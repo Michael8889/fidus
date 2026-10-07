@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from . import accounts, agent, booking, config, features, google_client, meetings, plans, store, tools
 
-app = FastAPI(title="Fidus API", version="0.7.0")
+app = FastAPI(title="Fidus API", version="0.7.0", docs_url=None, redoc_url=None, openapi_url=None)  # não expõe o mapa da API
 store.init_db()
 accounts.init()
 if config.APP_TOKEN in ("", "troque-este-token") and not config.PUBLIC_BASE_URL.startswith(("http://localhost", "http://127.0.0.1")):
