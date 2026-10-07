@@ -186,7 +186,7 @@ def test_google_oauth_needs_signed_link(monkeypatch):
     assert client.get("/auth/google/start", follow_redirects=False).status_code == 403
     assert client.get("/auth/google/callback?code=x&state=y").status_code == 403
     url = client.get("/v1/auth/google/link", headers=H).json()["url"]
-    assert "/auth/google/start?exp=" in url
+    assert "/auth/google/start?u=owner&exp=" in url
 
 
 # ---------- planos ----------

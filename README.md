@@ -15,6 +15,7 @@ fidus/
 │   │   ├── meetings.py    ata de reunião (transcrição em segundo plano + resumo + tarefas)
 │   │   ├── booking.py     página pública de agendamento
 │   │   ├── plans.py       planos Essencial / Negócio / Premium e oferta de upgrade
+│   │   ├── accounts.py    contas de clientes, login pelo Google, convites, tokens
 │   │   ├── llm.py         adaptador de IA (Anthropic ou qualquer API compatível com OpenAI)
 │   │   ├── transcribe.py  Whisper local via FFmpeg
 │   │   ├── google_client.py, store.py (SQLite), config.py (.env)
@@ -47,6 +48,15 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
 ## Publicar o app
 - Mudou só `App.tsx`: pasta `app`, `update-app.ps1`. Os celulares recebem ao abrir o app duas vezes.
 - Mudou `app.json` ou entrou módulo nativo novo: `build-apk.ps1` e instalar o APK novo.
+
+## Contas de clientes
+- Cada cliente entra com o **Google** no app. Sem cadastro aberto (`FIDUS_SIGNUP_OPEN=0`), só entra quem foi
+  convidado na aba **Clientes** do app do dono.
+- Cada cliente tem **o próprio banco** (`/data/users/<id>/fidus.db`) e a própria pasta de arquivos. O dono usa
+  o banco de sempre (`FIDUS_DB_PATH`). Contas, tokens (só o hash), convites e links públicos ficam em `accounts.db`.
+- O app recebe um token próprio por cliente; o `FIDUS_APP_TOKEN` continua valendo só para o dono.
+- Enquanto o app do Google estiver como "Interno", só contas do domínio da empresa conseguem entrar. Para
+  testadores de fora: mudar para "Externo" em modo de teste e adicionar os e-mails deles como usuários de teste.
 
 ## Configuração
 Tudo no `server/.env` (modelo em `server/.env.example`). Trocar de IA = mudar `FIDUS_LLM_PROVIDER`.

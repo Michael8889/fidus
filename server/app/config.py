@@ -53,9 +53,19 @@ GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET")
 PUBLIC_BASE_URL = env("FIDUS_PUBLIC_BASE_URL", "http://localhost:8000")
 GOOGLE_SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.send",
 ]
 
-DB_PATH = env("FIDUS_DB_PATH", "fidus.db")
+DB_PATH = env("FIDUS_DB_PATH", "fidus.db")  # banco do dono (Mike); clientes têm um banco cada
+
+# Contas de clientes
+ACCOUNTS_DB = env("FIDUS_ACCOUNTS_DB") or os.path.join(os.path.dirname(os.path.abspath(DB_PATH)), "accounts.db")
+OWNER_EMAIL = (env("FIDUS_OWNER_EMAIL", "") or "").strip().lower()  # e-mail Google do dono (vira admin)
+SIGNUP_OPEN = (env("FIDUS_SIGNUP_OPEN", "0") or "0").strip() in ("1", "true", "yes")  # 0 = só convidados
+NEW_USER_PLAN = env("FIDUS_NEW_USER_PLAN", "essencial")
+APP_SCHEME = env("FIDUS_APP_SCHEME", "fidus")  # link que reabre o app depois do login

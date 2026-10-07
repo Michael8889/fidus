@@ -1,20 +1,87 @@
-"""Armazenamento em SQLite: tokens do Google, histórico curto e ações pendentes."""
+"""Armazenamento em SQLite.
+
+Cada cliente tem o PRÓPRIO arquivo de banco (e a própria pasta de arquivos): os dados de um nunca
+aparecem para outro, mesmo com um erro de consulta. Quem é o cliente da requisição atual fica em
+`CURRENT` (contextvar), definido pelo middleware de autenticação ou por `as_user(...)`.
+Sem cliente definido, vale o dono (Mike), cujo banco é o FIDUS_DB_PATH de sempre.
+"""
+import contextlib
+import contextvars
 import json
+import os
 import sqlite3
+import threading
 import uuid
 from datetime import datetime, timezone
 
 from . import config
 
+CURRENT: contextvars.ContextVar = contextvars.ContextVar("fidus_user", default=None)
+_ready: set = set()
+_ready_lock = threading.Lock()
+
+OWNER_ID = "owner"
+
+
+def owner_user() -> dict:
+    return {"id": OWNER_ID, "email": config.OWNER_EMAIL, "name": config.USER_NAME, "is_owner": True,
+            "db": config.DB_PATH, "dir": config.DATA_DIR, "receipts": config.RECEIPTS_DIR}
+
+
+def user_paths(uid: str) -> dict:
+    if uid == OWNER_ID:
+        return owner_user()
+    base = os.path.join(config.DATA_DIR, "users", uid)
+    return {"db": os.path.join(base, "fidus.db"), "dir": base, "receipts": os.path.join(base, "receipts")}
+
+
+def current() -> dict:
+    return CURRENT.get() or owner_user()
+
+
+@contextlib.contextmanager
+def as_user(user: dict):
+    """Executa o bloco no banco desse cliente."""
+    tok = CURRENT.set(user)
+    try:
+        yield user
+    finally:
+        CURRENT.reset(tok)
+
+
+def files_dir(*parts: str) -> str:
+    d = os.path.join(current()["dir"], *parts)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def receipts_dir() -> str:
+    d = current()["receipts"]
+    os.makedirs(d, exist_ok=True)
+    return d
+
 
 def _conn() -> sqlite3.Connection:
-    c = sqlite3.connect(config.DB_PATH)
+    path = current()["db"]
+    if path not in _ready:
+        with _ready_lock:
+            if path not in _ready:
+                if os.path.dirname(path):
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                _ready.add(path)
+                _create(path)
+    c = sqlite3.connect(path)
     c.row_factory = sqlite3.Row
     return c
 
 
 def init_db() -> None:
-    with _conn() as c:
+    _conn().close()
+
+
+def _create(path: str) -> None:
+    c0 = sqlite3.connect(path)
+    with c0 as c:
         c.executescript(
             """
             CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
@@ -52,6 +119,7 @@ def init_db() -> None:
                 status TEXT NOT NULL, created_at TEXT NOT NULL);
             """
         )
+    c0.close()
 
 
 def now() -> str:
@@ -198,3 +266,50 @@ def get(table: str, rid: int) -> dict | None:
 def select(sql: str, args: tuple | list = ()) -> list[dict]:
     with _conn() as c:
         return [dict(r) for r in c.execute(sql, args).fetchall()]
+
+
+# ---------- Perfil do cliente (nome, fuso, moeda, empresas) ----------
+def profile() -> dict:
+    u = current()
+    if u.get("is_owner"):
+        base = {"name": config.USER_NAME, "timezone": config.USER_TIMEZONE, "currency": config.DEFAULT_CURRENCY,
+                "businesses": list(config.BUSINESSES)}
+    else:
+        base = {"name": u.get("name") or "", "timezone": config.USER_TIMEZONE, "currency": config.DEFAULT_CURRENCY,
+                "businesses": ["Pessoal"]}
+    raw = kv_get("profile")
+    if raw:
+        base.update({k: v for k, v in json.loads(raw).items() if v})
+    return base
+
+
+def save_profile(**changes) -> dict:
+    p = profile()
+    p.update({k: v for k, v in changes.items() if v is not None})
+    kv_set("profile", json.dumps(p, ensure_ascii=False))
+    return p
+
+
+def user_name() -> str:
+    return profile()["name"] or "você"
+
+
+def user_tz() -> str:
+    return profile()["timezone"]
+
+
+def default_currency() -> str:
+    return profile()["currency"]
+
+
+def businesses() -> list:
+    return profile()["businesses"] or ["Pessoal"]
+
+
+def match_business(name: str | None) -> str | None:
+    if not name:
+        return None
+    for b in businesses():
+        if b.strip().lower() == name.strip().lower():
+            return b
+    return None

@@ -63,8 +63,9 @@ UPSELL_TOOL = {
 
 
 def current() -> str:
-    p = (store.kv_get("plan") or config.DEFAULT_PLAN or "premium").strip().lower()
-    return p if p in PLANS else "premium"
+    default = (config.DEFAULT_PLAN or "premium") if store.current().get("is_owner") else config.NEW_USER_PLAN
+    p = (store.kv_get("plan") or default).strip().lower()
+    return p if p in PLANS else "essencial"  # valor estranho nunca libera o plano mais caro
 
 
 def set_plan(plan: str) -> str:
@@ -104,7 +105,7 @@ def primary_business() -> str:
     b = store.kv_get("primary_business")
     if not b:
         row = store.select("SELECT business FROM expenses WHERE deleted=0 ORDER BY id LIMIT 1")
-        b = row[0]["business"] if row else (config.BUSINESSES[0] if config.BUSINESSES else "Pessoal")
+        b = row[0]["business"] if row else store.businesses()[0]
         store.kv_set("primary_business", b)
     return b
 

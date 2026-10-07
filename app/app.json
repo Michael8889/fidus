@@ -58,6 +58,7 @@
     },
     "runtimeVersion": {
       "policy": "appVersion"
-    }
+    },
+    "scheme": "fidus"
   }
 }

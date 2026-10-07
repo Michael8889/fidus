@@ -31,31 +31,55 @@ def _flow(state: str | None = None) -> Flow:
     return flow
 
 
-def auth_url() -> str:
+def auth_url() -> tuple[str, str, str | None]:
+    """(endereço do Google, state, verificador PKCE). Quem chama guarda state+verificador para o retorno."""
     flow = _flow()
     url, state = flow.authorization_url(access_type="offline", prompt="consent", include_granted_scopes="true")
-    store.kv_set("google_oauth_state", state)
-    # código de segurança (PKCE) precisa ser o mesmo no retorno
-    verifier = getattr(flow, "code_verifier", None)
-    if verifier:
-        store.kv_set("google_code_verifier", verifier)
-    return url
+    return url, state, getattr(flow, "code_verifier", None)
 
 
-def handle_callback(full_url: str) -> None:
-    flow = _flow(state=store.kv_get("google_oauth_state"))
-    verifier = store.kv_get("google_code_verifier")
+def exchange(full_url: str, state: str, verifier: str | None) -> tuple[Credentials, dict]:
+    """Troca o código do Google por credenciais e devolve também quem é (e-mail e nome)."""
+    flow = _flow(state=state)
     if verifier:
         flow.code_verifier = verifier
     flow.fetch_token(authorization_response=full_url)
-    store.kv_set("google_creds", flow.credentials.to_json())
+    creds = flow.credentials
+    return creds, identity(creds)
+
+
+def identity(creds: Credentials) -> dict:
+    from google.oauth2 import id_token as gid
+    tok = getattr(creds, "id_token", None)
+    if tok:
+        info = gid.verify_oauth2_token(tok, Request(), config.GOOGLE_CLIENT_ID)
+        return {"email": info.get("email"), "name": info.get("name"), "sub": info.get("sub"),
+                "verified": info.get("email_verified", False)}
+    raise RuntimeError("o Google não informou o e-mail da conta")
+
+
+REQUIRED = {"https://www.googleapis.com/auth/calendar.events", "https://www.googleapis.com/auth/gmail.readonly",
+            "https://www.googleapis.com/auth/gmail.send"}
+
+
+def has_required_scopes(creds: Credentials) -> bool:
+    granted = set(getattr(creds, "granted_scopes", None) or getattr(creds, "scopes", None) or [])
+    return REQUIRED.issubset(granted)
+
+
+def save_credentials(creds: Credentials, email: str | None = None) -> None:
+    """Guarda no banco do cliente atual (e de qual conta Google elas são)."""
+    store.kv_set("google_creds", creds.to_json())
+    if email:
+        store.kv_set("google_email", email.lower())
 
 
 def credentials() -> Credentials:
     raw = store.kv_get("google_creds")
     if not raw:
-        raise RuntimeError("Conta Google ainda não conectada. Abra /auth/google/start.")
-    creds = Credentials.from_authorized_user_info(json.loads(raw), config.GOOGLE_SCOPES)
+        raise RuntimeError("Conta Google ainda não conectada. No app: menu ⋯ › Reconectar Google.")
+    # usa os escopos que o cliente autorizou (pedir outros no refresh dá erro)
+    creds = Credentials.from_authorized_user_info(json.loads(raw))
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
         store.kv_set("google_creds", creds.to_json())

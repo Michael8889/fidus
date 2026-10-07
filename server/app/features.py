@@ -109,7 +109,7 @@ TOOLS = [
                 "day_of_month": {"type": "integer", "description": "dia do vencimento, 1-31"},
                 "amount": {"type": "number"},
                 "currency": {"type": "string"},
-                "business": {"type": "string", "enum": config.BUSINESSES},
+                "business": {"type": "string", "description": "uma das empresas/carteiras do usuário"},
                 "category": {"type": "string", "enum": config.CATEGORIES},
                 "remind_days_before": {"type": "integer", "description": "padrão 2"},
             },
@@ -141,7 +141,7 @@ TOOLS = [
             "properties": {
                 "date_from": {"type": "string", "description": "AAAA-MM-DD"},
                 "date_to": {"type": "string", "description": "AAAA-MM-DD"},
-                "business": {"type": "string", "enum": config.BUSINESSES},
+                "business": {"type": "string", "description": "uma das empresas/carteiras do usuário"},
             },
             "required": ["date_from", "date_to"],
         },
@@ -163,7 +163,7 @@ TOOLS = [
 
 
 def _tz():
-    return ZoneInfo(config.USER_TIMEZONE)
+    return ZoneInfo(store.user_tz())
 
 
 def _now() -> datetime:
@@ -175,7 +175,7 @@ def _cal_api():
 
 
 def _event_body(title, start: datetime, minutes: int, description=None, recurrence=None, popup_minutes=0):
-    tz = config.USER_TIMEZONE
+    tz = store.user_tz()
     body = {
         "summary": title,
         "start": {"dateTime": start.replace(tzinfo=None).isoformat(), "timeZone": tz},
@@ -332,16 +332,22 @@ def delete_document(doc_id):
         store.update("documents", int(doc_id), deleted=1)
 
 
+def _doc_sig(uid: str, doc_id: int, exp: int) -> str:
+    return hmac.new(config.APP_TOKEN.encode(), f"doc:{uid}:{doc_id}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+
+
 def sign(doc_id: int, ttl: int = 3600) -> str:
+    """Link temporário para o documento do cliente atual (o id do cliente entra na assinatura)."""
+    uid = store.current()["id"]
     exp = int(time.time()) + ttl
-    sig = hmac.new(config.APP_TOKEN.encode(), f"{doc_id}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
-    return f"{config.PUBLIC_BASE_URL.rstrip('/')}/v1/documents/{doc_id}/file?exp={exp}&sig={sig}"
+    return (f"{config.PUBLIC_BASE_URL.rstrip('/')}/v1/documents/{doc_id}/file"
+            f"?u={uid}&exp={exp}&sig={_doc_sig(uid, doc_id, exp)}")
 
 
-def check_sig(doc_id: int, exp: int, sig: str) -> bool:
+def check_sig(doc_id: int, exp: int, sig: str, uid: str = store.OWNER_ID) -> bool:
     if exp < time.time():
         return False
-    good = hmac.new(config.APP_TOKEN.encode(), f"{doc_id}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+    good = _doc_sig(uid, doc_id, exp)
     try:
         return hmac.compare_digest(good, sig)
     except TypeError:
@@ -367,7 +373,8 @@ def add_bill(name, day_of_month, amount=None, currency=None, business=None, cate
     # dia 29-31 não existe em todo mês: o aviso fica no máximo no dia 28 para não pular meses
     rday = min(max(day - int(remind_days_before if remind_days_before is not None else 2), 1), 28)
     first = _next_due(rday)
-    cur = (currency or config.DEFAULT_CURRENCY).upper()
+    cur = (currency or store.default_currency()).upper()
+    business = store.match_business(business) or business
     label = f"🔁 Vence dia {day}: {name}" + (f" ({amount:.2f} {cur})" if amount else "")
     eid = _insert(_event_body(label, datetime.combine(first, datetime.min.time()).replace(hour=9), 15,
                               "Conta fixa cadastrada no Fidus.", f"RRULE:FREQ=MONTHLY;BYMONTHDAY={rday}"))
@@ -498,7 +505,7 @@ def briefing_text(data: dict) -> str:
     d = date.fromisoformat(data["date"])
     hour = _now().hour
     hi = "Bom dia" if hour < 12 else "Boa tarde" if hour < 18 else "Boa noite"
-    lines = [f"{hi}, {config.USER_NAME}. {dias[d.weekday()].capitalize()}, {d:%d/%m}."]
+    lines = [f"{hi}, {store.user_name()}. {dias[d.weekday()].capitalize()}, {d:%d/%m}."]
     ev = data.get("events") or []
     if ev:
         lines.append("\nAgenda:")
@@ -606,8 +613,11 @@ def export_for_accountant(date_from, date_to, business=None):
         df, dt = date.fromisoformat(date_from), date.fromisoformat(date_to)
     except (TypeError, ValueError):
         return {"error": "datas precisam ser AAAA-MM-DD"}
-    if business and business not in config.BUSINESSES:
-        return {"error": f"empresa desconhecida: {business}"}
+    if business:
+        b = store.match_business(business)
+        if not b:
+            return {"error": f"empresa desconhecida: {business}. Empresas: {', '.join(store.businesses())}"}
+        business = b
     date_from, date_to = df.isoformat(), dt.isoformat()
     rows = sorted(store.query_expenses(date_from, date_to, business=business, limit=10000), key=lambda r: (r["date"], r["id"]))
     if not rows:
@@ -637,8 +647,7 @@ def export_for_accountant(date_from, date_to, business=None):
         t[1] += r["vat"] or 0
     for (b, c, cur), (tot, vat) in sorted(agg.items()):
         sm.append([b, c, cur, round(tot, 2), round(vat, 2)])
-    folder = os.path.join(config.DATA_DIR, "exports")
-    os.makedirs(folder, exist_ok=True)
+    folder = store.files_dir("exports")
     import re
     tag = re.sub(r"[^\w-]", "", (business or "todas").replace(" ", "-")) or "empresa"
     base = f"fidus-{tag}-{date_from}-a-{date_to}"

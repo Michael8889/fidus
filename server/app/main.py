@@ -1,4 +1,5 @@
 """API do Fidus."""
+import html
 import os
 import tempfile
 
@@ -6,18 +7,59 @@ from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Uplo
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
-from . import agent, booking, config, features, google_client, meetings, plans, store, tools
+from . import accounts, agent, booking, config, features, google_client, meetings, plans, store, tools
 
-app = FastAPI(title="Fidus API", version="0.5.0")
+app = FastAPI(title="Fidus API", version="0.7.0")
 store.init_db()
+accounts.init()
 if config.APP_TOKEN in ("", "troque-este-token") and not config.PUBLIC_BASE_URL.startswith(("http://localhost", "http://127.0.0.1")):
     raise RuntimeError("Defina FIDUS_APP_TOKEN no .env antes de colocar o Fidus na internet.")
-meetings.resume_unfinished()
 
 
-def auth(authorization: str = Header(default="")):
-    if authorization != f"Bearer {config.APP_TOKEN}":
+class UserContext:
+    """Middleware: descobre o cliente pelo token e abre o banco DELE durante a requisição."""
+
+    def __init__(self, app_):
+        self.app = app_
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        auth_h = dict(scope.get("headers") or []).get(b"authorization", b"").decode("latin-1")
+        user = accounts.user_for_token(auth_h[7:].strip()) if auth_h.startswith("Bearer ") else None
+        tok = store.CURRENT.set(accounts.user_ctx(user)) if user else None
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            if tok is not None:
+                store.CURRENT.reset(tok)
+
+
+app.add_middleware(UserContext)
+
+
+def _resume_all_meetings():
+    """Na inicialização: retoma atas pela metade e registra os links de agendamento já existentes."""
+    for u in accounts.list_users():
+        if u["status"] == "ativo":
+            with store.as_user(accounts.user_ctx(u)):
+                meetings.resume_unfinished()
+                if store.kv_get("booking"):
+                    booking.settings()
+
+
+_resume_all_meetings()
+
+
+def auth():
+    if store.CURRENT.get() is None:
         raise HTTPException(401, "token inválido")
+
+
+def owner_only():
+    u = store.CURRENT.get()
+    if not u or not u.get("is_owner"):
+        raise HTTPException(403, "só o administrador")
 
 
 class TextIn(BaseModel):
@@ -33,49 +75,200 @@ def health():
     return {"ok": True, "google_connected": google_client.is_connected(), "llm": config.LLM_PROVIDER}
 
 
-# ---------- Conexão com o Google ----------
-def _oauth_sig(exp: int) -> str:
+# ---------- Login e conexão com o Google ----------
+def _page(title: str, body: str) -> HTMLResponse:
+    return HTMLResponse(f"""<!doctype html><html lang="pt"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title>
+<style>body{{margin:0;font-family:system-ui,sans-serif;background:#07090D;color:#F2F5F7;display:flex;min-height:100vh;
+align-items:center;justify-content:center}}main{{max-width:420px;padding:32px 24px;text-align:center}}
+h1{{font-size:26px;margin:0 0 12px}}p{{color:#B7C0CC;line-height:1.5}}.code{{font:700 34px ui-monospace,monospace;
+letter-spacing:.12em;background:#11151C;border:1px solid #222A35;border-radius:14px;padding:18px;margin:20px 0;
+user-select:all}}a.b{{display:block;background:#3DDC97;color:#07090D;font-weight:800;text-decoration:none;
+padding:16px;border-radius:14px;margin-top:8px}}</style></head><body><main>{body}</main></body></html>""")
+
+
+def _oauth_sig(uid: str, exp: int) -> str:
     import hashlib
     import hmac
-    return hmac.new(config.APP_TOKEN.encode(), f"oauth:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+    return hmac.new(config.APP_TOKEN.encode(), f"oauth:{uid}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def _start_google(user_id: str | None, app_challenge: str | None = None) -> RedirectResponse:
+    import secrets
+    url, state, verifier = google_client.auth_url()
+    nonce = secrets.token_urlsafe(24)
+    accounts.new_pending(verifier, user_id, state, nonce, app_challenge)
+    resp = RedirectResponse(url)
+    # o retorno do Google só vale no MESMO navegador que começou (impede alguém mandar o próprio login para a vítima)
+    resp.set_cookie("fidus_login", nonce, max_age=900, httponly=True, samesite="lax",
+                    secure=config.PUBLIC_BASE_URL.startswith("https"), path="/auth/google")
+    return resp
+
+
+@app.get("/auth/google/login")
+def google_login(request: Request, cc: str = ""):
+    """Entrar / criar conta com o Google (aberto pelo app, que manda `cc` = hash de um segredo só dele)."""
+    import re as _re
+    _rate_limit(request, 20, "login")
+    return _start_google(None, cc.lower() if _re.fullmatch(r"[0-9a-fA-F]{64}", cc or "") else None)
 
 
 @app.get("/v1/auth/google/link", dependencies=[Depends(auth)])
 def google_link():
-    """Link de 10 minutos para (re)conectar o Google. Só quem tem o token do app consegue gerar."""
+    """Link de 10 minutos para reconectar o Google do cliente logado."""
     import time
+    uid = store.current()["id"]
     exp = int(time.time()) + 600
-    return {"url": f"{config.PUBLIC_BASE_URL.rstrip('/')}/auth/google/start?exp={exp}&sig={_oauth_sig(exp)}"}
+    return {"url": f"{config.PUBLIC_BASE_URL.rstrip('/')}/auth/google/start?u={uid}&exp={exp}&sig={_oauth_sig(uid, exp)}"}
 
 
 @app.get("/auth/google/start")
-def google_start(exp: int = 0, sig: str = ""):
+def google_start(u: str = store.OWNER_ID, exp: int = 0, sig: str = ""):
     import hmac
     import time
-    local_first_setup = config.PUBLIC_BASE_URL.startswith(("http://localhost", "http://127.0.0.1")) \
-        and not google_client.is_connected()
+    local_first_setup = u == store.OWNER_ID and not google_client.is_connected() \
+        and config.PUBLIC_BASE_URL.startswith(("http://localhost", "http://127.0.0.1"))
     if not local_first_setup:
         try:
-            ok = exp > time.time() and hmac.compare_digest(_oauth_sig(exp), sig)
+            ok = exp > time.time() and hmac.compare_digest(_oauth_sig(u, exp), sig)
         except TypeError:
             ok = False
-        if not ok:
-            raise HTTPException(403, "Abra este link pelo app do Fidus (⋯ > Reconectar Google).")
-    store.kv_set("google_oauth_pending", str(int(time.time()) + 600))
-    return RedirectResponse(google_client.auth_url())
+        if not ok or not accounts.use_link_once(sig, exp):
+            raise HTTPException(403, "Link expirado ou já usado. Abra de novo pelo app (⋯ > Reconectar Google).")
+    return _start_google(u)
 
 
 @app.get("/auth/google/callback")
-def google_callback(request: Request):
-    import time
-    pending = store.kv_get("google_oauth_pending")
-    if not pending or int(pending) < time.time():
+def google_callback(request: Request, state: str = "", error: str = ""):
+    pending = accounts.take_pending(state, request.cookies.get("fidus_login", ""))
+    if not pending:
         raise HTTPException(403, "Conexão não solicitada ou expirada. Comece de novo pelo app.")
-    store.kv_set("google_oauth_pending", "0")
-    os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
-    google_client.handle_callback(str(request.url).replace("http://", "https://", 1)
-                                  if config.PUBLIC_BASE_URL.startswith("https") else str(request.url))
-    return HTMLResponse("<h2>Fidus conectado ao Google ✓</h2><p>Pode fechar esta página.</p>")
+    if error:
+        return _page("Fidus", "<h1>Conexão cancelada</h1><p>Você pode tentar de novo pelo app.</p>")
+    full = str(request.url)
+    if config.PUBLIC_BASE_URL.startswith("https"):
+        full = full.replace("http://", "https://", 1)
+    try:
+        creds, who = google_client.exchange(full, state, pending.get("verifier"))
+    except Exception as e:  # noqa: BLE001
+        return _page("Fidus", f"<h1>Não deu certo</h1><p>O Google recusou a conexão ({html.escape(str(e)[:120])}). Tente de novo pelo app.</p>")
+    email = (who.get("email") or "").lower()
+    if not email or not who.get("verified"):
+        return _page("Fidus", "<h1>E-mail não confirmado</h1><p>Use uma conta Google com e-mail verificado.</p>")
+    full_access = google_client.has_required_scopes(creds)
+    if pending.get("user_id"):  # reconectar a conta de quem já está logado
+        user = accounts.get_user(pending["user_id"])
+        expected = (config.OWNER_EMAIL if user and user["id"] == store.OWNER_ID else (user or {}).get("email")) or ""
+        if not user or (expected and expected.lower() != email):
+            return _page("Fidus", f"<h1>Conta diferente</h1><p>Entre com o mesmo Google da sua conta Fidus ({html.escape(expected)}).</p>")
+        if not full_access:
+            return _page("Fidus", "<h1>Faltou permissão</h1><p>Para o Fidus cuidar da agenda e dos e-mails, marque todas as caixas na tela do Google. Tente de novo pelo app.</p>")
+        with store.as_user(accounts.user_ctx(user)):
+            google_client.save_credentials(creds, email)
+        return _page("Fidus", "<h1>Google conectado ✓</h1><p>Pode voltar para o app.</p>")
+    user = accounts.find_or_create(email, who.get("name"), who.get("sub"))
+    if not user:
+        return _page("Fidus", f"<h1>Quase lá</h1><p>O Fidus está em acesso antecipado e <b>{html.escape(email)}</b> ainda não "
+                              "está na lista. Peça seu convite e tente de novo.</p>")
+    with store.as_user(accounts.user_ctx(user)):
+        # entrar não troca a conta Google que já está ligada; para trocar, use "Reconectar Google"
+        had = store.kv_get("google_creds") is not None
+        same = store.kv_get("google_email") == email
+        if full_access and (not had or same):
+            google_client.save_credentials(creds, email)
+    code = accounts.new_login_code(user["id"], pending.get("app_challenge"))
+    link = f"{config.APP_SCHEME}://login?code={code}"
+    return _page("Fidus", f"""<h1>Pronto, {html.escape((who.get('name') or '').split(' ')[0])}!</h1>
+<p>Volte para o app do Fidus. Se ele não abrir sozinho, digite este código na tela de entrada:</p>
+<div class="code">{code[:4]}-{code[4:]}</div><a class="b" href="{link}">Abrir o Fidus</a>
+<p style="font-size:13px">O código vale 10 minutos e só funciona uma vez.</p>""")
+
+
+class CodeIn(BaseModel):
+    code: str
+    verifier: str | None = None
+
+
+@app.post("/v1/auth/exchange")
+def auth_exchange(body: CodeIn, request: Request):
+    _rate_check(request, 20, "exchange")  # conta só as tentativas erradas
+    token = accounts.redeem_code(body.code, body.verifier)
+    if not token:
+        _rate_record(request, "exchange")
+        raise HTTPException(400, "código inválido ou expirado")
+    u = accounts.user_for_token(token)
+    return {"token": token, "user": {"id": u["id"], "email": u.get("email"), "name": u.get("name")}}
+
+
+@app.get("/v1/me", dependencies=[Depends(auth)])
+def me():
+    u = store.current()
+    return {"id": u["id"], "email": u.get("email"), "name": store.user_name(), "is_owner": bool(u.get("is_owner")),
+            "plan": plans.current(), "google_connected": google_client.is_connected(), "profile": store.profile()}
+
+
+@app.post("/v1/auth/logout", dependencies=[Depends(auth)])
+def logout(request: Request):
+    h = request.headers.get("authorization", "")
+    if h.startswith("Bearer fx_"):
+        accounts.revoke(h[7:].strip())
+    return {"ok": True}
+
+
+# ---------- Administração (só o dono) ----------
+@app.get("/v1/admin/users", dependencies=[Depends(owner_only)])
+def admin_users():
+    out = []
+    for u in accounts.list_users():
+        with store.as_user(accounts.user_ctx(u)):
+            try:
+                stats = features.month_stats()
+            except Exception:  # noqa: BLE001
+                stats = {"actions_this_month": 0}
+            out.append({"id": u["id"], "email": u.get("email"), "name": u.get("name"), "status": u["status"],
+                        "created_at": u["created_at"], "last_seen": u.get("last_seen"), "plan": plans.current(),
+                        "google_connected": google_client.is_connected(),
+                        "actions_this_month": stats.get("actions_this_month", 0), "is_owner": u["id"] == store.OWNER_ID})
+    return {"users": out, "invites": accounts.list_invites()}
+
+
+class InviteIn(BaseModel):
+    email: str
+    plan: str = "essencial"
+
+
+@app.post("/v1/admin/invites", dependencies=[Depends(owner_only)])
+def admin_invite(body: InviteIn):
+    if "@" not in body.email or body.plan not in plans.PLANS:
+        raise HTTPException(400, "e-mail ou plano inválido")
+    accounts.invite(body.email, body.plan)
+    return {"ok": True}
+
+
+class PlanIn(BaseModel):
+    plan: str
+
+
+@app.post("/v1/admin/users/{uid}/plan", dependencies=[Depends(owner_only)])
+def admin_set_plan(uid: str, body: PlanIn):
+    u = accounts.get_user(uid)
+    if not u or body.plan not in plans.PLANS:
+        raise HTTPException(400, "cliente ou plano inválido")
+    with store.as_user(accounts.user_ctx(u)):
+        plans.set_plan(body.plan)
+    return {"ok": True}
+
+
+class StatusIn(BaseModel):
+    status: str
+
+
+@app.post("/v1/admin/users/{uid}/status", dependencies=[Depends(owner_only)])
+def admin_set_status(uid: str, body: StatusIn):
+    if uid == store.OWNER_ID or body.status not in ("ativo", "suspenso"):
+        raise HTTPException(400, "inválido")
+    accounts.set_status(uid, body.status)
+    return {"ok": True}
 
 
 # ---------- Conversa ----------
@@ -144,7 +337,7 @@ def photo(body: PhotoIn):
     raw = base64.b64decode(body.image_b64)
     if len(raw) > 15 * 1024 * 1024:
         raise HTTPException(413, "arquivo grande demais (máx. 15 MB)")
-    folder = os.path.join(config.RECEIPTS_DIR, datetime.now().strftime("%Y-%m"))
+    folder = os.path.join(store.receipts_dir(), datetime.now().strftime("%Y-%m"))
     os.makedirs(folder, exist_ok=True)
     ext = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "application/pdf": ".pdf"}[body.media_type]
     path = os.path.join(folder, f"{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}{ext}")
@@ -304,11 +497,15 @@ def documents_list(q: str | None = None):
 
 
 @app.get("/v1/documents/{did}/file")
-def document_file(did: int, exp: int, sig: str):
+def document_file(did: int, exp: int, sig: str, u: str = store.OWNER_ID):
     """Link assinado e temporário (1 h): o app abre no navegador sem expor o token."""
-    if not features.check_sig(did, exp, sig):
+    if not features.check_sig(did, exp, sig, u):
         raise HTTPException(403, "link expirado")
-    d = store.get("documents", did)
+    user = accounts.get_user(u)
+    if not user or user["status"] != "ativo":
+        raise HTTPException(404, "documento não encontrado")
+    with store.as_user(accounts.user_ctx(user)):
+        d = store.get("documents", did)
     if not d or d["deleted"] or not os.path.exists(d["path"]):
         raise HTTPException(404, "documento não encontrado")
     name = os.path.basename(d["path"]) if d["path"].endswith((".zip", ".pdf", ".xlsx")) else None
@@ -373,45 +570,76 @@ def weekly():
 _book_hits: dict = {}
 
 
-def _booking_or_404(slug: str) -> dict:
-    s = booking.settings()
-    if slug != s["slug"] or not s["enabled"]:
+def _booking_user(slug: str) -> dict:
+    """Dono do link público: abre o banco dele. 404 se o link não existe ou foi desativado."""
+    u = accounts.user_for_slug(slug)
+    if not u:
         raise HTTPException(404, "link inválido")
-    return s
+    ctx = accounts.user_ctx(u)
+    with store.as_user(ctx):
+        s = booking.settings()
+        if slug != s["slug"] or not s["enabled"]:
+            raise HTTPException(404, "link inválido")
+    return ctx
+
+
+def _client_ip(request: Request) -> str:
+    import ipaddress
+    peer = request.client.host if request.client else "?"
+    # o contêiner só escuta em 127.0.0.1 (via Docker): o X-Real-IP vem do Nginx, que sobrescreve o do cliente.
+    # Só confiamos no cabeçalho quando quem conecta é o próprio servidor ou a rede interna do Docker.
+    try:
+        a = ipaddress.ip_address(peer)
+        trusted = a.is_loopback or a in ipaddress.ip_network("172.16.0.0/12")
+    except ValueError:
+        trusted = peer == "testclient"
+    return (request.headers.get("x-real-ip") if trusted else None) or peer
+
+
+def _hits(key: str) -> list:
+    import time
+    now = time.time()
+    if len(_book_hits) > 5000:  # limpa quem não aparece há 1 h
+        for k in [k for k, v in _book_hits.items() if not v or now - v[-1] > 3600]:
+            _book_hits.pop(k, None)
+    return [t for t in _book_hits.get(key, []) if now - t < 3600]
+
+
+def _rate_check(request: Request, limit: int, bucket: str) -> None:
+    if len(_hits(f"{bucket}:{_client_ip(request)}")) >= limit:
+        raise HTTPException(429, "muitas tentativas, tente mais tarde")
+
+
+def _rate_record(request: Request, bucket: str) -> None:
+    import time
+    key = f"{bucket}:{_client_ip(request)}"
+    _book_hits[key] = _hits(key) + [time.time()]
 
 
 def _rate_limit(request: Request, limit: int = 8, bucket: str = "book"):
-    import time
-
-    peer = request.client.host if request.client else "?"
-    # o contêiner só escuta em 127.0.0.1: o X-Real-IP vem do Nginx, que sobrescreve o do cliente
-    proxied = peer.startswith(("127.", "172.", "10.", "192.168.")) or peer in ("::1", "testclient")
-    ip = (request.headers.get("x-real-ip") if proxied else None) or peer
-    key = f"{bucket}:{ip}"
-    now = time.time()
-    hits = [t for t in _book_hits.get(key, []) if now - t < 3600]
-    if len(hits) >= limit:
-        raise HTTPException(429, "muitas tentativas, tente mais tarde")
-    _book_hits[key] = hits + [now]
+    _rate_check(request, limit, bucket)
+    _rate_record(request, bucket)
 
 
 @app.get("/book/{slug}", response_class=HTMLResponse)
 def booking_page(slug: str):
-    return HTMLResponse(booking.page(_booking_or_404(slug)))
+    with store.as_user(_booking_user(slug)):
+        return HTMLResponse(booking.page(booking.settings()))
 
 
 @app.get("/book/{slug}/days")
 def booking_days(slug: str, type: str):
-    _booking_or_404(slug)
-    return {"days": booking.days_available(type)}
+    with store.as_user(_booking_user(slug)):
+        return {"days": booking.days_available(type)}
 
 
 @app.get("/book/{slug}/slots")
 def booking_slots(slug: str, type: str, day: str, request: Request):
-    _booking_or_404(slug)
+    ctx = _booking_user(slug)
     _rate_limit(request, 200, "slots")
     try:
-        return {"slots": booking.slots(type, day)}
+        with store.as_user(ctx):
+            return {"slots": booking.slots(type, day)}
     except ValueError:
         raise HTTPException(400, "data inválida")
 
@@ -430,12 +658,13 @@ class BookIn(BaseModel):
 
 @app.post("/book/{slug}")
 def booking_create(slug: str, body: BookIn, request: Request):
-    _booking_or_404(slug)
+    ctx = _booking_user(slug)
     if body.website:
         return {"ok": False, "error": "inválido"}
     _rate_limit(request)
     try:
-        return booking.book(body.type, body.day, body.time, body.name, body.email, body.phone, body.address, body.notes)
+        with store.as_user(ctx):
+            return booking.book(body.type, body.day, body.time, body.name, body.email, body.phone, body.address, body.notes)
     except ValueError:
         return {"ok": False, "error": "dados inválidos"}
 
@@ -446,13 +675,9 @@ def plan_info():
     return plans.info()
 
 
-class PlanIn(BaseModel):
-    plan: str
-
-
-@app.post("/v1/plan", dependencies=[Depends(auth)])
+@app.post("/v1/plan", dependencies=[Depends(owner_only)])
 def plan_set(body: PlanIn):
-    """Troca de plano manual (testes). Com o pagamento ligado, quem chama isto é a confirmação do Stripe."""
+    """Troca de plano do próprio dono (testes). Clientes: /v1/admin/users/{id}/plan, ou o pagamento."""
     try:
         plans.set_plan(body.plan)
     except ValueError as e:

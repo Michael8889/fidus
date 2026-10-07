@@ -21,7 +21,7 @@ TOOLS = [
                 "amount": {"type": "number", "description": "valor total pago, ex. 45.90"},
                 "currency": {"type": "string", "description": "GBP, EUR, BRL... se não dito, a moeda padrão"},
                 "category": {"type": "string", "enum": config.CATEGORIES},
-                "business": {"type": "string", "enum": config.BUSINESSES,
+                "business": {"type": "string",
                              "description": "a qual empresa/carteira pertence; se não dito, pergunte ou use 'Pessoal'"},
                 "date": {"type": "string", "description": "AAAA-MM-DD; se não dito, hoje"},
                 "merchant": {"type": "string", "description": "estabelecimento, ex. Shell, Tesco"},
@@ -125,7 +125,16 @@ TOOLS = [
 ]
 
 
-TOOLS += features.TOOLS + meetings.TOOLS + booking.TOOLS + [plans.UPSELL_TOOL]
+PROFILE_TOOL = {
+    "name": "update_profile",
+    "description": "Muda o perfil do usuário: nome, fuso horário (IANA, ex. Europe/Lisbon), moeda padrão (GBP, EUR, "
+                   "BRL...) e empresas/carteiras (adicionar ou remover). Só passe o que mudar.",
+    "parameters": {"type": "object", "properties": {
+        "name": {"type": "string"}, "timezone": {"type": "string"}, "currency": {"type": "string"},
+        "add_business": {"type": "string"}, "remove_business": {"type": "string"}}},
+}
+
+TOOLS += features.TOOLS + meetings.TOOLS + booking.TOOLS + [plans.UPSELL_TOOL, PROFILE_TOOL]
 
 # foto de recibo da mensagem atual (definida pelo agente antes de rodar as ferramentas)
 class _PerRequest(threading.local):
@@ -153,6 +162,7 @@ def run(name: str, args: dict) -> dict:
         "delete_calendar_event": _delete_event,
         "find_place": _find_place,
         "add_expense": _add_expense,
+        "update_profile": _update_profile,
         "summarize_expenses": _summarize_expenses,
         "delete_expense": _delete_expense,
         "search_emails": _search_emails,
@@ -177,7 +187,7 @@ def run(name: str, args: dict) -> dict:
 # ---------- Agenda ----------
 def _create_event(title, start, end, location=None, description=None, recurrence=None, add_meet=False,
                   remind_minutes_before=None):
-    tz = config.USER_TIMEZONE
+    tz = store.user_tz()
     # proteção contra duplicados: mesmo título no mesmo horário de início
     try:
         from datetime import datetime, timedelta
@@ -213,7 +223,7 @@ def _create_event(title, start, end, location=None, description=None, recurrence
 
 
 def _list_events(time_min, time_max):
-    tz = config.USER_TIMEZONE
+    tz = store.user_tz()
     res = google_client.calendar().events().list(
         calendarId="primary", timeMin=_rfc3339(time_min), timeMax=_rfc3339(time_max),
         timeZone=tz, singleEvents=True, orderBy="startTime", maxResults=25).execute()
@@ -257,7 +267,7 @@ def _delete_event(event_id):
 def _today() -> str:
     from datetime import datetime
     from zoneinfo import ZoneInfo
-    return datetime.now(ZoneInfo(config.USER_TIMEZONE)).date().isoformat()
+    return datetime.now(ZoneInfo(store.user_tz())).date().isoformat()
 
 
 def _add_expense(amount, category, business, currency=None, date=None, merchant=None, vat=None, note=None,
@@ -265,7 +275,15 @@ def _add_expense(amount, category, business, currency=None, date=None, merchant=
     amount = round(float(amount), 2)
     if amount <= 0:
         return {"error": "valor precisa ser maior que zero"}
-    cur = (currency or config.DEFAULT_CURRENCY).upper()
+    cur = (currency or store.default_currency()).upper()
+    known = store.match_business(business)
+    if not known:
+        if plans.allows("extra_business"):
+            store.save_profile(businesses=store.businesses() + [business.strip()])
+            known = business.strip()
+        else:
+            return {"error": f"empresa desconhecida: {business}. Empresas: {', '.join(store.businesses())}"}
+    business = known
     receipt = CURRENT_RECEIPT.get("path") if attach_receipt else None
     eid = store.add_expense(date or _today(), amount, cur, category, business, merchant, note,
                             float(vat) if vat is not None else None, receipt)
@@ -278,6 +296,27 @@ def _add_expense(amount, category, business, currency=None, date=None, merchant=
     except Exception:
         pass
     return out
+
+
+def _update_profile(name=None, timezone=None, currency=None, add_business=None, remove_business=None):
+    from zoneinfo import ZoneInfo
+    biz = store.businesses()
+    if timezone:
+        try:
+            ZoneInfo(timezone)
+        except Exception:
+            return {"error": f"fuso horário desconhecido: {timezone} (use o formato Europe/Lisbon)"}
+    if add_business and not store.match_business(add_business):
+        if len(biz) >= 1 and not plans.allows("extra_business"):
+            return plans.locked("extra_business")
+        biz = biz + [add_business.strip()[:40]]
+    if remove_business:
+        b = store.match_business(remove_business)
+        if b and len(biz) > 1:
+            biz = [x for x in biz if x != b]
+    p = store.save_profile(name=(name or "").strip()[:40] or None, timezone=timezone,
+                           currency=(currency or "").strip().upper()[:3] or None, businesses=biz)
+    return {"ok": True, "profile": p}
 
 
 def _summarize_expenses(date_from, date_to, category=None, business=None):
@@ -319,7 +358,7 @@ def _rfc3339(local_iso: str) -> str:
 
     dt = datetime.fromisoformat(local_iso)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=ZoneInfo(config.USER_TIMEZONE))
+        dt = dt.replace(tzinfo=ZoneInfo(store.user_tz()))
     return dt.isoformat()
 
 

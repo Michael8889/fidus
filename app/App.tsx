@@ -31,6 +31,51 @@ const SUGGESTIONS: [string, string][] = [
   ["🔗 Link de agendamento", "Me manda meu link de agendamento."],
   ["🔁 Assinaturas", "Quais assinaturas e cobranças recorrentes eu pago?"],
 ];
+// SHA-256 em JS puro (sem módulo nativo): o app manda ao servidor o hash de um segredo que só ele conhece,
+// e depois o segredo, para trocar o código de login. Outro app que capture o link fidus:// não consegue entrar.
+function sha256hex(msg: string): string {
+  const K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,
+    0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,
+    0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,
+    0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,
+    0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  const bytes: number[] = [];
+  for (const ch of unescape(encodeURIComponent(msg))) bytes.push(ch.charCodeAt(0));
+  const bitLen = bytes.length * 8;
+  bytes.push(0x80);
+  while (bytes.length % 64 !== 56) bytes.push(0);
+  for (let i = 7; i >= 0; i--) bytes.push(i >= 4 ? 0 : (bitLen >>> (i * 8)) & 0xff);
+  let H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const r = (x: number, n: number) => (x >>> n) | (x << (32 - n));
+  for (let o = 0; o < bytes.length; o += 64) {
+    const w = new Array(64);
+    for (let i = 0; i < 16; i++) w[i] = (bytes[o + i * 4] << 24) | (bytes[o + i * 4 + 1] << 16) | (bytes[o + i * 4 + 2] << 8) | bytes[o + i * 4 + 3];
+    for (let i = 16; i < 64; i++) {
+      const s0 = r(w[i - 15], 7) ^ r(w[i - 15], 18) ^ (w[i - 15] >>> 3), s1 = r(w[i - 2], 17) ^ r(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+    }
+    let [a, b, c, d, e, f, g, h] = H;
+    for (let i = 0; i < 64; i++) {
+      const t1 = (h + (r(e, 6) ^ r(e, 11) ^ r(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) | 0;
+      const t2 = ((r(a, 2) ^ r(a, 13) ^ r(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    H = [H[0] + a, H[1] + b, H[2] + c, H[3] + d, H[4] + e, H[5] + f, H[6] + g, H[7] + h].map((x) => x | 0);
+  }
+  return H.map((x) => (x >>> 0).toString(16).padStart(8, "0")).join("");
+}
+
+function randomSecret(): string {
+  const buf = new Uint8Array(32);
+  const c: any = (globalThis as any).crypto;
+  if (c?.getRandomValues) c.getRandomValues(buf);
+  else for (let i = 0; i < buf.length; i++) buf[i] = Math.floor(Math.random() * 256) ^ (Date.now() >> (i % 8));
+  return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+const DEFAULT_SERVER = "https://fidus.148-230-123-44.sslip.io";
+const PLAN_NAMES: Record<string, string> = { essencial: "Essencial", negocio: "Negócio", premium: "Premium" };
 const fmtClock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 
 type Draft = { to: string; subject: string; body: string; title?: string; start?: string; emails?: string[] };
@@ -93,7 +138,14 @@ function FidusApp() {
   const c = dark ? { bg: "#0B1426", card: "#14223F", text: "#EEF2F8", sub: "#9AA8C0" }
                  : { bg: "#F5F7FB", card: "#FFFFFF", text: NAVY, sub: "#5B6B85" };
 
-  const [server, setServer] = useState("");
+  const [server, setServer] = useState(DEFAULT_SERVER);
+  const [loginCode, setLoginCode] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [me, setMe] = useState<any>(null);
+  const [admin, setAdmin] = useState<{ users: any[]; invites: any[] }>({ users: [], invites: [] });
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
   const [token, setToken] = useState("");
   const [configured, setConfigured] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
@@ -109,7 +161,7 @@ function FidusApp() {
   const listRef = useRef<FlatList>(null);
   const insets = useSafeAreaInsets();
   const [kb, setKb] = useState(0);
-  const [tab, setTab] = useState<"chat" | "tasks" | "activity">("chat");
+  const [tab, setTab] = useState<"chat" | "tasks" | "activity" | "admin">("chat");
   const [acts, setActs] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -162,6 +214,7 @@ function FidusApp() {
       } catch { /* sem resumo semanal */ }
       setupNotifications();
       try { setPlan(await api("/v1/plan", {}, 15000)); } catch { /* servidor antigo */ }
+      try { setMe(await api("/v1/me", {}, 15000)); } catch { /* servidor antigo */ }
     })();
   }, [configured]);
 
@@ -408,8 +461,87 @@ function FidusApp() {
   }
 
   async function logout() {
-    await SecureStore.deleteItemAsync("server"); await SecureStore.deleteItemAsync("token");
-    setConfigured(false);
+    try { await api("/v1/auth/logout", { method: "POST" }, 8000); } catch { /* sem rede: sai assim mesmo */ }
+    await SecureStore.deleteItemAsync("token");
+    setToken(""); setMe(null); setItems([]); setTab("chat"); setConfigured(false);
+  }
+
+  // ---------- Entrar com Google ----------
+  const normServer = () => (server.trim() || DEFAULT_SERVER).replace(/\/$/, "");
+
+  async function loginGoogle() {
+    const sv = normServer();
+    setServer(sv); await SecureStore.setItemAsync("server", sv);
+    const secret = randomSecret();
+    await SecureStore.setItemAsync("loginSecret", secret);  // guardado: o app pode ser fechado enquanto o Google abre
+    await Linking.openURL(`${sv}/auth/google/login?cc=${sha256hex(secret)}`);
+  }
+
+  async function redeem(code: string) {
+    const clean = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (clean.length < 8) return Alert.alert("Código", "Digite o código de 8 letras que apareceu depois do Google.");
+    const sv = normServer();
+    setLoggingIn(true);
+    try {
+      const verifier = await SecureStore.getItemAsync("loginSecret");
+      const r = await fetch(`${sv}/v1/auth/exchange`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: clean, verifier }) });
+      if (!r.ok) throw new Error(r.status === 400 ? "código inválido ou expirado. Entre com o Google de novo." : `erro ${r.status}`);
+      const j = await r.json();
+      await SecureStore.setItemAsync("server", sv); await SecureStore.setItemAsync("token", j.token);
+      await SecureStore.deleteItemAsync("loginSecret");
+      setServer(sv); setToken(j.token); setLoginCode(""); setConfigured(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) { Alert.alert("Não deu certo", e?.message ?? String(e)); }
+    finally { setLoggingIn(false); }
+  }
+
+  // o site de login reabre o app com fidus://login?code=XXXX (APK com o "scheme" fidus)
+  useEffect(() => {
+    const handle = (url?: string | null) => {
+      const m = url && url.match(/login\?code=([A-Za-z0-9-]+)/);
+      if (m && !configured) redeem(m[1]);
+    };
+    Linking.getInitialURL().then(handle).catch(() => {});
+    const sub = Linking.addEventListener("url", (e: any) => handle(e.url));
+    return () => sub.remove();
+  }, [configured, server]);
+
+  // ---------- Clientes (só o dono) ----------
+  async function loadAdmin() {
+    setAdminLoading(true);
+    try { setAdmin(await api("/v1/admin/users", {}, 20000)); }
+    catch (e: any) { Alert.alert("Clientes", e?.message ?? String(e)); }
+    finally { setAdminLoading(false); }
+  }
+
+  async function sendInvite(plan: string) {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email.includes("@")) return Alert.alert("Convite", "Digite o e-mail Google da pessoa.");
+    try {
+      await api("/v1/admin/invites", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, plan }) });
+      setInviteEmail(""); loadAdmin();
+      Alert.alert("Convite criado", `${email} já pode entrar com o Google no app (plano ${PLAN_NAMES[plan]}).`);
+    } catch (e: any) { Alert.alert("Convite", e?.message ?? String(e)); }
+  }
+
+  function inviteMenu() {
+    setSheet({ title: `Convidar ${inviteEmail.trim() || "…"} no plano:`, items:
+      Object.entries(PLAN_NAMES).map(([id, name]) => [name, () => sendInvite(id)] as [string, () => void]) });
+  }
+
+  function clientMenu(u: any) {
+    const post = (path: string, body: any) => async () => {
+      try { await api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); loadAdmin(); }
+      catch (e: any) { Alert.alert("Erro", e?.message ?? String(e)); }
+    };
+    setSheet({ title: u.email || u.name || u.id, items: [
+      ...Object.entries(PLAN_NAMES).filter(([id]) => id !== u.plan)
+        .map(([id, name]) => [`Mudar para ${name}`, post(`/v1/admin/users/${u.id}/plan`, { plan: id })] as [string, () => void]),
+      ...(u.is_owner ? [] : [[u.status === "ativo" ? "Suspender acesso" : "Reativar acesso",
+        post(`/v1/admin/users/${u.id}/status`, { status: u.status === "ativo" ? "suspenso" : "ativo" })] as [string, () => void]]),
+    ] });
   }
 
   function showResult(res: any, showTranscript = true) {
@@ -520,11 +652,11 @@ function FidusApp() {
 
   async function moreMenu() {
     const pending = await SecureStore.getItemAsync("pendingMeeting");
-    setSheet({ title: base(), items: [
+    setSheet({ title: me?.email ? `${me.email} · ${PLAN_NAMES[me.plan] ?? ""}` : base(), items: [
       ["🔌  Testar conexão", testConnection],
       ...(pending ? [["🎙  Reenviar reunião", () => sendMeetingFile(pending)] as [string, () => void]] : []),
       ["🔑  Reconectar Google", reconnectGoogle],
-      ["↩️  Trocar servidor", logout],
+      ["↩️  Sair da conta", logout],
     ] });
   }
 
@@ -602,16 +734,31 @@ function FidusApp() {
       <SafeAreaView edges={["top", "bottom"]} style={[s.flex, { backgroundColor: c.bg }]}>
         <View style={s.setup}>
           <Text style={[s.logo, { color: c.text }]}>Fidus</Text>
-          <Text style={{ color: c.sub, marginBottom: 24 }}>Conecte ao seu servidor</Text>
-          <TextInput style={[s.input, { color: c.text, backgroundColor: c.card }]} placeholder="https://api.seudominio.com"
-            placeholderTextColor={c.sub} autoCapitalize="none" value={server} onChangeText={setServer} />
-          <TextInput style={[s.input, { color: c.text, backgroundColor: c.card }]} placeholder="Token do app"
-            placeholderTextColor={c.sub} autoCapitalize="none" secureTextEntry value={token} onChangeText={setToken} />
-          <Pressable style={s.primary} onPress={async () => {
-            const sv = server.trim().replace(/\/$/, ""); const tk = token.trim(); setServer(sv); setToken(tk);
-            await SecureStore.setItemAsync("server", sv); await SecureStore.setItemAsync("token", tk);
-            setConfigured(true);
-          }}><Text style={s.primaryText}>Entrar</Text></Pressable>
+          <Text style={{ color: c.sub, marginBottom: 28, fontSize: 16 }}>Fale. O Fidus resolve.</Text>
+          <Pressable style={[s.primary, { flexDirection: "row", justifyContent: "center", gap: 10 }]} onPress={loginGoogle}>
+            <Text style={[s.primaryText, { fontSize: 17 }]}>Entrar com o Google</Text></Pressable>
+          <Text style={{ color: c.sub, marginTop: 22, marginBottom: 8 }}>Depois do Google, se o app não abrir sozinho, digite o código:</Text>
+          <View style={[s.row, { gap: 8 }]}>
+            <TextInput style={[s.input, s.flex, { color: c.text, backgroundColor: c.card, marginBottom: 0, letterSpacing: 3, fontSize: 18 }]}
+              placeholder="ABCD-1234" placeholderTextColor={c.sub} autoCapitalize="characters" autoCorrect={false}
+              value={loginCode} onChangeText={setLoginCode} onSubmitEditing={() => redeem(loginCode)} />
+            <Pressable style={[s.primarySm, { justifyContent: "center", opacity: loggingIn ? 0.5 : 1 }]} disabled={loggingIn}
+              onPress={() => redeem(loginCode)}><Text style={s.primaryText}>{loggingIn ? "…" : "Entrar"}</Text></Pressable>
+          </View>
+          <Pressable onPress={() => setShowAdvanced(!showAdvanced)} style={{ marginTop: 28 }}>
+            <Text style={{ color: c.sub, textDecorationLine: "underline" }}>{showAdvanced ? "Fechar opções avançadas" : "Opções avançadas"}</Text></Pressable>
+          {showAdvanced && (<>
+            <TextInput style={[s.input, { color: c.text, backgroundColor: c.card, marginTop: 12 }]} placeholder={DEFAULT_SERVER}
+              placeholderTextColor={c.sub} autoCapitalize="none" value={server} onChangeText={setServer} />
+            <TextInput style={[s.input, { color: c.text, backgroundColor: c.card }]} placeholder="Token de administrador"
+              placeholderTextColor={c.sub} autoCapitalize="none" secureTextEntry value={token} onChangeText={setToken} />
+            <Pressable style={[s.secondary, { borderColor: c.sub, alignItems: "center" }]} onPress={async () => {
+              const sv = normServer(); const tk = token.trim(); if (!tk) return;
+              setServer(sv); setToken(tk);
+              await SecureStore.setItemAsync("server", sv); await SecureStore.setItemAsync("token", tk);
+              setConfigured(true);
+            }}><Text style={{ color: c.text }}>Entrar com token</Text></Pressable>
+          </>)}
         </View>
       </SafeAreaView>
     );
@@ -634,15 +781,48 @@ function FidusApp() {
             <Text style={{ color: c.text, fontSize: 13 }}>⋯</Text></Pressable>
         </View>
         <View style={s.tabs}>
-          {(["chat", "tasks", "activity"] as const).map((t) => (
-            <Pressable key={t} onPress={() => { setTab(t); if (t === "activity") loadActivity(); if (t === "tasks") loadTasks(); }}
+          {(me?.is_owner ? (["chat", "tasks", "activity", "admin"] as const) : (["chat", "tasks", "activity"] as const)).map((t) => (
+            <Pressable key={t} onPress={() => { setTab(t); if (t === "activity") loadActivity(); if (t === "tasks") loadTasks(); if (t === "admin") loadAdmin(); }}
               style={[s.tab, tab === t && { borderBottomColor: MINT }]}>
               <Text style={{ color: tab === t ? c.text : c.sub, fontWeight: tab === t ? "700" : "400" }}>
-                {t === "chat" ? "Conversa" : t === "tasks" ? "Tarefas" : "Atividade"}</Text>
+                {t === "chat" ? "Conversa" : t === "tasks" ? "Tarefas" : t === "activity" ? "Atividade" : "Clientes"}</Text>
             </Pressable>
           ))}
         </View>
-        {tab === "tasks" ? (
+        {tab === "admin" ? (
+          <FlatList
+            data={admin.users} keyExtractor={(u) => u.id} contentContainerStyle={{ padding: 16, gap: 8 }}
+            refreshing={adminLoading} onRefresh={loadAdmin}
+            ListHeaderComponent={
+              <View style={{ gap: 8, marginBottom: 8 }}>
+                <View style={[s.row, { gap: 8 }]}>
+                  <TextInput style={[s.input, s.flex, { color: c.text, backgroundColor: c.card, marginBottom: 0 }]}
+                    placeholder="E-mail Google para convidar" placeholderTextColor={c.sub} autoCapitalize="none"
+                    keyboardType="email-address" value={inviteEmail} onChangeText={setInviteEmail} />
+                  <Pressable onPress={inviteMenu} style={[s.primarySm, { justifyContent: "center" }]}>
+                    <Text style={s.primaryText}>Convidar</Text></Pressable>
+                </View>
+                <Text style={{ color: c.sub, fontSize: 13 }}>
+                  {admin.users.length} conta(s) · {admin.invites.filter((i: any) => !i.used_at).length} convite(s) aguardando
+                </Text>
+                {admin.invites.filter((i: any) => !i.used_at).map((i: any) => (
+                  <Text key={i.email} style={{ color: c.sub, fontSize: 13 }}>✉️ {i.email} · {PLAN_NAMES[i.plan] ?? i.plan}</Text>
+                ))}
+              </View>}
+            renderItem={({ item: u }) => (
+              <Pressable onPress={() => clientMenu(u)} style={[s.actCard, { backgroundColor: c.card, opacity: u.status === "ativo" ? 1 : 0.5 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: c.text, fontWeight: "700" }}>{u.name || u.email}{u.is_owner ? " (você)" : ""}</Text>
+                  <Text style={{ color: c.sub, fontSize: 13 }}>{u.email}</Text>
+                  <Text style={{ color: c.sub, fontSize: 12, marginTop: 2 }}>
+                    {PLAN_NAMES[u.plan] ?? u.plan} · {u.actions_this_month} ações no mês · {u.google_connected ? "Google ok" : "sem Google"}
+                    {u.status !== "ativo" ? " · SUSPENSO" : ""}</Text>
+                </View>
+                <Text style={{ color: c.sub }}>›</Text>
+              </Pressable>
+            )}
+          />
+        ) : tab === "tasks" ? (
           <View style={s.flex}>
             <View style={[s.row, { paddingHorizontal: 16, paddingTop: 12, gap: 8 }]}>
               <TextInput style={[s.input, s.flex, { color: c.text, backgroundColor: c.card, marginBottom: 0 }]}

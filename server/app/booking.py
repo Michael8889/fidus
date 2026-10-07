@@ -65,8 +65,10 @@ def settings() -> dict:
     raw = store.kv_get("booking")
     s = {**DEFAULTS, **(json.loads(raw) if raw else {})}
     if not s.get("slug"):
-        s["slug"] = secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:8].lower()
+        s["slug"] = secrets.token_urlsafe(9).replace("-", "").replace("_", "")[:10].lower()
         store.kv_set("booking", json.dumps(s))
+    from . import accounts
+    accounts.register_slug(s["slug"], store.current()["id"])  # a página pública acha o dono por aqui
     return s
 
 
@@ -91,6 +93,8 @@ def update_booking_settings(**kw):
     s = settings()
     kw = {k: v for k, v in kw.items() if k in ALLOWED or k == "new_link"}
     if kw.pop("new_link", False):
+        from . import accounts
+        accounts.drop_slug(s["slug"])  # o link antigo para de funcionar
         s["slug"] = ""
     for k, v in kw.items():
         if v is None:
@@ -105,6 +109,7 @@ def update_booking_settings(**kw):
                  for i, t in enumerate(v) if t.get("name")]
         s[k] = v
     store.kv_set("booking", json.dumps(s))
+    settings()  # gera e registra o link novo, se for o caso
     return {"ok": True, **get_booking_link()}
 
 
@@ -118,7 +123,7 @@ def _busy(day: date) -> list[tuple[datetime, datetime]]:
     from . import tools
     res = google_client.calendar().events().list(
         calendarId="primary", timeMin=tools._rfc3339(f"{day}T00:00:00"), timeMax=tools._rfc3339(f"{day}T23:59:59"),
-        timeZone=config.USER_TIMEZONE, singleEvents=True, orderBy="startTime", maxResults=250).execute()
+        timeZone=store.user_tz(), singleEvents=True, orderBy="startTime", maxResults=250).execute()
     out = []
     for e in res.get("items", []):
         st = e.get("start", {}).get("dateTime") or ""
@@ -193,7 +198,7 @@ def _book_locked(s, t, day, hhmm, name, email, phone, address, notes) -> dict:
         return {"ok": False, "error": "Esse horário acabou de ser ocupado. Escolha outro."}
     start = datetime.fromisoformat(f"{day}T{hhmm}:00")
     end = start + timedelta(minutes=int(t["minutes"]))
-    tz = config.USER_TIMEZONE
+    tz = store.user_tz()
     desc = "\n".join(x for x in ["Agendado pelo link do Fidus.", f"Nome: {name}", f"E-mail: {email}",
                                  f"Telefone: {phone}" if phone else "", f"Observações: {notes}" if notes else ""] if x)
     # só a agenda do usuário recebe o evento; nenhum convite é enviado a partir da conta dele
@@ -210,14 +215,14 @@ def _book_locked(s, t, day, hhmm, name, email, phone, address, notes) -> dict:
     store.add_message("assistant", f"Novo agendamento pelo seu link: {t['name']} com {name}, "
                                    f"{start:%d/%m} às {start:%H:%M}" + (f", em {address}" if address else "") +
                                    ". Já está na sua agenda.")
-    host = s.get("title") or config.USER_NAME
+    host = s.get("title") or store.user_name()
     return {"ok": True, "when": start.strftime("%d/%m/%Y %H:%M"), "type": t["name"], "host": host,
             "start": start.isoformat(), "end": end.isoformat(), "tz": tz, "location": address or ""}
 
 
 # ---------- página pública ----------
 def page(s: dict) -> str:
-    title = html.escape(s.get("title") or config.USER_NAME)
+    title = html.escape(s.get("title") or store.user_name())
     # "<" escapado: um nome de tipo não consegue fechar o <script>
     types = json.dumps([{k: t[k] for k in ("id", "name", "minutes", "needs_address")} for t in s["types"]]).replace("<", "\\u003c")
     return PAGE.replace("{{TITLE}}", title).replace("{{TYPES}}", types).replace("{{SLUG}}", s["slug"])

@@ -54,9 +54,7 @@ Escreva no idioma principal da reunião. Não invente nada que não esteja na tr
 
 
 def _dir() -> str:
-    d = os.path.join(config.DATA_DIR, "meetings", datetime.now().strftime("%Y-%m"))
-    os.makedirs(d, exist_ok=True)
-    return d
+    return store.files_dir("meetings", datetime.now().strftime("%Y-%m"))
 
 
 def start(audio_bytes: bytes, ext: str, title: str | None = None) -> int:
@@ -64,8 +62,15 @@ def start(audio_bytes: bytes, ext: str, title: str | None = None) -> int:
     with open(path, "wb") as f:
         f.write(audio_bytes)
     mid = store.insert("meetings", title=title, status="processando", audio_path=path)
-    threading.Thread(target=process, args=(mid,), daemon=True).start()
+    _spawn(mid)
     return mid
+
+
+def _spawn(mid: int) -> None:
+    """Roda a ata em segundo plano NO banco do cliente atual (o contexto vai junto para a thread)."""
+    import contextvars
+    ctx = contextvars.copy_context()
+    threading.Thread(target=ctx.run, args=(process, mid), daemon=True).start()
 
 
 def _parse_json(text: str) -> dict:
@@ -78,8 +83,9 @@ def _parse_json(text: str) -> dict:
 def _is_me(owner: str | None) -> bool:
     o = (owner or "").strip().lower()
     mine = {"eu", "me", "mim", "i", "você", "voce"}
-    if config.USER_NAME.strip():
-        mine.add(config.USER_NAME.strip().lower())
+    name = store.user_name().strip().lower()
+    if name and name != "você":
+        mine.add(name)
     return o in mine
 
 
@@ -99,7 +105,7 @@ def resume_unfinished() -> None:
     try:
         for m in store.select("SELECT id, audio_path FROM meetings WHERE status='processando'"):
             if m["audio_path"] and os.path.exists(m["audio_path"]):
-                threading.Thread(target=process, args=(m["id"],), daemon=True).start()
+                _spawn(m["id"])
             else:
                 store.update("meetings", m["id"], status="erro", error="o servidor reiniciou e o áudio se perdeu")
     except Exception:  # noqa: BLE001
@@ -116,7 +122,7 @@ def process(mid: int) -> None:
             if not transcript:
                 raise ValueError("não consegui ouvir nada na gravação")
             store.update("meetings", mid, transcript=transcript)
-            out = llm.chat(SUMMARY_PROMPT.format(name=config.USER_NAME, today=features._now().date().isoformat()),
+            out = llm.chat(SUMMARY_PROMPT.format(name=store.user_name(), today=features._now().date().isoformat()),
                            [{"role": "user", "content": transcript[:120000]}], [], web_search=False)
             data = _parse_json(out["text"])
             title = m["title"] or data.get("title") or "Reunião"
@@ -200,10 +206,10 @@ def prepare_minutes_email(meeting_id, emails, note=None):
     if d.get("action_items"):
         body += ["", "Próximos passos:"]
         for it in d["action_items"]:
-            owner = config.USER_NAME if _is_me(it.get("owner")) else it.get("owner")
+            owner = store.user_name() if _is_me(it.get("owner")) else it.get("owner")
             due = f" (até {it['due']})" if DATE_RE.match(str(it.get("due") or "")) else ""
             body.append(f"- {owner}: {it.get('task')}{due}")
-    body += ["", "Abraço,", config.USER_NAME]
+    body += ["", "Abraço,", store.user_name()]
     payload = {"to": ", ".join(emails), "subject": f"Ata: {m['title']}", "body": "\n".join(body)}
     pid = store.create_pending("send_email", payload)
     return {"ok": True, "pending_action_id": pid, "status": "aguardando confirmação do usuário", "draft": payload}

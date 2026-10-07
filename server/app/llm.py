@@ -6,7 +6,7 @@ Resposta: {"text": str, "tool_calls": [{"id", "name", "input"}]}.
 """
 import json
 
-from . import config
+from . import config, store
 
 
 def chat(system: str, messages: list[dict], tools: list[dict], web_search: bool = True) -> dict:
@@ -61,7 +61,7 @@ def _anthropic(system, messages, tools, web_search=True):
         # busca na web feita pela própria Anthropic (opcional; outros provedores seguem sem ela)
         api_tools.append({"type": "web_search_20250305", "name": "web_search", "max_uses": 3,
                           "user_location": {"type": "approximate", "country": config.WEB_SEARCH_COUNTRY,
-                                            "timezone": config.USER_TIMEZONE}})
+                                            "timezone": store.user_tz()}})
     raw: list = []
     for _ in range(3):  # "pause_turn": a busca longa pede para continuar a mesma resposta
         try:
