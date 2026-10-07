@@ -1,0 +1,17 @@
+# Fidus — contêiner isolado. Só escuta em 127.0.0.1 (o Nginx do servidor faz o HTTPS).
+services:
+  fidus:
+    build: ..
+    container_name: fidus_server
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      FIDUS_DB_PATH: /data/fidus.db
+      FIDUS_RECEIPTS_DIR: /data/receipts
+      HF_HOME: /models
+    volumes:
+      - ./data:/data
+      - ./models:/models
+    ports:
+      - "127.0.0.1:${FIDUS_PORT:-8095}:8000"
+    mem_limit: 2g

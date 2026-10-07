@@ -1,0 +1,63 @@
+{
+  "expo": {
+    "name": "Fidus",
+    "slug": "fidus",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.fidus.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "O Fidus usa o microfone para ouvir seus pedidos."
+      }
+    },
+    "android": {
+      "package": "com.fidus.app",
+      "permissions": [
+        "CAMERA",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MICROPHONE",
+        "POST_NOTIFICATIONS",
+        "RECORD_AUDIO",
+        "WAKE_LOCK"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0E1E3A"
+      }
+    },
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "O Fidus usa o microfone para ouvir seus pedidos.",
+          "enableBackgroundRecording": true
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "O Fidus usa a câmera para ler recibos.",
+          "photosPermission": "O Fidus acessa suas fotos para ler recibos."
+        }
+      ],
+      "expo-updates",
+      [
+        "expo-notifications",
+        {
+          "color": "#0E1E3A"
+        }
+      ]
+    ],
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0E1E3A"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
+  }
+}

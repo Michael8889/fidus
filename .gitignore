@@ -1,0 +1,14 @@
+# segredos e dados — nunca no GitHub
+.env
+*.db
+receipts/
+server/deploy/data/
+server/deploy/models/
+server/deploy/.port
+# gerados
+.venv/
+__pycache__/
+.pytest_cache/
+node_modules/
+*.zip
+*.tgz
