@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Fidus Control Room</title>
+<style>
+:root{--bg:#F4F6F8;--card:#FFFFFF;--text:#0B1220;--sub:#5B6678;--line:#E2E7EE;--mint:#14804F;--mintbg:#E3F7EE;
+  --red:#C2362F;--redbg:#FCE9E7;--amber:#9A6200;--amberbg:#FFF3DC;--blue:#2F5BD8;--chip:#EEF1F5;--nav:#07090D;--navtext:#F2F5F7}
+@media (prefers-color-scheme:dark){:root{--bg:#07090D;--card:#10151D;--text:#EEF2F7;--sub:#9AA6B6;--line:#1F2733;--mint:#3DDC97;
+  --mintbg:#10291F;--red:#FF7A70;--redbg:#2E1513;--amber:#FFC560;--amberbg:#2C2210;--blue:#8FB0FF;--chip:#171E28;--nav:#020305}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{background:var(--nav);color:var(--navtext);padding:12px 20px;display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;margin-right:auto}
+.logo span.f{width:30px;height:30px;border-radius:9px;background:#3DDC97;color:#07090D;display:grid;place-items:center}
+header button,header select{background:transparent;color:var(--navtext);border:1px solid #2A3341;border-radius:999px;padding:7px 12px;font:inherit;cursor:pointer;min-height:36px}
+nav{display:flex;gap:6px;flex-wrap:wrap;padding:12px 20px 0;max-width:1240px;margin:0 auto}
+nav button{border:0;background:transparent;color:var(--sub);font:inherit;font-weight:600;padding:10px 14px;border-radius:10px;cursor:pointer;min-height:40px}
+nav button[aria-current="page"]{background:var(--card);color:var(--text);box-shadow:0 1px 0 var(--line)}
+main{max-width:1240px;margin:0 auto;padding:16px 20px 60px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}
+.card h3{margin:0 0 8px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--sub)}
+.big{font-size:30px;font-weight:800;letter-spacing:-.02em}
+.small{font-size:13px;color:var(--sub)}
+.sec{margin:26px 0 10px;font-size:20px;font-weight:800}
+.banner{border-radius:14px;padding:14px 16px;font-weight:700;display:flex;gap:10px;align-items:center}
+.ok{background:var(--mintbg);color:var(--mint)}.bad{background:var(--redbg);color:var(--red)}.warn{background:var(--amberbg);color:var(--amber)}
+.pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--sub);margin:1px 2px}
+.pill.red{background:var(--redbg);color:var(--red)}.pill.amber{background:var(--amberbg);color:var(--amber)}.pill.green{background:var(--mintbg);color:var(--mint)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--sub)}
+.tablebox{overflow-x:auto}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input,select.f{font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);min-height:42px}
+.btn{font:inherit;font-weight:700;border:0;border-radius:10px;padding:10px 16px;background:var(--text);color:var(--card);cursor:pointer;min-height:42px}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+.btn.danger{background:var(--red);color:#fff}
+.login{max-width:420px;margin:12vh auto;text-align:center}
+.login .code{font:700 26px ui-monospace,monospace;letter-spacing:.18em;text-align:center;width:100%;text-transform:uppercase}
+svg text{fill:var(--sub);font-size:11px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--sub);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.muted{color:var(--sub)}
+.err{color:var(--red);font-weight:600;margin-top:10px;min-height:20px}
+@media (max-width:640px){main,nav{padding-left:16px;padding-right:16px}.big{font-size:24px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><span class="f">F</span><span data-t="title">Fidus Control Room</span></div>
+  <label class="small" for="lang" style="color:#9AA6B6" data-t="language">Language</label>
+  <select id="lang" aria-label="Language"><option value="en">English (UK)</option><option value="pt">Português (BR)</option></select>
+  <span id="who" class="small" style="color:#9AA6B6"></span>
+  <button id="logout" hidden data-t="logout">Sign out</button>
+</header>
+<nav id="tabs" aria-label="Sections"></nav>
+<main id="main"></main>
+<script>
+const T = {
+ en: {title:"Fidus Control Room", language:"Language", logout:"Sign out", system:"System", heart:"HEART", business:"Business",
+  clients:"Clients", team:"Team", signin:"Sign in to the control room", signin_help:"In the Fidus app, open the menu › Company dashboard and type the 8-letter code here. It is valid for 5 minutes.",
+  enter:"Enter", all_ok:"All systems healthy", problems:"Needs attention", uptime:"Uptime", requests24:"Requests (24 h)", asks24:"Requests to Fidus (24 h)",
+  error_rate:"Error rate (24 h)", p50:"Response time (median)", p95:"Response time (95%)", failed_tasks:"Failed requests (24 h)", backup:"Last backup",
+  disk:"Free disk", google:"Google connected", ai_today:"AI cost today", recent_errors:"Recent errors", none:"Nothing here yet.",
+  requests_chart:"Requests per day", errors_chart:"Errors per day", run_backup:"Run backup now", hours_ago:"{0} h ago", never:"never",
+  backup_late:"Backup is late", backup_failed:"Last backup failed", disk_low:"Disk almost full", errors_high:"High error rate", tasks_failing:"Many failed requests",
+  happiness:"Happiness", engagement:"Engagement", adoption:"Adoption", retention:"Retention", task_success:"Task success",
+  thumbs:"Thumbs up / down (30 d)", positive:"positive", nps:"NPS (90 d)", answers:"answers", comments:"What customers said",
+  dau:"Active today", wau:"Active this week", mau:"Active this month", per_day:"Requests per active user per day", usage:"What they use (30 d)",
+  accounts:"Accounts", new30:"New (30 d)", funnel:"Funnel", f_accounts:"Account created", f_google:"Google connected", f_first:"First request", f_five:"5+ requests",
+  d7:"Still active after 7 days", d30:"Still active after 30 days", at_risk:"At risk (no use for 7+ days)", ok30:"Requests resolved (30 d)",
+  drafts:"Email drafts sent / discarded", undone:"Actions undone", active_chart:"Active users per day", success_chart:"Success rate per day",
+  mrr:"Monthly recurring revenue", mrr_est:"Estimate in USD", plans:"Customers per plan", subs:"Subscriptions", ai_month:"AI cost this month",
+  ai_pct:"of revenue", referrals:"Referrals (invited / paid)", deleted:"Deleted accounts", fair_use:"Fair-use limit per customer per day",
+  margin_table:"AI cost per customer", email:"Email", plan:"Plan", price:"Price", ai_cost:"AI cost (month)", ai_share:"AI / price", status:"Status",
+  last_ask:"Last request", asks30:"Requests (30 d)", flags:"Flags", created:"Joined", actions:"Actions", change_plan:"Change plan", suspend:"Suspend", reactivate:"Reactivate",
+  no_google:"no Google", inactive_7d:"inactive 7 d", device_switching:"device switching", active:"active", suspended:"suspended", you:"you",
+  privacy:"The team sees numbers only. Customers' conversations, emails, expenses and documents are never shown here.",
+  team_title:"Team access", add:"Add", role:"Role", r_admin:"Admin — everything", r_support:"Support — system, HEART, clients", r_finance:"Finance — business, clients",
+  owner:"Owner", remove:"Remove", audit:"Activity log", when:"When", who:"Who", what:"What", added_by:"Added by",
+  team_help:"The person signs in to the Fidus app with this Google account and opens menu › Company dashboard to get a code.",
+  confirm_remove:"Remove {0} from the team?", saved:"Saved", loading:"Loading…", na:"—", note_fx:"Estimated from assigned plans until store billing is live; approximate exchange rates.",
+  sessions_expired:"Your session has ended. Sign in again.", code_bad:"Invalid or expired code."},
+ pt: {title:"Painel do Fidus", language:"Idioma", logout:"Sair", system:"Sistema", heart:"HEART", business:"Negócio",
+  clients:"Clientes", team:"Equipe", signin:"Entrar no painel", signin_help:"No app do Fidus, abra o menu › Painel da empresa e digite aqui o código de 8 letras. Ele vale 5 minutos.",
+  enter:"Entrar", all_ok:"Tudo funcionando", problems:"Precisa de atenção", uptime:"No ar há", requests24:"Chamadas (24 h)", asks24:"Pedidos ao Fidus (24 h)",
+  error_rate:"Taxa de erro (24 h)", p50:"Tempo de resposta (mediana)", p95:"Tempo de resposta (95%)", failed_tasks:"Pedidos que falharam (24 h)", backup:"Último backup",
+  disk:"Disco livre", google:"Google conectado", ai_today:"Custo de IA hoje", recent_errors:"Erros recentes", none:"Nada por aqui ainda.",
+  requests_chart:"Pedidos por dia", errors_chart:"Erros por dia", run_backup:"Fazer backup agora", hours_ago:"há {0} h", never:"nunca",
+  backup_late:"Backup atrasado", backup_failed:"Último backup falhou", disk_low:"Disco quase cheio", errors_high:"Muitos erros", tasks_failing:"Muitos pedidos falhando",
+  happiness:"Satisfação", engagement:"Uso", adoption:"Adoção", retention:"Retenção", task_success:"Sucesso nas tarefas",
+  thumbs:"Joinha para cima / baixo (30 d)", positive:"positivo", nps:"NPS (90 d)", answers:"respostas", comments:"O que os clientes disseram",
+  dau:"Ativos hoje", wau:"Ativos na semana", mau:"Ativos no mês", per_day:"Pedidos por cliente ativo por dia", usage:"O que mais usam (30 d)",
+  accounts:"Contas", new30:"Novas (30 d)", funnel:"Funil", f_accounts:"Conta criada", f_google:"Google conectado", f_first:"Primeiro pedido", f_five:"5+ pedidos",
+  d7:"Ainda ativos depois de 7 dias", d30:"Ainda ativos depois de 30 dias", at_risk:"Em risco (7+ dias sem usar)", ok30:"Pedidos resolvidos (30 d)",
+  drafts:"Rascunhos de e-mail enviados / descartados", undone:"Ações desfeitas", active_chart:"Clientes ativos por dia", success_chart:"Taxa de sucesso por dia",
+  mrr:"Receita recorrente mensal", mrr_est:"Estimativa em USD", plans:"Clientes por plano", subs:"Assinaturas", ai_month:"Custo de IA no mês",
+  ai_pct:"da receita", referrals:"Convites (convidados / pagaram)", deleted:"Contas apagadas", fair_use:"Limite de uso justo por cliente por dia",
+  margin_table:"Custo de IA por cliente", email:"E-mail", plan:"Plano", price:"Preço", ai_cost:"Custo de IA (mês)", ai_share:"IA / preço", status:"Situação",
+  last_ask:"Último pedido", asks30:"Pedidos (30 d)", flags:"Alertas", created:"Entrou em", actions:"Ações", change_plan:"Mudar plano", suspend:"Suspender", reactivate:"Reativar",
+  no_google:"sem Google", inactive_7d:"parado há 7 d", device_switching:"trocando de aparelho", active:"ativo", suspended:"suspenso", you:"você",
+  privacy:"A equipe vê só números. Conversas, e-mails, gastos e documentos dos clientes nunca aparecem aqui.",
+  team_title:"Acessos da equipe", add:"Adicionar", role:"Papel", r_admin:"Admin — tudo", r_support:"Suporte — sistema, HEART, clientes", r_finance:"Financeiro — negócio, clientes",
+  owner:"Dono", remove:"Remover", audit:"Registro de atividades", when:"Quando", who:"Quem", what:"O quê", added_by:"Adicionado por",
+  team_help:"A pessoa entra no app do Fidus com esse Google e abre menu › Painel da empresa para pegar o código.",
+  confirm_remove:"Tirar {0} da equipe?", saved:"Salvo", loading:"Carregando…", na:"—", note_fx:"Estimativa pelos planos atribuídos até a cobrança pela loja estar ligada; câmbio aproximado.",
+  sessions_expired:"Sua sessão terminou. Entre de novo.", code_bad:"Código inválido ou expirado."}
+};
+let L = "en";
+try { L = localStorage.getItem("fidus_admin_lang") || "en"; } catch (e) {}
+const t = (k, ...a) => { let s = (T[L] && T[L][k]) || T.en[k] || k; a.forEach((v, i) => s = s.split("{" + i + "}").join(v)); return s; };
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const $ = (s) => document.querySelector(s);
+const locale = () => L === "pt" ? "pt-BR" : "en-GB";
+const num = (n, d = 0) => n == null ? t("na") : Number(n).toLocaleString(locale(), {maximumFractionDigits: d, minimumFractionDigits: d});
+const pct = (n) => n == null ? t("na") : num(n, 1) + "%";
+const when = (ts) => ts ? new Date(ts * 1000).toLocaleString(locale(), {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) : t("na");
+const dateIso = (s) => s ? new Date(s).toLocaleDateString(locale(), {day: "2-digit", month: "short", year: "numeric"}) : t("na");
+const money = (v, cur) => v == null ? t("na") : new Intl.NumberFormat(locale(), {style: "currency", currency: cur || "USD"}).format(v);
+let ME = null, TAB = null;
+
+async function api(path, opts = {}) {
+  const r = await fetch("/admin/api/" + path, {credentials: "same-origin", ...opts,
+    headers: {"Content-Type": "application/json", "X-Fidus-Admin": "1", ...(opts.headers || {})}});
+  if (r.status === 401) { ME = null; render(); throw new Error(t("sessions_expired")); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.detail || r.status);
+  return j;
+}
+
+function card(title, value, sub = "", cls = "") {
+  return `<div class="card ${cls}"><h3>${esc(title)}</h3><div class="big">${value}</div>${sub ? `<div class="small">${sub}</div>` : ""}</div>`;
+}
+
+// gráfico de barras/linha em SVG (sem biblioteca)
+function chart(series, keys, colors, fmt) {
+  const W = 640, H = 170, P = 26, n = series.length;
+  const max = Math.max(1, ...series.flatMap((d) => keys.map((k) => d[k] || 0)));
+  fmt = fmt || ((v) => num(v, max < 10 && v % 1 ? 1 : 0));
+  const bw = (W - P * 2) / n;
+  let out = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(keys.join(", "))}">`;
+  for (let i = 0; i <= 2; i++) { const y = P + (H - P * 2) * i / 2; out += `<line x1="${P}" x2="${W - 4}" y1="${y}" y2="${y}" stroke="currentColor" opacity=".08"/><text x="0" y="${y + 4}">${fmt(max * (1 - i / 2))}</text>`; }
+  keys.forEach((k, ki) => {
+    if (ki === 0) series.forEach((d, i) => { const h = (H - P * 2) * (d[k] || 0) / max; out += `<rect x="${P + i * bw + 1}" y="${H - P - h}" width="${Math.max(1, bw - 3)}" height="${h}" rx="2" fill="${colors[0]}"><title>${esc(d.day)}: ${fmt(d[k] || 0)}</title></rect>`; });
+    else { const pts = series.map((d, i) => `${P + i * bw + bw / 2},${H - P - (H - P * 2) * (d[k] || 0) / max}`).join(" "); out += `<polyline points="${pts}" fill="none" stroke="${colors[ki]}" stroke-width="2.5"/>`; }
+  });
+  [0, Math.floor(n / 2), n - 1].forEach((i) => { if (series[i]) out += `<text x="${P + i * bw}" y="${H - 6}">${esc(series[i].day.slice(5))}</text>`; });
+  return out + "</svg>";
+}
+
+function render() {
+  document.documentElement.lang = L === "pt" ? "pt-BR" : "en-GB";
+  document.title = t("title");
+  document.querySelectorAll("[data-t]").forEach((el) => el.textContent = t(el.dataset.t));
+  $("#lang").value = L;
+  $("#logout").hidden = !ME;
+  $("#who").textContent = ME ? `${ME.email} · ${ME.role}` : "";
+  const tabs = $("#tabs");
+  if (!ME) {
+    tabs.innerHTML = "";
+    $("#main").innerHTML = `<div class="login card"><h1 style="margin:0 0 8px">${esc(t("signin"))}</h1><p class="muted">${esc(t("signin_help"))}</p>
+      <form id="lf"><label for="code" class="small" style="display:block;text-align:left;margin:8px 0 4px">Code</label>
+      <input id="code" class="code" maxlength="9" autocomplete="one-time-code" required>
+      <button class="btn" style="width:100%;margin-top:12px">${esc(t("enter"))}</button><div class="err" id="lerr"></div></form></div>`;
+    $("#lf").onsubmit = async (e) => { e.preventDefault();
+      try { await api("login", {method: "POST", body: JSON.stringify({code: $("#code").value})}); await boot(); }
+      catch (err) { $("#lerr").textContent = /inválido|expir/.test(err.message) ? t("code_bad") : err.message; } };
+    return;
+  }
+  const order = ["system", "heart", "business", "clients", "team"].filter((s) => ME.screens.includes(s));
+  if (!TAB || !order.includes(TAB)) TAB = order[0];
+  tabs.innerHTML = order.map((s) => `<button data-s="${s}" ${s === TAB ? 'aria-current="page"' : ""}>${esc(t(s))}</button>`).join("");
+  tabs.querySelectorAll("button").forEach((b) => b.onclick = () => { TAB = b.dataset.s; render(); });
+  $("#main").innerHTML = `<p class="muted">${esc(t("loading"))}</p>`;
+  ({system: showSystem, heart: showHeart, business: showBusiness, clients: showClients, team: showTeam})[TAB]().catch((e) => {
+    $("#main").innerHTML = `<div class="banner bad">${esc(e.message)}</div>`; });
+}
+
+async function showSystem() {
+  const d = await api("system");
+  const up = d.uptime_s > 86400 ? `${Math.floor(d.uptime_s / 86400)} d` : `${Math.floor(d.uptime_s / 3600)} h`;
+  const b = d.backup || {};
+  $("#main").innerHTML = `
+    <div class="banner ${d.ok ? "ok" : "bad"}">${d.ok ? "✓ " + esc(t("all_ok")) : "⚠ " + esc(t("problems")) + ": " + d.problems.map((p) => esc(t(p))).join(" · ")}</div>
+    <div class="grid" style="margin-top:12px">
+      ${card(t("asks24"), num(d.asks_24h), `${esc(t("requests24"))}: ${num(d.requests_24h)}`)}
+      ${card(t("error_rate"), pct(d.error_rate_24h), `${num(d.errors_24h)} · ${esc(t("failed_tasks"))}: ${num(d.tasks_failed_24h)}`, d.errors_24h ? "" : "")}
+      ${card(t("p50"), d.p50_ms == null ? t("na") : num(d.p50_ms / 1000, 1) + " s", `${esc(t("p95"))}: ${d.p95_ms == null ? t("na") : num(d.p95_ms / 1000, 1) + " s"}`)}
+      ${card(t("backup"), b.age_hours == null ? esc(t("never")) : esc(t("hours_ago", num(b.age_hours, 1))), b.file ? esc(b.file) : "")}
+      ${card(t("disk"), d.disk_free_gb == null ? t("na") : num(d.disk_free_gb, 1) + " GB", `${esc(t("uptime"))}: ${up} · v${esc(d.version)}`)}
+      ${card(t("google"), `${num(d.google_connected)} / ${num(d.accounts)}`, esc(d.model))}
+      ${card(t("ai_today"), money(d.ai_cost_today_usd, "USD"))}
+    </div>
+    <div class="grid" style="margin-top:12px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+      <div class="card"><h3>${esc(t("requests_chart"))}</h3>${chart(d.series, ["requests"], ["var(--mint)"])}</div>
+      <div class="card"><h3>${esc(t("errors_chart"))}</h3>${chart(d.series, ["errors"], ["var(--red)"])}</div>
+    </div>
+    <div class="sec">${esc(t("recent_errors"))}</div>
+    <div class="card tablebox">${d.recent_errors.length ? `<table><thead><tr><th>${esc(t("when"))}</th><th>Path</th><th>HTTP</th><th>${esc(t("what"))}</th></tr></thead><tbody>
+      ${d.recent_errors.map((e) => `<tr><td>${when(e.ts)}</td><td>${esc(e.path)}</td><td>${e.status}</td><td class="small">${esc(e.detail)}</td></tr>`).join("")}</tbody></table>` : `<p class="muted">${esc(t("none"))}</p>`}</div>
+    ${["owner", "admin"].includes(ME.role) ? `<p style="margin-top:16px"><button class="btn ghost" id="bk">${esc(t("run_backup"))}</button> <span id="bkr" class="small"></span></p>` : ""}`;
+  const bk = $("#bk");
+  if (bk) bk.onclick = async () => { bk.disabled = true; try { const r = await api("backup", {method: "POST"}); $("#bkr").textContent = "✓ " + r.file; } catch (e) { $("#bkr").textContent = e.message; } bk.disabled = false; };
+}
+
+async function showHeart() {
+  const d = await api("heart");
+  const h = d.happiness, e = d.engagement, a = d.adoption, r = d.retention, s = d.task_success;
+  const funnel = [[t("f_accounts"), a.accounts], [t("f_google"), a.google_connected], [t("f_first"), a.first_ask], [t("f_five"), a.five_asks]];
+  const kinds = Object.entries(e.by_kind || {}).sort((x, y) => y[1].n - x[1].n);
+  $("#main").innerHTML = `
+    <div class="sec">❤ ${esc(t("happiness"))}</div>
+    <div class="grid">
+      ${card(t("thumbs"), `${num(h.thumbs_up)} / ${num(h.thumbs_down)}`, `${pct(h.positive_pct)} ${esc(t("positive"))}`)}
+      ${card(t("nps"), h.nps == null ? t("na") : num(h.nps), `${num(h.nps_answers)} ${esc(t("answers"))} · ${h.promoters}/${h.passives}/${h.detractors}`)}
+    </div>
+    ${h.comments.length ? `<div class="card" style="margin-top:12px"><h3>${esc(t("comments"))}</h3>${h.comments.map((c) => `<p><span class="pill ${c.score >= 9 ? "green" : c.score <= 6 ? "red" : ""}">${c.score}</span> ${esc(c.comment)} <span class="small">${when(c.ts)}</span></p>`).join("")}</div>` : ""}
+    <div class="sec">⚡ ${esc(t("engagement"))}</div>
+    <div class="grid">
+      ${card(t("dau"), num(e.dau))}${card(t("wau"), num(e.wau))}${card(t("mau"), num(e.mau))}${card(t("per_day"), num(e.asks_per_active_day, 1))}
+      <div class="card"><h3>${esc(t("usage"))}</h3>${kinds.length ? kinds.map(([k, v]) => `<div class="row" style="justify-content:space-between"><span>${esc(k)}</span><b>${num(v.n)}</b></div>`).join("") : `<span class="muted">${esc(t("none"))}</span>`}</div>
+    </div>
+    <div class="card" style="margin-top:12px"><h3>${esc(t("active_chart"))}</h3>${chart(d.series, ["active"], ["var(--blue)"])}</div>
+    <div class="sec">🌱 ${esc(t("adoption"))}</div>
+    <div class="grid">
+      ${card(t("accounts"), num(a.accounts), `${esc(t("new30"))}: ${num(a.new_30d)}`)}
+      <div class="card" style="grid-column:span 2;min-width:0"><h3>${esc(t("funnel"))}</h3>${funnel.map(([k, v]) => `<div style="margin:6px 0"><div class="row" style="justify-content:space-between"><span>${esc(k)}</span><b>${num(v)}</b></div><div style="height:8px;background:var(--chip);border-radius:4px"><div style="height:8px;border-radius:4px;background:var(--mint);width:${a.accounts ? Math.round(100 * v / a.accounts) : 0}%"></div></div></div>`).join("")}</div>
+    </div>
+    <div class="sec">🔁 ${esc(t("retention"))}</div>
+    <div class="grid">
+      ${card(t("d7"), pct(r.d7_pct), `n = ${num(r.d7_base)}`)}${card(t("d30"), pct(r.d30_pct), `n = ${num(r.d30_base)}`)}
+    </div>
+    <div class="card tablebox" style="margin-top:12px"><h3>${esc(t("at_risk"))}</h3>${r.at_risk.length ? `<table><thead><tr><th>${esc(t("email"))}</th><th>${esc(t("plan"))}</th><th>${esc(t("last_ask"))}</th></tr></thead><tbody>${r.at_risk.map((u) => `<tr><td>${esc(u.email)}</td><td>${esc(u.plan)}</td><td>${when(u.last_task)}</td></tr>`).join("")}</tbody></table>` : `<p class="muted">${esc(t("none"))}</p>`}</div>
+    <div class="sec">✓ ${esc(t("task_success"))}</div>
+    <div class="grid">
+      ${card(t("ok30"), pct(s.ok_pct_30d), `n = ${num(s.asks_30d)}`)}
+      ${card(t("drafts"), `${num(s.drafts_sent)} / ${num(s.drafts_discarded)}`)}
+      ${card(t("undone"), num(s.undone))}
+    </div>
+    <div class="card" style="margin-top:12px"><h3>${esc(t("success_chart"))}</h3>${chart(d.series, ["success"], ["var(--mint)"], (v) => num(v) + "%")}</div>`;
+}
+
+async function showBusiness() {
+  const d = await api("business");
+  const mrr = Object.entries(d.mrr_by_currency).map(([c, v]) => money(v, c)).join(" + ") || t("na");
+  $("#main").innerHTML = `
+    <div class="grid">
+      ${card(t("mrr"), mrr, `${esc(t("mrr_est"))}: ${money(d.mrr_usd_estimate, "USD")}`)}
+      ${card(t("ai_month"), money(d.ai_cost_month_usd, "USD"), `${pct(d.ai_cost_pct_of_mrr)} ${esc(t("ai_pct"))}`)}
+      ${card(t("plans"), Object.entries(d.plans).map(([k, v]) => `${v}`).join(" / ") || "0", Object.keys(d.plans).map(esc).join(" / "))}
+      ${card(t("referrals"), `${num(d.referrals.invited)} / ${num(d.referrals.paid)}`)}
+      ${card(t("subs"), Object.values(d.subscriptions).reduce((a, b) => a + b, 0), Object.entries(d.subscriptions).map(([k, v]) => `${esc(k)}: ${v}`).join(" · "))}
+      ${card(t("deleted"), num(d.deleted_accounts), `${esc(t("fair_use"))}: ${money(d.fair_use_daily_usd, "USD")}`)}
+    </div>
+    <p class="small">${esc(t("note_fx"))}</p>
+    <div class="sec">${esc(t("margin_table"))}</div>
+    <div class="card tablebox"><table><thead><tr><th>${esc(t("email"))}</th><th>${esc(t("plan"))}</th><th>${esc(t("price"))}</th><th>${esc(t("ai_cost"))}</th><th>${esc(t("ai_share"))}</th><th>${esc(t("status"))}</th></tr></thead><tbody>
+    ${d.clients.map((c) => `<tr><td>${esc(c.email)}</td><td>${esc(c.plan)}</td><td>${money(c.price, c.currency)}</td><td>${money(c.ai_cost_month_usd, "USD")}</td><td>${c.ai_cost_pct != null && c.ai_cost_pct > 40 ? `<span class="pill red">${pct(c.ai_cost_pct)}</span>` : pct(c.ai_cost_pct)}</td><td>${esc(c.subscription || t("na"))}</td></tr>`).join("") || `<tr><td colspan="6" class="muted">${esc(t("none"))}</td></tr>`}
+    </tbody></table></div>`;
+}
+
+async function showClients() {
+  const d = await api("clients");
+  const fin = d.clients.some((c) => "price" in c);
+  $("#main").innerHTML = `<div class="banner warn" style="font-weight:600">🔒 ${esc(t("privacy"))}</div>
+    <div class="card tablebox" style="margin-top:12px"><table><thead><tr><th>${esc(t("email"))}</th><th>${esc(t("plan"))}</th>${fin ? `<th>${esc(t("price"))}</th><th>${esc(t("ai_cost"))}</th>` : ""}
+    <th>${esc(t("asks30"))}</th><th>${esc(t("last_ask"))}</th><th>${esc(t("created"))}</th><th>${esc(t("flags"))}</th><th>${esc(t("status"))}</th>${d.can_manage ? `<th>${esc(t("actions"))}</th>` : ""}</tr></thead><tbody>
+    ${d.clients.map((c) => `<tr><td>${esc(c.email)}${c.is_owner ? ` <span class="pill green">${esc(t("you"))}</span>` : ""}<div class="small">${esc(c.name || "")} ${esc(c.country || "")} ${esc(c.language || "")}</div></td>
+      <td>${esc(c.plan_name)}</td>${fin ? `<td>${money(c.price, c.currency)}</td><td>${money(c.ai_cost_month_usd, "USD")}</td>` : ""}
+      <td>${num(c.asks_30d)}</td><td>${when(c.last_ask)}</td><td>${dateIso(c.created_at)}</td>
+      <td>${c.flags.map((f) => `<span class="pill ${f === "device_switching" ? "red" : "amber"}">${esc(t(f))}</span>`).join("")}</td>
+      <td>${c.status === "ativo" ? `<span class="pill green">${esc(t("active"))}</span>` : `<span class="pill red">${esc(t("suspended"))}</span>`}</td>
+      ${d.can_manage ? `<td>${c.is_owner ? "" : `<div class="row"><select class="f" data-plan="${esc(c.id)}" aria-label="${esc(t("change_plan"))}">${["essencial", "negocio", "premium"].map((p) => `<option value="${p}" ${p === c.plan ? "selected" : ""}>${p}</option>`).join("")}</select>
+        <button class="btn ghost" data-status="${esc(c.id)}" data-to="${c.status === "ativo" ? "suspenso" : "ativo"}">${esc(c.status === "ativo" ? t("suspend") : t("reactivate"))}</button></div>`}</td>` : ""}</tr>`).join("")}
+    </tbody></table></div>`;
+  document.querySelectorAll("[data-plan]").forEach((s) => s.onchange = async () => { await api(`clients/${s.dataset.plan}/plan`, {method: "POST", body: JSON.stringify({plan: s.value})}); showClients(); });
+  document.querySelectorAll("[data-status]").forEach((b) => b.onclick = async () => { await api(`clients/${b.dataset.status}/status`, {method: "POST", body: JSON.stringify({status: b.dataset.to})}); showClients(); });
+}
+
+async function showTeam() {
+  const d = await api("team");
+  const roles = ME.role === "owner" ? ["support", "finance", "admin"] : ["support", "finance"];
+  $("#main").innerHTML = `<div class="sec" style="margin-top:0">${esc(t("team_title"))}</div>
+    <form class="card row" id="tf"><label class="small" for="tm" style="width:100%">${esc(t("team_help"))}</label>
+      <input id="tm" type="email" required placeholder="name@company.com" style="flex:1 1 240px">
+      <select id="tr" class="f" aria-label="${esc(t("role"))}">${roles.map((r) => `<option value="${r}">${esc(t("r_" + r))}</option>`).join("")}</select>
+      <button class="btn">${esc(t("add"))}</button><span id="terr" class="err"></span></form>
+    <div class="card tablebox" style="margin-top:12px"><table><thead><tr><th>${esc(t("email"))}</th><th>${esc(t("role"))}</th><th>${esc(t("added_by"))}</th><th></th></tr></thead><tbody>
+      <tr><td>${esc(d.owner || "")}</td><td><span class="pill green">${esc(t("owner"))}</span></td><td></td><td></td></tr>
+      ${d.staff.map((s) => `<tr><td>${esc(s.email)}</td><td>${esc(t("r_" + s.role))}</td><td class="small">${esc(s.added_by)}</td><td><button class="btn ghost" data-rm="${esc(s.email)}">${esc(t("remove"))}</button></td></tr>`).join("")}
+    </tbody></table></div>
+    <div class="sec">${esc(t("audit"))}</div>
+    <div class="card tablebox"><table><thead><tr><th>${esc(t("when"))}</th><th>${esc(t("who"))}</th><th>${esc(t("what"))}</th></tr></thead><tbody>
+      ${d.audit.map((a) => `<tr><td>${when(a.ts)}</td><td>${esc(a.email)}</td><td>${esc(a.action)} <span class="small">${esc(a.target)}</span></td></tr>`).join("") || `<tr><td colspan="3" class="muted">${esc(t("none"))}</td></tr>`}
+    </tbody></table></div>`;
+  $("#tf").onsubmit = async (e) => { e.preventDefault();
+    try { await api("team", {method: "POST", body: JSON.stringify({email: $("#tm").value, role: $("#tr").value})}); showTeam(); }
+    catch (err) { $("#terr").textContent = err.message; } };
+  document.querySelectorAll("[data-rm]").forEach((b) => b.onclick = async () => {
+    if (!confirm(t("confirm_remove", b.dataset.rm))) return;
+    await api("team/" + encodeURIComponent(b.dataset.rm), {method: "DELETE"}); showTeam(); });
+}
+
+async function boot() {
+  try { ME = await api("me"); } catch (e) { ME = null; }
+  render();
+}
+$("#lang").onchange = (e) => { L = e.target.value; try { localStorage.setItem("fidus_admin_lang", L); } catch (er) {} render(); };
+$("#logout").onclick = async () => { try { await api("logout", {method: "POST"}); } catch (e) {} ME = null; render(); };
+boot();
+</script>
+</body>
+</html>

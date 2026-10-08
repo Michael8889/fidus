@@ -68,6 +68,7 @@ GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/spreadsheets",  # planilhas: opcional (quem conectou antes reconecta para ganhar)
 ]
 
 DB_PATH = env("FIDUS_DB_PATH", "fidus.db")  # banco do dono (Mike); clientes têm um banco cada

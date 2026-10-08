@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Uplo
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
-from . import account_data, accounts, actions, agent, backup, booking, config, features, google_client, i18n, mailer, meetings, plans, store, tools
+from . import account_data, accounts, actions, admin, agent, backup, booking, metrics, web_tools, config, features, google_client, i18n, mailer, meetings, plans, store, tools
 
 app = FastAPI(title="Fidus API", version="0.9.0", docs_url=None, redoc_url=None, openapi_url=None)  # não expõe o mapa da API
 store.init_db()
@@ -36,6 +36,8 @@ class UserContext:
                 store.CURRENT.reset(tok)
 
 
+app.include_router(admin.router)  # painel da empresa em /admin
+app.add_middleware(metrics.Middleware)  # mede tempo e erros (fica por dentro: já sabe quem é o cliente)
 app.add_middleware(UserContext)
 
 
@@ -343,7 +345,46 @@ def me():
     return {"id": u["id"], "email": u.get("email"), "name": store.user_name(), "is_owner": bool(u.get("is_owner")),
             "plan": plans.current(), "plan_name": plans.PLANS[plans.current()]["name"],
             "google_connected": google_client.is_connected(), "profile": store.profile(),
-            "language": store.user_lang(), "currency": plans.user_currency()}
+            "language": store.user_lang(), "currency": plans.user_currency(),
+            "staff_role": admin.role_for({**u, "email": u.get("email")}),
+            "nps_due": _nps_due(u)}
+
+
+def _nps_due(u: dict) -> bool:
+    try:
+        full = accounts.get_user(u["id"]) or {}
+        return not u.get("is_owner") and metrics.nps_due(u["id"], full.get("created_at"))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+# ---------- Satisfação (painel HEART): 👍/👎 nas respostas e nota de 0 a 10 ----------
+class FeedbackIn(BaseModel):
+    value: int
+    area: str = ""
+
+
+@app.post("/v1/feedback", dependencies=[Depends(auth)])
+def feedback(body: FeedbackIn):
+    return {"ok": metrics.add_feedback(store.current()["id"], body.value, body.area)}
+
+
+class NpsIn(BaseModel):
+    score: int
+    comment: str = ""
+
+
+@app.post("/v1/nps", dependencies=[Depends(auth)])
+def nps(body: NpsIn):
+    if not 0 <= body.score <= 10:
+        raise HTTPException(400, "nota de 0 a 10")
+    return {"ok": metrics.add_nps(store.current()["id"], body.score, body.comment)}
+
+
+@app.post("/v1/admin/panel_code", dependencies=[Depends(auth)])
+def panel_code():
+    """Código de 8 letras para abrir o painel da empresa no computador (só equipe)."""
+    return admin.new_panel_code(store.current())
 
 
 class ProfileIn(BaseModel):
@@ -491,17 +532,19 @@ def admin_set_status(uid: str, body: StatusIn):
 def message(body: TextIn):
     sent = actions.handle_command(body.text, body.drafts)  # "envia" com rascunho na tela: o próprio usuário autorizou
     if sent:
+        metrics.record_task(store.current()["id"], "envio", bool(sent.get("sent_actions")))
         return {"transcript": body.text, **sent}
     return {"transcript": body.text, **agent.handle(body.text, voice=body.mode == "voice")}
 
 
-def _after_transcript(text: str, voice: bool = False, drafts: list[str] | None = None) -> dict:
+def _after_transcript(text: str, voice: bool = False, drafts: list[str] | None = None, kind: str = "voz") -> dict:
     if not text:
         return {"transcript": "", "reply": i18n.msg("no_audio"), "pending_actions": [], "events": []}
     sent = actions.handle_command(text, drafts)
     if sent:
+        metrics.record_task(store.current()["id"], "envio", bool(sent.get("sent_actions")))
         return {"transcript": text, **sent}
-    return {"transcript": text, **agent.handle(text, voice=voice)}
+    return {"transcript": text, **agent.handle(text, voice=voice, kind="conversa" if voice else kind)}
 
 
 @app.post("/v1/voice", dependencies=[Depends(auth)])
@@ -517,7 +560,7 @@ async def voice(audio: UploadFile = File(...)):
         text = transcribe(path, prompt_for(store.user_lang()))
     finally:
         os.unlink(path)
-    return _after_transcript(text)
+    return _after_transcript(text, kind="voz")
 
 
 class VoiceB64In(BaseModel):
@@ -574,7 +617,7 @@ def photo(body: PhotoIn):
                                  "(seguro, contrato, carta, MOT, apólice, garantia...), guarde com save_document. "
                                  "Se não der para saber, pergunte."))
     return {"transcript": "", **agent.handle(text, image_b64=body.image_b64, media_type=body.media_type,
-                                             receipt_path=path)}
+                                             receipt_path=path, kind="pdf" if body.media_type == "application/pdf" else "foto")}
 
 
 @app.get("/v1/history", dependencies=[Depends(auth)])
@@ -671,6 +714,7 @@ UNDO = {
     "document_saved": lambda ref: features.delete_document(int(ref)),
     "bill_added": lambda ref: features.delete_bill(int(ref)),
     "export_created": lambda ref: features.delete_document(int(ref)),
+    "sheet_changed": lambda ref: web_tools.undo_sheet(ref),
 }
 
 

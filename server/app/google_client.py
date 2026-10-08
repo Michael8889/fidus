@@ -27,7 +27,7 @@ def _flow(state: str | None = None) -> Flow:
         "token_uri": "https://oauth2.googleapis.com/token",
     }}
     flow = Flow.from_client_config(client_config, scopes=config.GOOGLE_SCOPES, state=state)
-    flow.redirect_uri = config.PUBLIC_BASE_URL + REDIRECT_PATH
+    flow.redirect_uri = config.PUBLIC_BASE_URL.strip().rstrip("/") + REDIRECT_PATH
     return flow
 
 
@@ -96,3 +96,7 @@ def calendar():
 
 def gmail():
     return build("gmail", "v1", credentials=credentials(), cache_discovery=False)
+
+
+def sheets():
+    return build("sheets", "v4", credentials=credentials(), cache_discovery=False)

@@ -154,8 +154,9 @@ type Item =
   | { id: string; type: "fidus"; text: string }
   | { id: string; type: "action"; action: Action }
   | { id: string; type: "doc"; doc: Doc }
-  | { id: string; type: "upsell"; up: Upsell };
-type Screen = "chat" | "convs" | "tasks" | "docs" | "meetings" | "expenses" | "booking" | "activity" | "invite" | "admin" | "settings";
+  | { id: string; type: "upsell"; up: Upsell }
+  | { id: string; type: "nps" };
+type Screen = "chat" | "convs" | "tasks" | "docs" | "meetings" | "expenses" | "booking" | "activity" | "invite" | "admin" | "settings" | "panel";
 
 const NAVY = "#0E1E3A";
 const MINT = "#3DDC97";
@@ -164,13 +165,14 @@ const ICON: Record<string, string> = {
   event_created: "📅", event_deleted: "🗑", email_draft: "✉️", expense_added: "💷", expense_deleted: "🗑",
   reminder_created: "⏰", task_added: "📝", task_done: "✅", document_saved: "📄", bill_added: "🔁",
   bill_deleted: "🗑", meet_added: "🎥", invite_draft: "👥", meeting_summarized: "🎙", booking_received: "🗓",
-  export_created: "📦",
+  export_created: "📦", sheet_changed: "📊",
 };
 const LABEL = (): Record<string, string> => ({
   event_created: t("Agenda"), event_deleted: t("Agenda"), email_draft: t("E-mail"), expense_added: t("Gasto"),
   expense_deleted: t("Gasto"), reminder_created: t("Lembrete"), task_added: t("Tarefa"), task_done: t("Tarefa"),
   document_saved: t("Documento"), bill_added: t("Conta fixa"), bill_deleted: t("Conta fixa"), meet_added: t("Agenda"),
   invite_draft: t("Convite"), meeting_summarized: t("Reunião"), booking_received: t("Agendamento"), export_created: t("Contador"),
+  sheet_changed: t("Planilha"),
 });
 const fmtDay = (d?: string | null) => d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : "";
 // selo de status: verbo claro + cor
@@ -189,6 +191,7 @@ function pill(kind: string, status: string): { text: string; color: string } {
   if (kind === "meeting_summarized") return { text: t("Ata pronta"), color: GREEN };
   if (kind === "booking_received") return { text: t("Agendado"), color: GREEN };
   if (kind === "export_created") return { text: t("Gerado"), color: GREEN };
+  if (kind === "sheet_changed") return { text: t("Alterada"), color: GREEN };
   return { text: t("Criado"), color: GREEN };
 }
 const fmtDate = (iso: string) => {
@@ -504,6 +507,10 @@ function FidusApp() {
   const [nameEdit, setNameEdit] = useState("");
   const [pendingMeet, setPendingMeet] = useState<string | null>(null);
   const [billing, setBilling] = useState<any>(null);
+  const [fb, setFb] = useState<Record<string, number>>({});
+  const [npsScore, setNpsScore] = useState<number | null>(null);
+  const [npsText, setNpsText] = useState("");
+  const [panel, setPanel] = useState<any>(null);
   const [authOpts, setAuthOpts] = useState<any>(null);
   const [emailMode, setEmailMode] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
@@ -599,7 +606,14 @@ function FidusApp() {
             ...(deviceTimezone() ? { timezone: deviceTimezone() } : {}), only_if_empty: true }) }, 15000);
       } catch { /* servidor antigo */ }
       for (let i = 0; i < 3; i++) {  // dados da conta; tenta de novo se a rede falhar
-        try { const m = await api("/v1/me", {}, 15000); setMe(m); if (m.language && m.language !== LANG) loadLang(m.language); break; }
+        try {
+          const m = await api("/v1/me", {}, 15000); setMe(m); if (m.language && m.language !== LANG) loadLang(m.language);
+          if (m.nps_due) {  // nota de 0 a 10, no máximo uma vez por mês (se a pessoa fechar, volta em 7 dias)
+            const skip = Number(await SecureStore.getItemAsync("npsSkip") || 0);
+            if (Date.now() - skip > 7 * 86400000) setTimeout(() => push({ id: uid(), type: "nps" }), 4000);
+          }
+          break;
+        }
         catch { await new Promise((r) => setTimeout(r, 3000)); }
       }
       await loadHistory();
@@ -1489,6 +1503,29 @@ function FidusApp() {
     catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
   }
 
+  async function sendFeedback(itemId: string, value: number) {
+    setFb((p) => ({ ...p, [itemId]: value }));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try { await post("/v1/feedback", { value }, 10000); } catch {}
+  }
+
+  async function sendNps(itemId: string) {
+    if (npsScore == null) return;
+    try { await post("/v1/nps", { score: npsScore, comment: npsText.trim() }, 10000); } catch {}
+    setItems((prev) => prev.filter((x) => x.id !== itemId));
+    setNpsScore(null); setNpsText(""); flash(t("Obrigado!"));
+  }
+
+  async function skipNps(itemId: string) {
+    setItems((prev) => prev.filter((x) => x.id !== itemId));
+    try { await SecureStore.setItemAsync("npsSkip", String(Date.now())); } catch {}
+  }
+
+  async function panelCode() {
+    try { setPanel(await post("/v1/admin/panel_code", {}, 15000)); }
+    catch (e: any) { Alert.alert(t("Painel da empresa"), errMsg(e)); }
+  }
+
   async function exportData() {
     try {
       flash(t("Preparando seus dados…"));
@@ -1545,7 +1582,7 @@ function FidusApp() {
   const SCREEN_TITLE = (): Record<Screen, string> => ({
     chat: "Fidus", convs: t("Conversas"), tasks: t("Tarefas"), docs: t("Documentos"), meetings: t("Reuniões e atas"),
     expenses: t("Gastos e contas"), booking: t("Link de agendamento"), activity: t("Atividade"),
-    invite: t("Convide e ganhe"), admin: t("Clientes"), settings: t("Configurações"),
+    invite: t("Convide e ganhe"), admin: t("Clientes"), settings: t("Configurações"), panel: t("Painel da empresa"),
   });
 
   // ---------- Telas ----------
@@ -1898,6 +1935,22 @@ function FidusApp() {
         {!!referral?.invited_by && <Text style={{ color: c.sub }}>{t("Você entrou pelo convite de {0} 🎁", referral.invited_by)}</Text>}
       </ScrollView>
     );
+    if (screen === "panel") return (
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+        <Text style={{ color: c.sub, lineHeight: 20 }}>{t("O painel mostra a saúde do sistema, o uso do Fidus (HEART), o negócio e a equipe. Abra no computador e digite o código.")}</Text>
+        <Pressable style={s.primary} onPress={panelCode}><Text style={s.primaryText}>{t("Gerar código de acesso")}</Text></Pressable>
+        {!!panel && (
+          <Card c={c} style={{ flexDirection: "column", alignItems: "center", gap: 8 }}>
+            <Text selectable style={{ color: c.text, fontSize: 34, fontWeight: "800", letterSpacing: 6 }}>{panel.code}</Text>
+            <Text style={{ color: c.sub, fontSize: 13 }}>{t("Vale 5 minutos e só uma vez.")}</Text>
+            <Text selectable style={{ color: c.text, fontWeight: "600" }}>{panel.url}</Text>
+            <View style={[s.row, { justifyContent: "center", flexWrap: "wrap" }]}>
+              <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => copyText(panel.url)}><Text style={{ color: c.text }}>{t("Copiar endereço")}</Text></Pressable>
+              <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => Linking.openURL(panel.url).catch(() => {})}><Text style={{ color: c.text }}>{t("Abrir aqui")}</Text></Pressable>
+            </View>
+          </Card>)}
+      </ScrollView>
+    );
     if (screen === "settings") return (
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
         <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
@@ -2020,8 +2073,36 @@ function FidusApp() {
             if (item.type === "user")
               return <View style={[s.bubble, s.userBubble]}><LinkText text={item.text} style={s.userText} linkColor={MINT} /></View>;
             if (item.type === "fidus")
-              return <View style={[s.bubble, { backgroundColor: c.card }]}>
-                <LinkText text={item.text} style={{ color: c.text }} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} /></View>;
+              return <View style={{ alignSelf: "flex-start", maxWidth: "85%" }}>
+                <View style={[s.bubble, { backgroundColor: c.card, maxWidth: "100%" }]}>
+                  <LinkText text={item.text} style={{ color: c.text }} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} /></View>
+                <View style={{ flexDirection: "row", gap: 2, marginTop: 2, marginLeft: 4 }}>
+                  {[1, -1].map((v) => (
+                    <Pressable key={v} hitSlop={6} onPress={() => sendFeedback(item.id, v)} accessibilityLabel={v > 0 ? t("Resposta boa") : t("Resposta ruim")}
+                      style={{ paddingHorizontal: 6, paddingVertical: 2, opacity: fb[item.id] === undefined ? 0.45 : fb[item.id] === v ? 1 : 0.2 }}>
+                      <Text style={{ fontSize: 13 }}>{v > 0 ? "👍" : "👎"}</Text></Pressable>))}
+                </View>
+              </View>;
+            if (item.type === "nps")
+              return (
+                <View style={[s.draft, { backgroundColor: c.card, borderColor: MINT }]}>
+                  <Text style={{ color: c.text, fontWeight: "700" }}>{t("De 0 a 10, quanto você indicaria o Fidus a um amigo?")}</Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+                    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                      <Pressable key={n} onPress={() => setNpsScore(n)} accessibilityLabel={String(n)}
+                        style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1,
+                          borderColor: npsScore === n ? MINT : c.line, backgroundColor: npsScore === n ? MINT : "transparent" }}>
+                        <Text style={{ color: npsScore === n ? NAVY : c.text, fontWeight: "700" }}>{n}</Text></Pressable>))}
+                  </View>
+                  {npsScore != null && (
+                    <TextInput style={[s.input, { color: c.text, backgroundColor: c.bg, marginTop: 10, marginBottom: 0 }]} value={npsText} onChangeText={setNpsText}
+                      placeholder={t("O que faria o Fidus ser ainda melhor? (opcional)")} placeholderTextColor={c.sub} multiline />)}
+                  <View style={[s.row, { marginTop: 10 }]}>
+                    <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => skipNps(item.id)}><Text style={{ color: c.text }}>{t("Agora não")}</Text></Pressable>
+                    <Pressable style={[s.primarySm, { opacity: npsScore == null ? 0.4 : 1 }]} disabled={npsScore == null} onPress={() => sendNps(item.id)}>
+                      <Text style={s.primaryText}>{t("Enviar")}</Text></Pressable>
+                  </View>
+                </View>);
             if (item.type === "upsell")
               return <UpsellCard u={item.up} onClose={() => setItems((prev) => prev.filter((x) => x.id !== item.id))} />;
             if (item.type === "doc") {
@@ -2150,6 +2231,7 @@ function FidusApp() {
                 ["booking", "🔗", t("Link de agendamento")], ["activity", "✅", t("Atividade")],
                 ["invite", "🎁", t("Convide e ganhe")],
                 ...(me?.is_owner ? [["admin", "👥", t("Clientes")]] : []),
+                ...(me?.staff_role ? [["panel", "📈", t("Painel da empresa")]] : []),
               ] as [Screen, string, string][]).map(([sc, ic, label]) => (
                 <Pressable key={sc} onPress={() => go(sc)} style={[s.drawerItem, screen === sc && { backgroundColor: c.card }]}>
                   <Text style={{ fontSize: 17, width: 28 }}>{ic}</Text>
@@ -2328,6 +2410,7 @@ const I18N_KEYS: string[] = [
   "Reunião",
   "Agendamento",
   "Contador",
+  "Planilha",
   "Desfeito",
   "Cancelado",
   "Aguardando você",
@@ -2341,6 +2424,7 @@ const I18N_KEYS: string[] = [
   "Ata pronta",
   "Agendado",
   "Gerado",
+  "Alterada",
   "Criado",
   "Link",
   "Não consegui abrir este link.",
@@ -2471,6 +2555,8 @@ const I18N_KEYS: string[] = [
   "Ainda processando…",
   "Idioma do Fidus",
   "Salvo",
+  "Obrigado!",
+  "Painel da empresa",
   "Preparando seus dados…",
   "Seus dados",
   "O arquivo com todos os seus dados está pronto. Ele também fica em Documentos.",
@@ -2570,6 +2656,11 @@ const I18N_KEYS: string[] = [
   "Alguém te convidou?",
   "Usar",
   "Você entrou pelo convite de {0} 🎁",
+  "O painel mostra a saúde do sistema, o uso do Fidus (HEART), o negócio e a equipe. Abra no computador e digite o código.",
+  "Gerar código de acesso",
+  "Vale 5 minutos e só uma vez.",
+  "Copiar endereço",
+  "Abrir aqui",
   "SEU NOME",
   "Idioma",
   "SEU PLANO",
@@ -2606,6 +2697,10 @@ const I18N_KEYS: string[] = [
   "Nova conversa",
   "Fidus está pensando…",
   "Toque no microfone, fale e toque de novo para enviar.\nEx.: “Marca visita técnica dia 12 às 4pm”,\n“Me lembra de pagar o IVA dia 5”,\n“Paguei 60 libras de gasolina, HomB” ou\n📷 mande a foto de um recibo ou documento.\n\n🎙 Reunião no topo grava e gera a ata.",
+  "Resposta boa",
+  "Resposta ruim",
+  "De 0 a 10, quanto você indicaria o Fidus a um amigo?",
+  "O que faria o Fidus ser ainda melhor? (opcional)",
   "aguardando você",
   "enviando…",
   "enviado ✓",

@@ -74,8 +74,9 @@ def run() -> dict:
     for old in sorted(glob.glob(os.path.join(_dir(), "fidus-*.tar.gz")))[:-KEEP]:
         os.remove(old)
     try:
-        from . import account_data
+        from . import account_data, metrics
         account_data.purge_deleted()
+        metrics.purge_old()
     except Exception:  # noqa: BLE001
         pass
     info = _status(True, "", out)

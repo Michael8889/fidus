@@ -100,6 +100,27 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
 - `GET /health` responde 503 se o backup estiver atrasado (+36 h), se falhou ou se o disco tiver menos de 2 GB.
   Cadastre esse endereço num monitor grátis (ex. UptimeRobot) para receber alerta se o Fidus cair.
 
+## Painel da empresa (/admin)
+- Endereço: `https://<servidor>/admin` (hoje `https://fidus.148-230-123-44.sslip.io/admin`). Em inglês britânico,
+  com botão para português.
+- Entrada: no app, menu › Painel da empresa › gerar código (8 letras, vale 5 min, uma vez). Sessão de 12 h no
+  navegador. Só aparece para o dono (`FIDUS_OWNER_EMAIL`) e para a equipe cadastrada.
+- Telas: Sistema (saúde, erros, backup, disco), HEART (satisfação 👍/👎 e nota 0–10, uso, adoção, retenção, sucesso
+  das tarefas), Negócio (receita mensal, planos, custo de IA), Clientes (trocar plano, pausar) e Equipe.
+- Papéis: owner (tudo), admin (tudo menos mexer em outros admins), support (sistema, HEART, clientes sem valores),
+  finance (negócio e clientes com valores). Ninguém da equipe vê conversas, e-mails ou gastos dos clientes; toda
+  ação fica registrada.
+- Medições em `metrics.db` (só ids, tempos e resultados; apagadas após 180 dias).
+
+## Links, planilhas e escalas (Connecteam)
+- O Fidus abre links que vierem no pedido, num e-mail que ele leu ou salvos com nome (ex. "agenda dos turnos").
+  Só endereços públicos da internet; páginas de login não funcionam (ele nunca usa senha).
+- Planilhas Google: ler, adicionar linhas e alterar células, só em planilhas cujo link a pessoa mandou ou salvou
+  ("salva essa planilha como Tarefas"). Cada mudança aparece na Atividade com Desfazer.
+- Para ligar: no Google Cloud, ativar a **Google Sheets API** e incluir o escopo
+  `https://www.googleapis.com/auth/spreadsheets` em Acesso a dados; depois cada pessoa toca em Reconectar Google.
+- Connecteam: usar o link de calendário (iCal) das escalas; o Fidus lê turnos e notas e pode lançar na planilha.
+
 ## Idiomas e moedas
 - O app abre no idioma do celular (dá para trocar em Configurações). O servidor traduz os textos uma vez por idioma
   e guarda em `/data/i18n/<idioma>.json`; o app guarda uma cópia. O Fidus responde no idioma em que a pessoa fala.
