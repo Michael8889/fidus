@@ -17,6 +17,16 @@ const KeepAwake: any = opt(() => require("expo-keep-awake"));
 const Speech: any = opt(() => require("expo-speech"));  // voz do Fidus no modo conversa (APK com expo-speech)
 const DocumentPicker: any = opt(() => require("expo-document-picker"));
 const Clipboard: any = opt(() => require("expo-clipboard"));  // botão copiar (sem ele, abre o compartilhar)
+// Assinatura pela Google Play / App Store (RevenueCat). Só funciona no APK com o módulo e com as chaves no servidor.
+// só usa se o módulo nativo existir no APK (num APK antigo a biblioteca entraria em "modo de demonstração")
+const hasNativePurchases = !!opt(() => {
+  const RN = require("react-native");
+  return RN.NativeModules?.RNPurchases || RN.TurboModuleRegistry?.get?.("RNPurchases");
+});
+const PurchasesMod: any = hasNativePurchases ? opt(() => require("react-native-purchases")) : null;
+const Purchases: any = PurchasesMod ? (PurchasesMod.default || PurchasesMod) : null;
+const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
+  : "https://play.google.com/store/account/subscriptions";
 
 // ---------- Idiomas ----------
 // O app é escrito em português. Em outro idioma, o servidor devolve as traduções (feitas uma vez e guardadas),
@@ -489,6 +499,8 @@ function FidusApp() {
   const [atBottom, setAtBottom] = useState(true);
   const [nameEdit, setNameEdit] = useState("");
   const [pendingMeet, setPendingMeet] = useState<string | null>(null);
+  const [billing, setBilling] = useState<any>(null);
+  const [storeReady, setStoreReady] = useState(false);
   // rascunhos na tela e fora de edição: só esses podem sair quando o usuário diz "envia"
   const itemsRef = useRef<Item[]>([]);
   itemsRef.current = items;
@@ -592,8 +604,60 @@ function FidusApp() {
       } catch { /* sem resumo semanal */ }
       setupNotifications();
       try { setPlan(await api("/v1/plan", {}, 15000)); } catch { /* servidor antigo */ }
+      setupStore();
     })();
   }, [configured]);
+
+  // ---------- Assinatura na loja (RevenueCat) ----------
+  async function setupStore() {
+    try {
+      const b = await api("/v1/billing", {}, 15000);
+      setBilling(b);
+      const key = Platform.OS === "ios" ? b.ios_key : b.android_key;
+      if (!Purchases || !b.enabled || !key) return;
+      Purchases.configure({ apiKey: key, appUserID: b.app_user_id });  // o aviso da loja chega ao servidor com o id do cliente
+      setStoreReady(true);
+    } catch (e: any) { console.log("[Fidus] loja", e?.message ?? e); setStoreReady(false); }
+  }
+
+  async function waitForPlan(target: string) {  // o aviso da loja leva alguns segundos para chegar ao servidor
+    for (let i = 0; i < 8; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      try { const p = await api("/v1/plan", {}, 15000); setPlan(p); if (p.plan === target) return true; } catch {}
+    }
+    return false;
+  }
+
+  async function buy(pkg: any, planId: string, planName: string) {
+    try {
+      let change: any = null;
+      if (Platform.OS === "android") {  // troca de plano na Google Play: substitui a assinatura atual
+        try {
+          const info = await Purchases.getCustomerInfo();
+          const cur = (info?.activeSubscriptions || [])[0];
+          if (cur) change = { oldProductIdentifier: String(cur).split(":")[0] };
+        } catch {}
+      }
+      const trial = billing?.referral_trial
+        ? (pkg.product?.subscriptionOptions || []).find((o: any) => (o.tags || []).includes(billing.trial_offer_tag || "convite"))
+        : null;
+      if (trial) await Purchases.purchaseSubscriptionOption(trial, change || undefined);
+      else await Purchases.purchasePackage(pkg, null, change || undefined);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      flash(t("Assinatura confirmada"));
+      const ok = await waitForPlan(planId);
+      if (!ok) Alert.alert(t("Plano {0}", t(planName)), t("A loja confirmou o pagamento. O plano novo aparece em alguns minutos."));
+    } catch (e: any) {
+      if (e?.userCancelled) return;
+      Alert.alert(t("Assinatura"), e?.message ?? String(e));
+    }
+  }
+
+  async function restorePurchases() {
+    if (!storeReady) return;
+    try { await Purchases.restorePurchases(); flash(t("Compras restauradas")); setTimeout(() => loadScreen("settings"), 2500); }
+    catch (e: any) { Alert.alert(t("Assinatura"), e?.message ?? String(e)); }
+  }
 
   // a conexão caiu no meio (troca de rede, 4G fraco, app em segundo plano). O servidor
   // normalmente termina o pedido mesmo assim, então buscamos a resposta no histórico.
@@ -1309,7 +1373,19 @@ function FidusApp() {
     catch (e: any) { Alert.alert(t("Convite"), errMsg(e)); }
   }
 
-  function subscribe(p: any) {
+  async function subscribe(p: any) {
+    const planId = p.plan || p.id;
+    if (storeReady) {
+      try {
+        const off = await Purchases.getOfferings();
+        const pkgs = (off?.current?.availablePackages || []).filter((k: any) => String(k.product?.identifier || "").includes(planId));
+        if (pkgs.length) {
+          const label = (k: any) => `${k.packageType === "ANNUAL" ? t("Anual") : k.packageType === "MONTHLY" ? t("Mensal") : (k.product?.title || "")} · ${k.product?.priceString || ""}`;
+          return setSheet({ title: t("Plano {0}", t(p.name)) + (billing?.referral_trial ? ` · ${t("convite: dias grátis")}` : ""),
+            items: pkgs.map((k: any) => [label(k), () => buy(k, planId, p.name)] as [string, () => void]) });
+        }
+      } catch (e: any) { console.log("[Fidus] ofertas", e?.message ?? e); }
+    }
     if (plan?.url) Linking.openURL(plan.url);
     else Alert.alert(t("Plano {0}", t(p.name)), t("A assinatura pelo app chega em breve. Por enquanto, fale com a gente pelo e-mail de suporte."));
   }
@@ -1674,6 +1750,13 @@ function FidusApp() {
                 <Pressable style={[s.chip, { borderColor: c.sub }]} onPress={() => subscribe(p)}><Text style={{ color: c.text }}>{t("Escolher")}</Text></Pressable>}
             </View>))}
         </Card>
+        {storeReady && (<>
+          <Card c={c} onPress={() => Linking.openURL(MANAGE_SUBS_URL).catch(() => {})}>
+            <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600" }}>{t("Gerenciar assinatura")}</Text>
+              <Text style={{ color: c.sub, fontSize: 13 }}>{t("Trocar forma de pagamento ou cancelar, direto na loja")}</Text></View>
+            <Text style={{ color: c.sub }}>›</Text></Card>
+          <Card c={c} onPress={restorePurchases}><Text style={{ color: c.text, flex: 1 }}>{t("Restaurar compras")}</Text></Card>
+        </>)}
         <Card c={c} onPress={reconnectGoogle}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600" }}>Google</Text>
             <Text style={{ color: c.sub, fontSize: 13 }}>{me?.google_connected ? t("Conectado · tocar para reconectar") : t("Não conectado · tocar para conectar")}</Text></View>
@@ -2057,6 +2140,11 @@ const I18N_KEYS: string[] = [
   "Salvar",
   "Toque na seta azul ou diga “envia”.",
   "Descartar",
+  "Assinatura confirmada",
+  "Plano {0}",
+  "A loja confirmou o pagamento. O plano novo aparece em alguns minutos.",
+  "Assinatura",
+  "Compras restauradas",
   "Erro",
   "A conexão caiu. Buscando a resposta no servidor…",
   "Não consegui buscar a resposta. Confira sua internet e veja a Atividade antes de repetir o pedido.",
@@ -2152,7 +2240,9 @@ const I18N_KEYS: string[] = [
   "Salvo",
   "Estou usando o Fidus, um assessor pessoal por voz: agenda, e-mails, gastos e recibos. Com o meu convite você ganha {0} dias grátis: {1} (código {2})",
   "Pronto! Você ganhou {0} dias grátis.",
-  "Plano {0}",
+  "Anual",
+  "Mensal",
+  "convite: dias grátis",
   "A assinatura pelo app chega em breve. Por enquanto, fale com a gente pelo e-mail de suporte.",
   "Conversas",
   "Documentos",
@@ -2239,6 +2329,9 @@ const I18N_KEYS: string[] = [
   "ou {0}/ano (2 meses grátis)",
   "Atual",
   "Escolher",
+  "Gerenciar assinatura",
+  "Trocar forma de pagamento ou cancelar, direto na loja",
+  "Restaurar compras",
   "Conectado · tocar para reconectar",
   "Não conectado · tocar para conectar",
   "Reenviar reunião",

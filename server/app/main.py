@@ -864,6 +864,17 @@ def referral_page(code: str, request: Request):
 
 
 # ---------- Assinaturas (Google Play / App Store / Stripe via RevenueCat) ----------
+@app.get("/v1/billing", dependencies=[Depends(auth)])
+def billing_config():
+    """O que o app precisa para abrir a compra na loja: chave pública da RevenueCat e o id do cliente."""
+    uid = store.current()["id"]
+    on = bool(config.REVENUECAT_ANDROID_KEY or config.REVENUECAT_IOS_KEY)
+    return {"enabled": on, "android_key": config.REVENUECAT_ANDROID_KEY, "ios_key": config.REVENUECAT_IOS_KEY,
+            "app_user_id": uid, "referral_trial": accounts.referral_trial(uid), "trial_offer_tag": "convite",
+            "subscription": store.kv_get("subscription"), "plan": plans.current()}
+
+
+
 @app.post("/billing/revenuecat")
 async def billing_webhook(request: Request):
     """Aviso da RevenueCat: assinou, renovou, trocou de plano, cancelou ou expirou.

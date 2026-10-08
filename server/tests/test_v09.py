@@ -310,3 +310,11 @@ def test_billing_webhook(monkeypatch):
     assert client.post("/billing/revenuecat", json=[1], headers={"Authorization": "Bearer segredo"}).status_code == 400
     monkeypatch.setattr(config, "BILLING_WEBHOOK_SECRET", "")
     assert client.post("/billing/revenuecat", json=ev, headers={"Authorization": "Bearer "}).status_code == 401
+
+
+def test_billing_config(monkeypatch):
+    assert client.get("/v1/billing", headers=H).json()["enabled"] is False
+    monkeypatch.setattr(config, "REVENUECAT_ANDROID_KEY", "goog_publica")
+    r = client.get("/v1/billing", headers=H).json()
+    assert r["enabled"] and r["android_key"] == "goog_publica" and r["app_user_id"] == store.OWNER_ID
+    assert client.get("/v1/billing").status_code == 401

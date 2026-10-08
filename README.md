@@ -77,9 +77,17 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
 - `FIDUS_REFERRAL_SIGNUP=1` faz o código valer como convite com o cadastro fechado (máx. 10 contas/código/dia).
 
 ## Assinaturas
-- Lojas (Google Play, App Store) e site (Stripe) via RevenueCat. O aviso dela vai para `POST /billing/revenuecat`
-  com o segredo `FIDUS_BILLING_WEBHOOK_SECRET`. O produto precisa ter o id do plano no nome (ex. `fidus_negocio_monthly`)
-  e o app identifica o cliente na loja pelo id dele no Fidus.
+- Lojas (Google Play, App Store) e site (Stripe) via RevenueCat. O app compra pela loja (`react-native-purchases`,
+  precisa do APK novo) com o cliente identificado pelo id dele no Fidus; a RevenueCat avisa o servidor em
+  `POST /billing/revenuecat` (segredo `FIDUS_BILLING_WEBHOOK_SECRET`) e o plano muda sozinho.
+- Para ligar:
+  1. Google Play Console: publicar o app (pode ser teste fechado) e criar 3 assinaturas com o id do plano no nome:
+     `fidus_essencial`, `fidus_negocio`, `fidus_premium`, cada uma com os planos-base `mensal` e `anual` e os preços
+     por país (libra, euro, dólar). Oferta de 7 dias grátis com a etiqueta `convite` (só quem veio por convite vê).
+  2. RevenueCat: ligar a Play, criar a oferta "default" com os pacotes mensal e anual de cada plano, cadastrar o
+     webhook acima com o segredo, copiar a chave pública do SDK (`goog_...`).
+  3. No `.env` do servidor: `FIDUS_REVENUECAT_ANDROID_KEY` e `FIDUS_BILLING_WEBHOOK_SECRET`. Gerar e instalar o APK novo.
+- Sem as chaves, o botão de assinar mostra "em breve" (como antes).
 
 ## Configuração
 Tudo no `server/.env` (modelo em `server/.env.example`). Trocar de IA = mudar `FIDUS_LLM_PROVIDER`.

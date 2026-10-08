@@ -80,3 +80,6 @@ REFERRAL_TRIAL_DAYS = int(env("FIDUS_REFERRAL_TRIAL_DAYS", "7") or 7)
 REFERRAL_PERCENT = int(env("FIDUS_REFERRAL_PERCENT", "10") or 10)
 APP_DOWNLOAD_URL = env("FIDUS_APP_DOWNLOAD_URL", "")  # página/loja para baixar o app (link de convite)
 BILLING_WEBHOOK_SECRET = (env("FIDUS_BILLING_WEBHOOK_SECRET", "") or "").strip()  # segredo do aviso da RevenueCat
+# Chaves PÚBLICAS do SDK da RevenueCat (começam com goog_ / appl_). Ficam no app de qualquer jeito; não são segredo.
+REVENUECAT_ANDROID_KEY = (env("FIDUS_REVENUECAT_ANDROID_KEY", "") or "").strip()
+REVENUECAT_IOS_KEY = (env("FIDUS_REVENUECAT_IOS_KEY", "") or "").strip()

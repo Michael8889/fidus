@@ -382,6 +382,12 @@ def revoke_referral_reward(invitee_id: str) -> None:
         c.execute("UPDATE referrals SET paid_at=NULL WHERE invitee_id=?", (invitee_id,))
 
 
+def referral_trial(uid: str) -> bool:
+    """Entrou por convite e ainda não pagou: a loja oferece a oferta de dias grátis do convite."""
+    with _db() as c:
+        return bool(c.execute("SELECT 1 FROM referrals WHERE invitee_id=? AND paid_at IS NULL", (uid,)).fetchone())
+
+
 def next_discount(uid: str) -> int:
     """Desconto (%) da próxima cobrança. Não soma: no máximo um crédito por cobrança."""
     with _db() as c:
