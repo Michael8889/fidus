@@ -47,6 +47,8 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 
 ## Fase 4 — Crescer
 - [ ] iPhone (Apple Developer, US$ 99/ano) e App Store
+- [ ] Fidus no computador (Windows e Mac) pelo navegador, instalável como app, mesmo código do celular; liga pelo
+      celular com QR code, como o WhatsApp Web (regra: 1 celular + 1 computador por conta)
 - [ ] Outlook / Microsoft 365 (muitas empresas no Reino Unido usam)
 - [ ] Página de agendamento em vários idiomas
 - [ ] Lançamento aberto e anúncios
