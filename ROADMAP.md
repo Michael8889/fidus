@@ -10,6 +10,10 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [x] **Claude**: painel da empresa (/admin), links em e-mails, planilhas Google e escalas do Connecteam (v0.9.4)
 - [ ] **Você**: Google Cloud: ativar a Google Sheets API + escopo de planilhas; todos tocam em Reconectar Google
 
+## Anotado para a próxima versão (juntar e rodar uma vez só)
+- Áudio gravado (botão do microfone) também responde em voz alta, com opção de ligar/desligar em Configurações
+- Voz mais rápida: falar um "deixa eu ver..." enquanto pensa e usar o modelo leve nos pedidos simples
+
 ## Fase 1 — Empresa e contas (em paralelo)
 - [ ] **Você**: conta bancária da empresa
 - [ ] **Você**: registro no ICO (proteção de dados, taxa anual pequena)
