@@ -176,6 +176,30 @@ function ArrowUpIcon({ color, size = 18 }: { color: string; size?: number }) {
   );
 }
 
+// Texto com links, e-mails e telefones tocáveis (abre navegador, e-mail ou discador)
+const LINK_RE = /(\[[^\]\n]{1,80}\]\((https?:\/\/[^\s)]+)\))|(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])|(www\.[^\s<>"']+[^\s<>"'.,;:!?)\]])|([\w.+-]+@[\w-]+\.[\w.-]*[a-z]{2,})|((?:\+|00)\d[\d\s-]{7,16}\d)/gi;
+
+function LinkText({ text, style, linkColor }: { text: string; style: any; linkColor: string }) {
+  const parts: any[] = [];
+  let last = 0, m: RegExpExecArray | null, k = 0;
+  LINK_RE.lastIndex = 0;
+  while ((m = LINK_RE.exec(text))) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    let label = m[0], url = m[0];
+    if (m[1]) { label = m[1].slice(1, m[1].indexOf("](")); url = m[2]; }
+    else if (m[4]) url = "https://" + m[4];
+    else if (m[5]) url = "mailto:" + m[5];
+    else if (m[6]) url = "tel:" + m[6].replace(/[\s-]/g, "").replace(/^00/, "+");
+    const target = url;
+    parts.push(
+      <Text key={k++} style={{ color: linkColor, textDecorationLine: "underline" }}
+        onPress={() => Linking.openURL(target).catch(() => Alert.alert("Link", "Não consegui abrir este link."))}>{label}</Text>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return <Text selectable style={style}>{parts}</Text>;
+}
+
 function WaveIcon({ color, size = 20 }: { color: string; size?: number }) {
   const hs = [0.35, 0.75, 1, 0.6];
   return (
@@ -299,7 +323,9 @@ function FidusApp() {
       } catch { /* sem resumo semanal */ }
       setupNotifications();
       try { setPlan(await api("/v1/plan", {}, 15000)); } catch { /* servidor antigo */ }
-      try { setMe(await api("/v1/me", {}, 15000)); } catch { /* servidor antigo */ }
+      for (let i = 0; i < 3; i++) {  // dados da conta (aba Clientes do dono); tenta de novo se a rede falhar
+        try { setMe(await api("/v1/me", {}, 15000)); break; } catch { await new Promise((r) => setTimeout(r, 3000)); }
+      }
     })();
   }, [configured]);
 
@@ -1100,9 +1126,10 @@ function FidusApp() {
           </Text>}
           renderItem={({ item }) => {
             if (item.type === "user")
-              return <View style={[s.bubble, s.userBubble]}><Text selectable style={s.userText}>{item.text}</Text></View>;
+              return <View style={[s.bubble, s.userBubble]}><LinkText text={item.text} style={s.userText} linkColor={MINT} /></View>;
             if (item.type === "fidus")
-              return <View style={[s.bubble, { backgroundColor: c.card }]}><Text selectable style={{ color: c.text }}>{item.text}</Text></View>;
+              return <View style={[s.bubble, { backgroundColor: c.card }]}>
+                <LinkText text={item.text} style={{ color: c.text }} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} /></View>;
             if (item.type === "upsell") {
               const u = item.up;
               return (
