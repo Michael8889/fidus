@@ -14,6 +14,11 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - Áudio gravado (botão do microfone) também responde em voz alta, com opção de ligar/desligar em Configurações
 - Letras maiores como no app do Claude (mensagens 17, entre linhas 26; caixa de texto e cartões maiores); segue o tamanho de letra do
   celular (sem opção própria no app)
+- Carteiras nos gastos: cada carteira com nome + moeda (ex. HomB UK £, Pessoal UK £, Pessoal BR R$, Pessoal PT €,
+  Business BR R$, Business PT €); filtro por carteira na tela de gastos, totais de cada uma na moeda dela, exportar
+  por carteira para o contador; o Fidus escolhe a carteira pelo contexto e pergunta quando houver dúvida
+- Menu misturando PT e EN: tradução em blocos menores (blocos grandes falham e ficam sem traduzir) e refazer as que
+  faltam
 - Voz mais rápida: falar um "deixa eu ver..." enquanto pensa e usar o modelo leve nos pedidos simples
 
 ## Fase 1 — Empresa e contas (em paralelo)
