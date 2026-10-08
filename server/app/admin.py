@@ -247,7 +247,7 @@ def system(s: Session = Depends(need("system"))):
     if tasks24 >= 10 and _pct(failed, tasks24) > 10:
         problems.append("tasks_failing")
     return {"ok": not problems, "problems": problems, "uptime_s": int(time.time() - metrics.STARTED),
-            "version": "0.9.6", "llm": config.LLM_PROVIDER, "model": config.LLM_MODEL,
+            "version": "0.9.7", "llm": config.LLM_PROVIDER, "model": config.LLM_MODEL,
             "backup": {"age_hours": round(age, 1) if age is not None else None, **backup.last()},
             "disk_free_gb": free, "requests_24h": len(last24), "asks_24h": len(asks),
             "errors_24h": sum(1 for r in last24 if r["status"] >= 500),
@@ -378,6 +378,7 @@ def clients(s: Session = Depends(need("clients"))):
         n30 = {r["user_id"]: r["n"] for r in c.execute("SELECT user_id, COUNT(*) n FROM tasks WHERE ts>? GROUP BY user_id",
                                                         (_since(30),))}
     finance = s["role"] in ("owner", "admin", "finance")
+    caps = metrics.client_caps()
     out = []
     for u in _per_user():
         flags = []
@@ -391,7 +392,8 @@ def clients(s: Session = Depends(need("clients"))):
         row = {"id": u["id"], "email": u["email"], "name": u["name"], "plan": u["plan"], "plan_name": u["plan_name"],
                "status": u["status"], "created_at": u["created_at"], "last_ask": last.get(u["id"]),
                "asks_30d": n30.get(u["id"], 0), "google": u["google"], "device_switches_30d": sw,
-               "language": u["language"], "country": u["country"], "is_owner": u["is_owner"], "flags": flags}
+               "language": u["language"], "country": u["country"], "is_owner": u["is_owner"], "flags": flags,
+               "app": (caps.get(u["id"]) or {}).get("caps")}
         if finance:
             row.update({"price": u["price"], "currency": u["currency"], "ai_cost_month_usd": round(u["ai_cost_month"], 2),
                         "subscription": u["subscription"]})

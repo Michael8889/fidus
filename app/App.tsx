@@ -31,6 +31,9 @@ const LocalAuth: any = opt(() => require("expo-local-authentication"));
 const SpeechRec: any = opt(() => require("expo-speech-recognition").ExpoSpeechRecognitionModule);
 // tocar a voz natural (MP3 que vem do servidor)
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
+// o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
+const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
+const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},js=0.9.7,ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
 
@@ -742,7 +745,7 @@ function FidusApp() {
     try {
       const r = await fetch(url, {
         ...init, signal: ctrl.signal,
-        headers: { Authorization: `Bearer ${token.trim()}`, ...(init.headers || {}) },
+        headers: { Authorization: `Bearer ${token.trim()}`, "X-Fidus-Client": CLIENT_CAPS, ...(init.headers || {}) },
       });
       if (!r.ok) {
         const body = await r.text();
@@ -2288,6 +2291,10 @@ function FidusApp() {
           <Text style={{ color: c.sub, fontSize: 12 }}>{t("ESTE APARELHO")}</Text>
           <Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{device?.device_name || t("Este celular")}</Text>
           <Text style={{ color: c.sub, fontSize: 12 }}>{t("Sua conta funciona em um aparelho por vez. Entrar em outro desconecta este.")}</Text>
+          <Text style={{ color: c.sub, fontSize: 12, marginTop: 6 }}>
+            {SpeechRec ? "✅" : "❌"} {t("Transcrição no celular")}{SpeechRec ? "" : ` (${t("precisa do APK novo")})`}{"\n"}
+            {me?.natural_voice ? "✅" : "❌"} {t("Voz natural")}{me?.natural_voice ? "" : ` (${t("falta a chave no servidor")})`}{"\n"}
+            {t("Versão")}: 0.9.7 · {UPDATE_ID.slice(0, 8)}</Text>
           <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
         </Card>
         <Card c={c} onPress={reconnectGoogle}>
@@ -3012,6 +3019,11 @@ const I18N_KEYS: string[] = [
   "ESTE APARELHO",
   "Este celular",
   "Sua conta funciona em um aparelho por vez. Entrar em outro desconecta este.",
+  "Transcrição no celular",
+  "precisa do APK novo",
+  "Voz natural",
+  "falta a chave no servidor",
+  "Versão",
   "Sair de todos os aparelhos",
   "Conectado · tocar para reconectar",
   "Não conectado · tocar para conectar",

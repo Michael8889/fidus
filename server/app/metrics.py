@@ -54,6 +54,7 @@ def db() -> sqlite3.Connection:
                         CREATE TABLE IF NOT EXISTS panel_codes (hash TEXT PRIMARY KEY, email TEXT, role TEXT,
                             expires REAL NOT NULL, used INTEGER NOT NULL DEFAULT 0);
                         CREATE TABLE IF NOT EXISTS audit (ts REAL NOT NULL, email TEXT, action TEXT, target TEXT);
+                        CREATE TABLE IF NOT EXISTS client_info (user_id TEXT PRIMARY KEY, caps TEXT, ts REAL NOT NULL);
                     """)
                 _ready.add(p)
     c = sqlite3.connect(p, timeout=5)
@@ -160,6 +161,20 @@ def nps_due(user_id: str, created_at: str | None) -> bool:
         last = c.execute("SELECT MAX(ts) FROM nps WHERE user_id=?", (user_id,)).fetchone()[0]
         used = c.execute("SELECT COUNT(*) FROM tasks WHERE user_id=?", (user_id,)).fetchone()[0]
     return used >= 5 and (not last or time.time() - last > 30 * 86400)
+
+
+def set_client(user_id: str, caps: str) -> None:
+    """O que o app do cliente tem (APK com transcrição no celular, voz, versão): para o painel e para o suporte."""
+    import re as _re
+    caps = _re.sub(r"[^\w=,.:-]", "", caps or "")[:200]
+    if caps:
+        _enqueue("INSERT INTO client_info(user_id,caps,ts) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET "
+                 "caps=excluded.caps, ts=excluded.ts", (user_id, caps, time.time()))
+
+
+def client_caps() -> dict:
+    with db() as c:
+        return {r["user_id"]: {"caps": r["caps"], "ts": r["ts"]} for r in c.execute("SELECT * FROM client_info")}
 
 
 def purge_old() -> None:

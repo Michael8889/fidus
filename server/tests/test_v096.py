@@ -79,3 +79,11 @@ def test_male_voice_and_fixed_phrases_cached(monkeypatch):
     assert client.post("/v1/tts", json={"phrase": "qualquer texto"}, headers=H).status_code == 400
     assert client.post("/v1/profile", json={"voice_gender": "robo"}, headers=H).status_code == 400
     client.post("/v1/profile", json={"voice_gender": "female"}, headers=H)
+
+
+def test_app_reports_what_it_has():
+    from app import metrics
+    client.get("/v1/me", headers={**H, "X-Fidus-Client": "sr=1,speech=1,player=1,js=0.9.7,ota=abc<script>"})
+    metrics.flush()
+    caps = metrics.client_caps()[store.OWNER_ID]["caps"]
+    assert caps.startswith("sr=1,speech=1") and "<" not in caps

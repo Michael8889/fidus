@@ -269,7 +269,7 @@ async function showClients() {
   $("#main").innerHTML = `<div class="banner warn" style="font-weight:600">🔒 ${esc(t("privacy"))}</div>
     <div class="card tablebox" style="margin-top:12px"><table><thead><tr><th>${esc(t("email"))}</th><th>${esc(t("plan"))}</th>${fin ? `<th>${esc(t("price"))}</th><th>${esc(t("ai_cost"))}</th>` : ""}
     <th>${esc(t("asks30"))}</th><th>${esc(t("last_ask"))}</th><th>${esc(t("created"))}</th><th>${esc(t("flags"))}</th><th>${esc(t("status"))}</th>${d.can_manage ? `<th>${esc(t("actions"))}</th>` : ""}</tr></thead><tbody>
-    ${d.clients.map((c) => `<tr><td>${esc(c.email)}${c.is_owner ? ` <span class="pill green">${esc(t("you"))}</span>` : ""}<div class="small">${esc(c.name || "")} ${esc(c.country || "")} ${esc(c.language || "")}</div></td>
+    ${d.clients.map((c) => `<tr><td>${esc(c.email)}${c.is_owner ? ` <span class="pill green">${esc(t("you"))}</span>` : ""}<div class="small">${esc(c.name || "")} ${esc(c.country || "")} ${esc(c.language || "")}</div>${c.app ? `<div class="small">app: ${esc(c.app)}</div>` : ""}</td>
       <td>${esc(c.plan_name)}</td>${fin ? `<td>${money(c.price, c.currency)}</td><td>${money(c.ai_cost_month_usd, "USD")}</td>` : ""}
       <td>${num(c.asks_30d)}</td><td>${when(c.last_ask)}</td><td>${dateIso(c.created_at)}</td>
       <td>${c.flags.map((f) => `<span class="pill ${f === "device_switching" ? "red" : "amber"}">${esc(t(f))}</span>`).join("")}</td>

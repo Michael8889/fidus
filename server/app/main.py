@@ -342,8 +342,9 @@ def this_device(request: Request):
 
 
 @app.get("/v1/me", dependencies=[Depends(auth)])
-def me():
+def me(request: Request):
     u = store.current()
+    metrics.set_client(u["id"], request.headers.get("x-fidus-client", ""))
     return {"id": u["id"], "email": u.get("email"), "name": store.user_name(), "is_owner": bool(u.get("is_owner")),
             "plan": plans.current(), "plan_name": plans.PLANS[plans.current()]["name"],
             "google_connected": google_client.is_connected(), "profile": store.profile(),
