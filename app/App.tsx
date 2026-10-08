@@ -14,6 +14,11 @@ import * as SecureStore from "expo-secure-store";
 const opt = (load: () => any) => { try { return load(); } catch { return null; } };
 const Notifications: any = opt(() => require("expo-notifications"));
 const KeepAwake: any = opt(() => require("expo-keep-awake"));
+const Speech: any = opt(() => require("expo-speech"));  // voz do Fidus no modo conversa (APK com expo-speech)
+
+// modo conversa: gravação com medidor de volume para saber quando a pessoa parou de falar
+const VOICE_PRESET: any = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true };
+const EXIT_RE = /^\s*(tchau|encerr(a|ar)|pode parar|parar|sair|fim|obrigad[oa],? (é|e) só isso)\b/i;
 const DocumentPicker: any = opt(() => require("expo-document-picker"));
 
 // gravação de reunião: mono, 16 kHz, 32 kbps (1 h ≈ 15 MB) — suficiente para transcrever
@@ -171,6 +176,15 @@ function ArrowUpIcon({ color, size = 18 }: { color: string; size?: number }) {
   );
 }
 
+function WaveIcon({ color, size = 20 }: { color: string; size?: number }) {
+  const hs = [0.35, 0.75, 1, 0.6];
+  return (
+    <View style={{ width: size, height: size, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2.5 }}>
+      {hs.map((h, i) => <View key={i} style={{ width: 2.6, height: size * h, borderRadius: 2, backgroundColor: color }} />)}
+    </View>
+  );
+}
+
 // Barrinhas que se mexem enquanto grava (mostra que está ouvindo)
 function RecordingBars({ color }: { color: string }) {
   const vals = useRef([0, 1, 2, 3, 4, 5, 6].map(() => new Animated.Value(0.3))).current;
@@ -213,6 +227,14 @@ function FidusApp() {
   const [items, setItems] = useState<Item[]>([]);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const meetRec = useAudioRecorder(MEETING_PRESET);
+  const voiceRec = useAudioRecorder(VOICE_PRESET);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const [vState, setVState] = useState<"listening" | "thinking" | "speaking" | "idle">("idle");
+  const [vHeard, setVHeard] = useState("");
+  const [vReply, setVReply] = useState("");
+  const voiceActive = useRef(false);
+  const vad = useRef({ t0: 0, floor: -60, samples: [] as number[], speechAt: 0, lastLoud: 0, timer: null as any });
+  const pulse = useRef(new Animated.Value(1)).current;
   const [meeting, setMeeting] = useState(false);
   const [meetSecs, setMeetSecs] = useState(0);
   const [plan, setPlan] = useState<any>(null);
@@ -471,6 +493,107 @@ function FidusApp() {
         if (st.status === "erro") return fail(`na ata: ${st.error}`);
       } catch { /* rede instável: tenta de novo */ }
     }
+  }
+
+  // ---------- Modo conversa (mãos livres) ----------
+  useEffect(() => {
+    if (!voiceOpen) return;
+    const speed = vState === "listening" ? 700 : vState === "speaking" ? 450 : 1100;
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1.12, duration: speed, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1, duration: speed, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [voiceOpen, vState]);
+
+  async function openVoice() {
+    if (busy || recording || meeting) return;
+    const perm = await AudioModule.requestRecordingPermissionsAsync();
+    if (!perm.granted) return fail("permissão do microfone negada.");
+    voiceActive.current = true;
+    setVHeard(""); setVReply(Speech ? "Pode falar. Eu escuto e respondo em voz alta." :
+      "Pode falar. (Para ouvir as respostas em voz alta, instale o APK novo.)");
+    setVoiceOpen(true);
+    try { await KeepAwake?.activateKeepAwakeAsync("voice"); } catch {}
+    speak("Pode falar.");
+  }
+
+  async function closeVoice() {
+    voiceActive.current = false;
+    clearInterval(vad.current.timer);
+    try { Speech?.stop(); } catch {}
+    try { await voiceRec.stop(); } catch {}
+    try { KeepAwake?.deactivateKeepAwake("voice"); } catch {}
+    setVoiceOpen(false); setVState("idle");
+  }
+
+  function speak(text: string) {
+    if (!voiceActive.current) return;
+    if (!Speech) { setTimeout(listen, 1200); return; }
+    setVState("speaking");
+    try { Speech.stop(); } catch {}
+    Speech.speak(text, {
+      language: "pt-BR", rate: 1.02,
+      onDone: () => { if (voiceActive.current) listen(); },
+      onError: () => { if (voiceActive.current) listen(); },
+    });
+  }
+
+  async function listen() {
+    if (!voiceActive.current) return;
+    try {
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await voiceRec.prepareToRecordAsync();
+      voiceRec.record();
+    } catch (e: any) { setVReply(`Não consegui abrir o microfone: ${e?.message ?? e}`); return; }
+    setVState("listening");
+    const v = vad.current;
+    v.t0 = Date.now(); v.samples = []; v.speechAt = 0; v.lastLoud = 0; v.floor = -60;
+    clearInterval(v.timer);
+    v.timer = setInterval(() => {
+      const now = Date.now();
+      let db: number | undefined;
+      try { db = voiceRec.getStatus()?.metering; } catch {}
+      if (typeof db !== "number") return;  // sem medidor: a pessoa toca no círculo para enviar
+      if (now - v.t0 < 600) { v.samples.push(db); return; }  // mede o ruído do ambiente (carro, rua)
+      if (v.samples.length) { v.floor = v.samples.reduce((a, b) => a + b, 0) / v.samples.length; v.samples = []; }
+      const loud = db > Math.max(v.floor + 10, -52);
+      if (loud) { if (!v.speechAt) v.speechAt = now; v.lastLoud = now; }
+      if (v.speechAt && now - v.lastLoud > 1300 && now - v.speechAt > 400) return finishUtterance();
+      if (v.speechAt && now - v.speechAt > 30000) return finishUtterance();
+      if (!v.speechAt && now - v.t0 > 20000) { clearInterval(v.timer); voiceRec.stop().catch(() => {}).then(() => listen()); }
+    }, 120);
+  }
+
+  async function finishUtterance() {
+    clearInterval(vad.current.timer);
+    if (!voiceActive.current) return;
+    setVState("thinking");
+    try { await voiceRec.stop(); } catch {}
+    const uri = voiceRec.uri;
+    if (!uri) return listen();
+    try {
+      const audio_b64 = await new File(uri).base64();
+      const ext = (uri.match(/\.[a-z0-9]+$/i)?.[0] || ".m4a").toLowerCase();
+      const r = await api("/v1/voice_b64", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audio_b64, ext, mode: "voice" }) });
+      if (!voiceActive.current) return;
+      if (!r.transcript) { speak("Não entendi. Pode repetir?"); return; }
+      setVHeard(r.transcript);
+      if (EXIT_RE.test(r.transcript)) { setVReply("Até mais!"); speak("Até mais!"); setTimeout(closeVoice, 1600); return; }
+      showResult(r);  // vai também para a conversa, com cartões de rascunho, documentos etc.
+      setVReply(r.reply || "");
+      speak(r.speech || r.reply || "Feito.");
+    } catch (e: any) {
+      setVReply(`Falha de conexão: ${e?.message ?? e}`);
+      speak("Perdi a conexão com o servidor. Tente de novo em instantes.");
+    }
+  }
+
+  function tapVoiceCircle() {
+    if (vState === "speaking") { try { Speech?.stop(); } catch {} ; listen(); }
+    else if (vState === "listening") finishUtterance();
   }
 
   async function loadTasks() {
@@ -1098,16 +1221,48 @@ function FidusApp() {
                   <ArrowUpIcon color="#fff" />
                 </Pressable>
               ) : (
-                <Pressable onPress={toggleRec} disabled={busy || meeting} accessibilityLabel="Gravar áudio" hitSlop={6}
-                  style={[s.iconBtn, { opacity: busy || meeting ? 0.4 : 1 }]}>
-                  <MicIcon color={c.text} size={24} />
-                </Pressable>
+                <>
+                  <Pressable onPress={toggleRec} disabled={busy || meeting} accessibilityLabel="Gravar áudio" hitSlop={6}
+                    style={[s.iconBtn, { opacity: busy || meeting ? 0.4 : 1 }]}>
+                    <MicIcon color={c.text} size={24} />
+                  </Pressable>
+                  <Pressable onPress={openVoice} disabled={busy || meeting} accessibilityLabel="Modo conversa"
+                    style={[s.sendBtn2, { backgroundColor: NAVY, opacity: busy || meeting ? 0.4 : 1 }]}>
+                    <WaveIcon color="#fff" />
+                  </Pressable>
+                </>
               )}
             </>)}
           </View>
         </View>
         </>)}
       </KeyboardAvoidingView>
+      <Modal visible={voiceOpen} animationType="fade" onRequestClose={closeVoice} statusBarTranslucent>
+        <View style={{ flex: 1, backgroundColor: "#07090D", paddingTop: insets.top + 12, paddingBottom: insets.bottom + 20, paddingHorizontal: 24 }}>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Text style={{ color: "#F2F5F7", fontSize: 18, fontWeight: "700", flex: 1 }}>Modo conversa</Text>
+            <Pressable onPress={closeVoice} accessibilityLabel="Fechar modo conversa" hitSlop={10}
+              style={[s.iconBtn, { backgroundColor: "#161B23" }]}><CloseIcon color="#F2F5F7" /></Pressable>
+          </View>
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 28 }}>
+            <Pressable onPress={tapVoiceCircle} accessibilityLabel="Enviar agora ou interromper">
+              <Animated.View style={{ width: 190, height: 190, borderRadius: 95, alignItems: "center", justifyContent: "center",
+                backgroundColor: vState === "thinking" ? "#1E2530" : vState === "speaking" ? "#2F5BD8" : MINT,
+                transform: [{ scale: pulse }] }}>
+                {vState === "thinking" ? <ActivityIndicator color="#F2F5F7" size="large" /> : <WaveIcon color="#07090D" size={56} />}
+              </Animated.View>
+            </Pressable>
+            <Text style={{ color: "#F2F5F7", fontSize: 22, fontWeight: "700" }}>
+              {vState === "listening" ? "Ouvindo…" : vState === "thinking" ? "Pensando…" : vState === "speaking" ? "Falando…" : ""}</Text>
+            {!!vHeard && <Text style={{ color: "#8D98A8", fontSize: 16, textAlign: "center" }} numberOfLines={3}>“{vHeard}”</Text>}
+            {!!vReply && <Text style={{ color: "#F2F5F7", fontSize: 20, lineHeight: 28, textAlign: "center" }} numberOfLines={7}>{vReply}</Text>}
+          </View>
+          <Text style={{ color: "#6F7B8C", textAlign: "center", marginBottom: 14 }}>
+            Fale normalmente: quando você parar, eu respondo. Toque no círculo para enviar na hora ou para me interromper. Diga “tchau” para sair.</Text>
+          <Pressable onPress={closeVoice} style={{ backgroundColor: "#161B23", borderRadius: 18, paddingVertical: 18, alignItems: "center" }}>
+            <Text style={{ color: "#F2F5F7", fontSize: 18, fontWeight: "700" }}>Encerrar</Text></Pressable>
+        </View>
+      </Modal>
       <Modal visible={!!sheet} transparent animationType="slide" onRequestClose={() => setSheet(null)}>
         <Pressable style={s.sheetBg} onPress={() => setSheet(null)}>
           <View style={[s.sheet, { backgroundColor: c.card, paddingBottom: 16 + insets.bottom }]}>

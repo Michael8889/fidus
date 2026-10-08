@@ -15,7 +15,21 @@ NUDGE = ("[aviso do sistema, não é do usuário] Você afirmou ter feito uma a�
          "responda de novo sem dizer que fez algo. Responda direto ao usuário, sem citar este aviso.")
 
 
-def system_prompt() -> str:
+VOICE_RULES = """
+MODO CONVERSA (o usuário está ouvindo a resposta em voz alta, talvez dirigindo):
+- Responda em no máximo 2 frases curtas, como numa ligação. Nada de listas, links, emojis ou símbolos.
+- Diga só o essencial: o que foi feito e o dado principal (dia, hora, valor). Endereço só o nome do lugar e a cidade.
+- Se houver opções, diga no máximo 3, só pelos nomes, e pergunte qual.
+- Rascunhos de e-mail e convites: diga que ficaram para ele aprovar no app quando parar. Nunca leia o e-mail inteiro.
+- Se precisar de uma resposta dele, termine com uma pergunta curta.
+"""
+
+
+def system_prompt(voice: bool = False) -> str:
+    return _base_prompt() + (VOICE_RULES if voice else "")
+
+
+def _base_prompt() -> str:
     prof = store.profile()
     now = datetime.now(ZoneInfo(prof["timezone"]))
     dias = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"]
@@ -222,7 +236,7 @@ def _action_log(actions: list[str]) -> str:
 
 
 def handle(user_text: str, image_b64: str | None = None, media_type: str = "image/jpeg",
-           receipt_path: str | None = None) -> dict:
+           receipt_path: str | None = None, voice: bool = False) -> dict:
     tools.CURRENT_RECEIPT["path"] = receipt_path
     if image_b64:
         content = [{"type": "image", "data": image_b64, "media_type": media_type},
@@ -240,7 +254,7 @@ def handle(user_text: str, image_b64: str | None = None, media_type: str = "imag
 
     nudged = False
     for _ in range(MAX_STEPS):
-        out = llm.chat(system_prompt(), messages, tools.TOOLS)
+        out = llm.chat(system_prompt(voice), messages, tools.TOOLS)
         if not out["tool_calls"]:
             reply = out["text"].strip()
             if not actions and not nudged and CLAIM.search(reply):
@@ -250,7 +264,8 @@ def handle(user_text: str, image_b64: str | None = None, media_type: str = "imag
                 messages.append({"role": "user", "content": NUDGE})
                 continue
             store.add_message("assistant", reply + _action_log(actions))
-            return {"reply": reply, "pending_actions": [store.get_pending(p) for p in pending_ids], "events": events,
+            return {"reply": reply, "speech": speechify(reply) if voice else None,
+                    "pending_actions": [store.get_pending(p) for p in pending_ids], "events": events,
                     "documents": [{**d, "url": features.sign(d["document_id"])} for d in docs.values()],
                     "upsell": upsell}
 
@@ -278,3 +293,32 @@ def handle(user_text: str, image_b64: str | None = None, media_type: str = "imag
     reply = "Não consegui concluir esse pedido. Pode repetir de outro jeito?"
     store.add_message("assistant", reply)
     return {"reply": reply, "pending_actions": [store.get_pending(p) for p in pending_ids], "events": events}
+
+
+# ---------- Texto para ser falado (modo conversa) ----------
+_MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro",
+          "novembro", "dezembro"]
+_MOEDA = {"GBP": "libras", "EUR": "euros", "BRL": "reais", "USD": "dólares"}
+
+
+def speechify(text: str) -> str:
+    """Deixa a resposta boa de ouvir: sem marcadores, links e siglas de moeda; datas por extenso."""
+    t = re.sub(r"https?://\S+", "o link está no app", text or "")
+    t = re.sub(r"[*_#`>]", "", t)
+    t = re.sub(r"^\s*[•\-–]\s*", "", t, flags=re.M)
+    t = re.sub(r"\n{2,}", ". ", t)
+    t = t.replace("\n", ", ")
+    t = re.sub(r"£\s?(\d[\d.,]*)", r"\1 libras", t)
+    t = re.sub(r"€\s?(\d[\d.,]*)", r"\1 euros", t)
+    t = re.sub(r"R\$\s?(\d[\d.,]*)", r"\1 reais", t)
+    t = re.sub(r"\b(GBP|EUR|BRL|USD)\b", lambda m: _MOEDA[m.group(1)], t)
+
+    def _data(m):
+        d, mth = int(m.group(1)), int(m.group(2))
+        return f"{d} de {_MESES[mth - 1]}" if 1 <= d <= 31 and 1 <= mth <= 12 else m.group(0)
+    t = re.sub(r"\b(\d{1,2})/(\d{1,2})(?:/\d{2,4})?\b", _data, t)
+    t = re.sub(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]", "", t)  # emojis
+    t = t.replace(" · ", ", ").replace("·", ",")
+    t = re.sub(r"([.:!?;])\s*,", r"\1", t)  # "frase., outra" → "frase. outra"
+    t = re.sub(r"\s*([.,])\s*\1+", r"\1", t)
+    return re.sub(r"\s{2,}", " ", t).strip(" ,")

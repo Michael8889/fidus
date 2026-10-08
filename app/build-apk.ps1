@@ -29,7 +29,7 @@ Write-Host "1/4 Login na Expo" -ForegroundColor Yellow
 npx --yes eas-cli@latest whoami 2>$null
 if ($LASTEXITCODE -ne 0) { npx --yes eas-cli@latest login }
 Write-Host "2/4 Instalando modulos (atualizacoes, notificacoes, tela ligada, PDF)" -ForegroundColor Yellow
-npx expo install expo-updates expo-notifications expo-keep-awake expo-document-picker
+npx expo install expo-updates expo-notifications expo-keep-awake expo-document-picker expo-speech
 Write-Host "3/4 Conferindo dependencias" -ForegroundColor Yellow
 npx expo install --check
 Write-Host "4/4 Compilando o APK na nuvem. Responda Y (sim) as perguntas." -ForegroundColor Yellow

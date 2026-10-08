@@ -64,6 +64,7 @@ def owner_only():
 
 class TextIn(BaseModel):
     text: str
+    mode: str = ""  # "voice" = modo conversa (resposta curta para ouvir)
 
 
 class EditIn(BaseModel):
@@ -274,7 +275,7 @@ def admin_set_status(uid: str, body: StatusIn):
 # ---------- Conversa ----------
 @app.post("/v1/message", dependencies=[Depends(auth)])
 def message(body: TextIn):
-    return {"transcript": body.text, **agent.handle(body.text)}
+    return {"transcript": body.text, **agent.handle(body.text, voice=body.mode == "voice")}
 
 
 @app.post("/v1/voice", dependencies=[Depends(auth)])
@@ -297,6 +298,7 @@ async def voice(audio: UploadFile = File(...)):
 class VoiceB64In(BaseModel):
     audio_b64: str
     ext: str = ".m4a"
+    mode: str = ""
 
 
 @app.post("/v1/voice_b64", dependencies=[Depends(auth)])
@@ -316,7 +318,7 @@ def voice_b64(body: VoiceB64In):
         os.unlink(path)
     if not text:
         return {"transcript": "", "reply": "Não entendi o áudio. Pode repetir?", "pending_actions": [], "events": []}
-    return {"transcript": text, **agent.handle(text)}
+    return {"transcript": text, **agent.handle(text, voice=body.mode == "voice")}
 
 
 class PhotoIn(BaseModel):

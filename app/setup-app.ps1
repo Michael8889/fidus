@@ -9,7 +9,7 @@ if (-not (Test-Path $dest)) {
     Set-Location (Split-Path $PSScriptRoot -Parent)
     npx --yes create-expo-app@latest fidus-app --template blank-typescript --yes
     Set-Location $dest
-    npx --yes expo install expo-audio expo-haptics expo-secure-store expo-file-system react-native-safe-area-context expo-image-picker expo-updates expo-notifications expo-keep-awake expo-document-picker
+    npx --yes expo install expo-audio expo-haptics expo-secure-store expo-file-system react-native-safe-area-context expo-image-picker expo-updates expo-notifications expo-keep-awake expo-document-picker expo-speech
 } else {
     Set-Location $dest
 }

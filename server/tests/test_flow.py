@@ -184,3 +184,21 @@ def test_claimed_action_without_tool_is_challenged():
     r = client.post("/v1/message", json={"text": "oi"}, headers=H).json()
     assert len(calls) == 2 and "aviso do sistema" in calls[1]
     assert r["reply"].startswith("Ainda não marquei")
+
+
+def test_voice_mode_short_spoken_reply():
+    from app.agent import speechify
+    seen = {}
+
+    def chat(system, messages, t, **kw):
+        seen["system"] = system
+        return {"text": "Pronto:\n• jantar no SAFRA_ dia 09/10 às 20:00\n• total 45,90 GBP https://x.y", "tool_calls": []}
+
+    agent.llm.chat = chat
+    r = client.post("/v1/message", json={"text": "o que tenho sexta", "mode": "voice"}, headers=H).json()
+    assert "MODO CONVERSA" in seen["system"]
+    sp = r["speech"]
+    assert "•" not in sp and "http" not in sp and "9 de outubro" in sp and "libras" in sp
+    assert speechify("€12,50 e £3") == "12,50 euros e 3 libras"
+    r2 = client.post("/v1/message", json={"text": "oi"}, headers=H).json()
+    assert r2["speech"] is None
