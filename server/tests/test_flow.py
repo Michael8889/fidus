@@ -169,3 +169,18 @@ def test_photo_receipt_saved_and_linked(tmp_path):
     rows = T.store.query_expenses("2000-01-01", "2100-01-01", business="Pessoal")
     pret = [x for x in rows if x["merchant"] == "Pret"][0]
     assert pret["receipt_path"] and os.path.exists(pret["receipt_path"])
+
+
+def test_claimed_action_without_tool_is_challenged():
+    calls = []
+
+    def chat(system, messages, t, **kw):
+        calls.append(messages[-1]["content"])
+        if len(calls) == 1:
+            return {"text": "Marquei a reunião para amanhã às 10h.", "tool_calls": []}
+        return {"text": "Ainda não marquei nada. Quer que eu marque amanhã às 10h?", "tool_calls": []}
+
+    agent.llm.chat = chat
+    r = client.post("/v1/message", json={"text": "oi"}, headers=H).json()
+    assert len(calls) == 2 and "aviso do sistema" in calls[1]
+    assert r["reply"].startswith("Ainda não marquei")

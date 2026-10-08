@@ -163,13 +163,13 @@ def test_pdf_goes_to_model_as_document():
     seen = {}
 
     def chat(system, messages, t):
-        seen["c"] = messages[-1]["content"]
-        return {"text": "Guardei o contrato.", "tool_calls": []}
+        seen.setdefault("c", messages[-1]["content"])
+        return {"text": "Li o contrato.", "tool_calls": []}
 
     main.agent.llm.chat = chat
     pdf = base64.b64encode(b"%PDF-1.4 fake").decode()
     r = client.post("/v1/photo", json={"image_b64": pdf, "media_type": "application/pdf"}, headers=H).json()
-    assert r["reply"] == "Guardei o contrato."
+    assert r["reply"] == "Li o contrato."
     assert seen["c"][0]["media_type"] == "application/pdf" and "PDF enviado" in seen["c"][1]["text"]
 
 

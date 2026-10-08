@@ -1,10 +1,18 @@
 """Cérebro do Fidus: recebe o pedido em texto, usa ferramentas e responde."""
+import re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import config, features, llm, store, tools
 
 MAX_STEPS = 6
+
+# frases de quem diz que JÁ fez algo; sem ferramenta usada no pedido, isso seria inventado
+CLAIM = re.compile(r"(?<!não )(?<!nao )\b(marquei|agendei|criei|lancei|anotei|registrei|guardei|apaguei|cancelei|cadastrei|"
+                   r"coloquei na (sua )?agenda|est[áa] (marcad|agendad|lan[çc]ad|anotad)[oa])\b", re.I)
+NUDGE = ("[aviso do sistema, não é do usuário] Você afirmou ter feito uma ação, mas nenhuma ferramenta foi usada "
+         "neste pedido, então nada mudou. Se o usuário pediu essa ação agora, use a ferramenta certa. Se não, "
+         "responda de novo sem dizer que fez algo. Responda direto ao usuário, sem citar este aviso.")
 
 
 def system_prompt() -> str:
@@ -230,10 +238,17 @@ def handle(user_text: str, image_b64: str | None = None, media_type: str = "imag
     upsell: dict | None = None
     actions: list[str] = []
 
+    nudged = False
     for _ in range(MAX_STEPS):
         out = llm.chat(system_prompt(), messages, tools.TOOLS)
         if not out["tool_calls"]:
             reply = out["text"].strip()
+            if not actions and not nudged and CLAIM.search(reply):
+                # disse que fez algo sem usar nenhuma ferramenta: pede para fazer de verdade ou corrigir
+                nudged = True
+                messages.append({"role": "assistant", "content": reply})
+                messages.append({"role": "user", "content": NUDGE})
+                continue
             store.add_message("assistant", reply + _action_log(actions))
             return {"reply": reply, "pending_actions": [store.get_pending(p) for p in pending_ids], "events": events,
                     "documents": [{**d, "url": features.sign(d["document_id"])} for d in docs.values()],

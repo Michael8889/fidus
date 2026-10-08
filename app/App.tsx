@@ -983,10 +983,12 @@ function FidusApp() {
         )}
         {!meeting && !recording && typed.length === 0 && kb === 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingHorizontal: 12, gap: 8 }} style={{ flexGrow: 0 }}>
+            contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 6, gap: 8, alignItems: "center" }}
+            style={{ flexGrow: 0, flexShrink: 0, height: 54 }}>
             {SUGGESTIONS.map(([label, q]) => (
-              <Pressable key={label} disabled={busy} onPress={() => sendText(q)} style={[s.chip, { borderColor: c.sub, backgroundColor: c.card }]}>
-                <Text style={{ color: c.text, fontSize: 13 }}>{label}</Text></Pressable>
+              <Pressable key={label} disabled={busy} onPress={() => sendText(q)}
+                style={[s.chip, { borderColor: c.sub, backgroundColor: c.card, paddingVertical: 9, paddingHorizontal: 14 }]}>
+                <Text style={{ color: c.text, fontSize: 14, lineHeight: 18 }} numberOfLines={1}>{label}</Text></Pressable>
             ))}
           </ScrollView>
         )}
