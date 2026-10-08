@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator, Alert, FlatList, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, Pressable,
+  ActivityIndicator, Alert, Animated, Easing, FlatList, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, View, useColorScheme,
 } from "react-native";
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from "expo-audio";
@@ -129,6 +129,68 @@ const fmtDate = (iso: string) => {
   return isNaN(d.getTime()) ? "" : `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
+// Ícones desenhados com Views (sem biblioteca nativa): traço fino e neutro, no estilo dos apps de chat
+function PlusIcon({ color, size = 20 }: { color: string; size?: number }) {
+  const t = 2;
+  return (
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ position: "absolute", width: size * 0.8, height: t, borderRadius: 1, backgroundColor: color }} />
+      <View style={{ position: "absolute", width: t, height: size * 0.8, borderRadius: 1, backgroundColor: color }} />
+    </View>
+  );
+}
+
+function CloseIcon({ color, size = 18 }: { color: string; size?: number }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ position: "absolute", width: size, height: 2, borderRadius: 1, backgroundColor: color, transform: [{ rotate: "45deg" }] }} />
+      <View style={{ position: "absolute", width: size, height: 2, borderRadius: 1, backgroundColor: color, transform: [{ rotate: "-45deg" }] }} />
+    </View>
+  );
+}
+
+function MicIcon({ color, size = 22 }: { color: string; size?: number }) {
+  const w = size * 0.42, h = size * 0.58;
+  return (
+    <View style={{ width: size, height: size, alignItems: "center" }}>
+      <View style={{ width: w, height: h, borderRadius: w / 2, borderWidth: 1.8, borderColor: color }} />
+      <View style={{ position: "absolute", top: size * 0.32, width: size * 0.7, height: size * 0.42, borderWidth: 1.8, borderTopWidth: 0,
+        borderColor: color, borderBottomLeftRadius: size * 0.35, borderBottomRightRadius: size * 0.35 }} />
+      <View style={{ position: "absolute", top: size * 0.74, width: 1.8, height: size * 0.2, backgroundColor: color }} />
+    </View>
+  );
+}
+
+function ArrowUpIcon({ color, size = 18 }: { color: string; size?: number }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ position: "absolute", top: size * 0.2, width: 2.2, height: size * 0.75, borderRadius: 1, backgroundColor: color }} />
+      <View style={{ position: "absolute", top: size * 0.12, width: size * 0.48, height: size * 0.48, borderLeftWidth: 2.2, borderTopWidth: 2.2,
+        borderColor: color, transform: [{ rotate: "45deg" }] }} />
+    </View>
+  );
+}
+
+// Barrinhas que se mexem enquanto grava (mostra que está ouvindo)
+function RecordingBars({ color }: { color: string }) {
+  const vals = useRef([0, 1, 2, 3, 4, 5, 6].map(() => new Animated.Value(0.3))).current;
+  useEffect(() => {
+    const loops = vals.map((v, i) => Animated.loop(Animated.sequence([
+      Animated.timing(v, { toValue: 1, duration: 300 + i * 70, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(v, { toValue: 0.25, duration: 300 + i * 70, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    ])));
+    loops.forEach((l) => l.start());
+    return () => loops.forEach((l) => l.stop());
+  }, []);
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 3, height: 22 }}>
+      {vals.map((v, i) => (
+        <Animated.View key={i} style={{ width: 3, height: 22, borderRadius: 2, backgroundColor: color, transform: [{ scaleY: v }] }} />
+      ))}
+    </View>
+  );
+}
+
 export default function App() {
   return <SafeAreaProvider><FidusApp /></SafeAreaProvider>;
 }
@@ -156,6 +218,7 @@ function FidusApp() {
   const [plan, setPlan] = useState<any>(null);
   const [sheet, setSheet] = useState<{ title: string; items: [string, () => void][] } | null>(null);
   const [recording, setRecording] = useState(false);
+  const [recSecs, setRecSecs] = useState(0);
   const [busy, setBusy] = useState(false);
   const [typed, setTyped] = useState("");
   const listRef = useRef<FlatList>(null);
@@ -555,6 +618,20 @@ function FidusApp() {
 
   // ---------- Voz: tocar para gravar, tocar de novo para enviar ----------
   const fail = (msg: string) => push({ id: uid(), type: "fidus", text: `Erro: ${msg}` });
+
+  useEffect(() => {  // cronômetro da gravação de voz
+    if (!recording) return;
+    const t0 = Date.now();
+    setRecSecs(0);
+    const iv = setInterval(() => setRecSecs(Math.floor((Date.now() - t0) / 1000)), 500);
+    return () => clearInterval(iv);
+  }, [recording]);
+
+  async function cancelRec() {
+    setRecording(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try { await recorder.stop(); } catch { /* já parado */ }  // descarta: nada é enviado
+  }
 
   async function toggleRec() {
     if (busy) return;
@@ -973,7 +1050,6 @@ function FidusApp() {
             );
           }}
         />
-        {recording && <Text style={[s.empty, { color: MINT, marginTop: 0 }]}>● Gravando… toque de novo para enviar</Text>}
         {meeting && (
           <Pressable onPress={finishMeeting} style={[s.meetBar, { backgroundColor: c.card, borderColor: RED }]}>
             <Text style={{ color: RED, fontWeight: "800" }}>● REC {fmtClock(meetSecs)}</Text>
@@ -993,24 +1069,42 @@ function FidusApp() {
           </ScrollView>
         )}
         <View style={[s.bottom, Platform.OS === "android" && kb > 0 ? { marginBottom: Math.max(kb - insets.bottom, 0) + 56 } : null]}>
-          <Pressable onPress={photoMenu} disabled={busy || recording} accessibilityLabel="Enviar foto"
-            style={[s.cam, { backgroundColor: c.card }]}>
-            <Text style={{ fontSize: 22 }}>📷</Text>
-          </Pressable>
-          <TextInput style={[s.input, s.flex, { color: c.text, backgroundColor: c.card, marginBottom: 0 }]}
-            placeholder="Escreva ou toque no microfone…" multiline blurOnSubmit placeholderTextColor={c.sub} value={typed}
-            onChangeText={setTyped} onSubmitEditing={() => sendText()} returnKeyType="send" />
-          {typed.trim().length > 0 ? (
-            <Pressable onPress={() => sendText()} disabled={busy} accessibilityLabel="Enviar"
-              style={[s.mic, { backgroundColor: busy ? c.sub : NAVY }]}>
-              <Text style={s.micText}>➤</Text>
-            </Pressable>
-          ) : (
-            <Pressable onPress={toggleRec} disabled={busy || meeting} accessibilityLabel="Gravar"
-              style={[s.mic, { backgroundColor: recording ? MINT : busy ? c.sub : NAVY, transform: [{ scale: recording ? 1.15 : 1 }] }]}>
-              <Text style={s.micText}>{recording ? "■" : "🎙"}</Text>
-            </Pressable>
-          )}
+          <View style={[s.composer, { backgroundColor: c.card, borderColor: recording ? RED : (dark ? "#24365A" : "#DDE3EC") }]}>
+            {recording ? (<>
+              <Pressable onPress={cancelRec} accessibilityLabel="Cancelar gravação" hitSlop={8}
+                style={[s.iconBtn, { backgroundColor: dark ? "#22345A" : "#EEF1F6" }]}>
+                <CloseIcon color={c.text} />
+              </Pressable>
+              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 6 }}>
+                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: RED }} />
+                <Text style={{ color: c.text, fontVariant: ["tabular-nums"], fontWeight: "600" }}>{fmtClock(recSecs)}</Text>
+                <RecordingBars color={c.sub} />
+                <Text style={{ color: c.sub, fontSize: 13 }} numberOfLines={1}>Gravando…</Text>
+              </View>
+              <Pressable onPress={stopRec} accessibilityLabel="Enviar áudio" style={[s.sendBtn2, { backgroundColor: NAVY }]}>
+                <ArrowUpIcon color="#fff" />
+              </Pressable>
+            </>) : (<>
+              <Pressable onPress={photoMenu} disabled={busy} accessibilityLabel="Adicionar foto ou arquivo" hitSlop={6}
+                style={[s.iconBtn, { borderWidth: 1, borderColor: dark ? "#2C3F66" : "#D5DCE6" }]}>
+                <PlusIcon color={c.text} />
+              </Pressable>
+              <TextInput style={[s.composerInput, { color: c.text }]}
+                placeholder="Fale ou escreva…" multiline blurOnSubmit placeholderTextColor={c.sub} value={typed}
+                onChangeText={setTyped} onSubmitEditing={() => sendText()} returnKeyType="send" />
+              {typed.trim().length > 0 ? (
+                <Pressable onPress={() => sendText()} disabled={busy} accessibilityLabel="Enviar"
+                  style={[s.sendBtn2, { backgroundColor: busy ? c.sub : NAVY }]}>
+                  <ArrowUpIcon color="#fff" />
+                </Pressable>
+              ) : (
+                <Pressable onPress={toggleRec} disabled={busy || meeting} accessibilityLabel="Gravar áudio" hitSlop={6}
+                  style={[s.iconBtn, { opacity: busy || meeting ? 0.4 : 1 }]}>
+                  <MicIcon color={c.text} size={24} />
+                </Pressable>
+              )}
+            </>)}
+          </View>
         </View>
         </>)}
       </KeyboardAvoidingView>
@@ -1032,6 +1126,11 @@ function FidusApp() {
 }
 
 const s = StyleSheet.create({
+  composer: { flex: 1, flexDirection: "row", alignItems: "flex-end", gap: 6, borderWidth: 1, borderRadius: 26,
+    paddingHorizontal: 8, paddingVertical: 7, minHeight: 54 },
+  composerInput: { flex: 1, fontSize: 16, paddingHorizontal: 6, paddingTop: 9, paddingBottom: 9, maxHeight: 130 },
+  iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  sendBtn2: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   meetBar: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 12, marginBottom: 8, padding: 12, borderRadius: 12, borderWidth: 1.5 },
   sheetBg: { flex: 1, backgroundColor: "#0008", justifyContent: "flex-end" },
   sheet: { borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 16 },
