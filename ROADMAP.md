@@ -28,8 +28,7 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [x] **Você**: busca de marca no Reino Unido (08/10): nenhuma "FIDUS" viva em software (classes 9/42); atenção a
       "FEEDUS" (classes 35/42, parecida no som)
 - [ ] **Você**: busca na União Europeia (TMview), pedir registro da marca FIDUS (UK, classes 9 e 42) e comprar o domínio
-- [ ] **Você**: abrir a empresa com nome aceito (ex. "Fidus Labs Ltd" ou nome neutro; "FIDUS LIMITED" foi recusado
-      por já existir "FIDUS UK LTD")
+- [x] **Você**: abrir a empresa: **Fidus Labs Limited** (pedido feito em 08/10; aguardar o certificado com o número da empresa)
 - [ ] **Você**: conta Google Play Console no nome da empresa (US$ 25)
 - [ ] **Você**: conta Resend + verificar o domínio → liga os e-mails e a entrada por e-mail (`.env`)
 - [ ] **Você**: conta RevenueCat + assinaturas na Play (passo a passo no README › Assinaturas)
