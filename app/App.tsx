@@ -1,25 +1,69 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator, Alert, Animated, Easing, FlatList, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, Pressable,
-  ScrollView, StyleSheet, Text, TextInput, View, useColorScheme,
+  ActivityIndicator, Alert, Animated, Dimensions, Easing, FlatList, I18nManager, Keyboard, KeyboardAvoidingView, Linking,
+  Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, useColorScheme,
 } from "react-native";
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from "expo-audio";
-import { File } from "expo-file-system";
+import { File, Paths } from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import * as SecureStore from "expo-secure-store";
 
-// Módulos nativos novos: só existem a partir do APK v0.5. Num APK antigo, a função some sem travar o app.
+// Módulos nativos opcionais: num APK antigo, a função some sem travar o app.
 const opt = (load: () => any) => { try { return load(); } catch { return null; } };
 const Notifications: any = opt(() => require("expo-notifications"));
 const KeepAwake: any = opt(() => require("expo-keep-awake"));
 const Speech: any = opt(() => require("expo-speech"));  // voz do Fidus no modo conversa (APK com expo-speech)
+const DocumentPicker: any = opt(() => require("expo-document-picker"));
+const Clipboard: any = opt(() => require("expo-clipboard"));  // botão copiar (sem ele, abre o compartilhar)
+
+// ---------- Idiomas ----------
+// O app é escrito em português. Em outro idioma, o servidor devolve as traduções (feitas uma vez e guardadas),
+// e o app guarda uma cópia no celular para abrir já traduzido.
+let LANG = "pt";
+let LOCALE = "pt-BR";
+let TR: Record<string, string> = {};
+function t(s: string, ...a: any[]): string {
+  let x = TR[s] ?? s;
+  a.forEach((v, i) => { x = x.split(`{${i}}`).join(String(v)); });
+  return x;
+}
+function deviceLocale(): string {
+  const clean = (id: string) => {
+    const p = String(id).split(/[_-]/);
+    return p[1] && /^[A-Za-z]{2}$/.test(p[1]) ? `${p[0].toLowerCase()}-${p[1].toUpperCase()}` : p[0].toLowerCase();
+  };
+  try { const id = (I18nManager as any).getConstants?.().localeIdentifier; if (id) return clean(id); } catch {}
+  try { const l = Intl.DateTimeFormat().resolvedOptions().locale; if (l) return clean(l); } catch {}
+  return "en";
+}
+function deviceTimezone(): string | null {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; }
+}
+const LANG_CHOICES: [string, string][] = [
+  ["pt", "Português"], ["en", "English"], ["es", "Español"], ["fr", "Français"], ["de", "Deutsch"], ["it", "Italiano"],
+  ["nl", "Nederlands"], ["pl", "Polski"], ["ro", "Română"], ["ms", "Bahasa Melayu"], ["id", "Bahasa Indonesia"],
+  ["tr", "Türkçe"], ["ar", "العربية"], ["hi", "हिन्दी"], ["zh", "中文"], ["ja", "日本語"],
+];
+const TTS_LOCALE: Record<string, string> = { pt: "pt-BR", en: "en-GB", es: "es-ES", fr: "fr-FR", de: "de-DE", it: "it-IT" };
+// textos que vêm do servidor em português (planos): listados aqui para entrarem na tradução
+const _SERVER_TEXTS = () => [
+  t("Voz e texto sem limite"), t("Agenda, lembretes e bom dia"), t("E-mail com aprovação"), t("Gastos e recibos de 1 carteira"),
+  t("Documentos com validade"), t("Tarefas"), t("Empresas e moedas ilimitadas"), t("Link de agendamento para clientes"),
+  t("Ata de reunião automática"), t("Pacote do contador"), t("Alerta de assinaturas"), t("Resumo da semana"),
+  t("Banco conectado: gastos entram sozinhos"), t("Cobrança e fatura para clientes"), t("Mais 1 pessoa na conta + acesso do contador"),
+  t("Atas sem limite e suporte prioritário"), t("link de agendamento"), t("atas de reunião"), t("gravar reuniões e gerar a ata"),
+  t("pacote do contador"), t("alerta de assinaturas"), t("resumo da semana"), t("gastos de mais de uma empresa"),
+  t("banco conectado"), t("cobrança e fatura para clientes"), t("mais uma pessoa na conta"), t("Negócio"),
+  t("Essencial"), t("Premium"), t("combustível"), t("alimentação"), t("transporte"), t("materiais"), t("ferramentas"),
+  t("manutenção"), t("escritório"), t("software"), t("telefone e internet"), t("impostos e taxas"), t("moradia"), t("saúde"),
+  t("lazer"), t("viagem"), t("salários e prestadores"), t("outros"),
+];
 
 // modo conversa: gravação com medidor de volume para saber quando a pessoa parou de falar
 const VOICE_PRESET: any = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true };
-const EXIT_RE = /^\s*(tchau|encerr(a|ar)|pode parar|parar|sair|fim|obrigad[oa],? (é|e) só isso)\b/i;
-const DocumentPicker: any = opt(() => require("expo-document-picker"));
+const EXIT_RE = /^\s*(tchau|encerr(a|ar)|pode parar|parar|sair|fim|obrigad[oa],? (é|e) só isso|bye|goodbye|stop|that'?s all|adi[oó]s)\b/i;
 
 // gravação de reunião: mono, 16 kHz, 32 kbps (1 h ≈ 15 MB) — suficiente para transcrever
 const MEETING_PRESET: any = {
@@ -28,13 +72,13 @@ const MEETING_PRESET: any = {
   ios: { ...(RecordingPresets.HIGH_QUALITY as any).ios, sampleRate: 16000 },
 };
 
-const SUGGESTIONS: [string, string][] = [
-  ["☀️ Bom dia", "Bom dia! O que eu tenho hoje?"],
-  ["💷 Gastos do mês", "Quanto eu gastei este mês, por empresa?"],
-  ["📝 Tarefas", "Quais são minhas tarefas abertas?"],
-  ["📊 Minha semana", "Como foi minha semana?"],
-  ["🔗 Link de agendamento", "Me manda meu link de agendamento."],
-  ["🔁 Assinaturas", "Quais assinaturas e cobranças recorrentes eu pago?"],
+const SUGGESTIONS = (): [string, string][] => [
+  [t("☀️ Bom dia"), t("Bom dia! O que eu tenho hoje?")],
+  [t("💷 Gastos do mês"), t("Quanto eu gastei este mês, por empresa?")],
+  [t("📝 Tarefas"), t("Quais são minhas tarefas abertas?")],
+  [t("📊 Minha semana"), t("Como foi minha semana?")],
+  [t("🔗 Link de agendamento"), t("Me manda meu link de agendamento.")],
+  [t("🔁 Assinaturas"), t("Quais assinaturas e cobranças recorrentes eu pago?")],
 ];
 // SHA-256 em JS puro (sem módulo nativo): o app manda ao servidor o hash de um segredo que só ele conhece,
 // e depois o segredo, para trocar o código de login. Outro app que capture o link fidus:// não consegue entrar.
@@ -80,67 +124,71 @@ function randomSecret(): string {
 }
 
 const DEFAULT_SERVER = "https://fidus.148-230-123-44.sslip.io";
+const SUPPORT_EMAIL = "suporte@homb.io";
 const PLAN_NAMES: Record<string, string> = { essencial: "Essencial", negocio: "Negócio", premium: "Premium" };
 const fmtClock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+const money = (n: number, sym = "€") => `${sym}${LANG === "pt" ? n.toFixed(2).replace(".", ",") : n.toFixed(2)}`;
 
-type Draft = { to: string; subject: string; body: string; title?: string; start?: string; emails?: string[] };
+type Draft = { to: string; subject: string; body: string; cc?: string; title?: string; start?: string; emails?: string[] };
 type Action = { id: string; kind: string; status: string; payload: Draft };
 type Doc = { document_id: number; title: string; expires_on?: string | null; url: string };
 type Task = { id: number; title: string; due?: string | null; priority: string; status: string; overdue?: boolean };
+type Upsell = { feature_label: string; plan: string; name: string; month: number; year: number; highlights: string[];
+  current_plan: string; url: string; symbol?: string };
 type Item =
   | { id: string; type: "user"; text: string }
   | { id: string; type: "fidus"; text: string }
   | { id: string; type: "action"; action: Action }
   | { id: string; type: "doc"; doc: Doc }
   | { id: string; type: "upsell"; up: Upsell };
-type Upsell = { feature_label: string; plan: string; name: string; month: number; year: number; highlights: string[]; current_plan: string; url: string };
-const eur = (n: number) => `€${n.toFixed(2).replace(".", ",")}`;
+type Screen = "chat" | "convs" | "tasks" | "docs" | "meetings" | "expenses" | "booking" | "activity" | "invite" | "admin" | "settings";
 
 const NAVY = "#0E1E3A";
 const MINT = "#3DDC97";
+const BLUE = "#2F6BFF";
 const ICON: Record<string, string> = {
   event_created: "📅", event_deleted: "🗑", email_draft: "✉️", expense_added: "💷", expense_deleted: "🗑",
   reminder_created: "⏰", task_added: "📝", task_done: "✅", document_saved: "📄", bill_added: "🔁",
   bill_deleted: "🗑", meet_added: "🎥", invite_draft: "👥", meeting_summarized: "🎙", booking_received: "🗓",
   export_created: "📦",
 };
-const LABEL: Record<string, string> = {
-  event_created: "Agenda", event_deleted: "Agenda", email_draft: "E-mail", expense_added: "Gasto", expense_deleted: "Gasto",
-  reminder_created: "Lembrete", task_added: "Tarefa", task_done: "Tarefa", document_saved: "Documento",
-  bill_added: "Conta fixa", bill_deleted: "Conta fixa", meet_added: "Agenda", invite_draft: "Convite",
-  meeting_summarized: "Reunião", booking_received: "Agendamento", export_created: "Contador",
-};
+const LABEL = (): Record<string, string> => ({
+  event_created: t("Agenda"), event_deleted: t("Agenda"), email_draft: t("E-mail"), expense_added: t("Gasto"),
+  expense_deleted: t("Gasto"), reminder_created: t("Lembrete"), task_added: t("Tarefa"), task_done: t("Tarefa"),
+  document_saved: t("Documento"), bill_added: t("Conta fixa"), bill_deleted: t("Conta fixa"), meet_added: t("Agenda"),
+  invite_draft: t("Convite"), meeting_summarized: t("Reunião"), booking_received: t("Agendamento"), export_created: t("Contador"),
+});
 const fmtDay = (d?: string | null) => d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : "";
 // selo de status: verbo claro + cor
 const GREEN = "#2E9E6B", RED = "#D64545", AMBER = "#C98A00", GRAY = "#8A94A6";
 function pill(kind: string, status: string): { text: string; color: string } {
-  if (status === "desfeito") return { text: "Desfeito", color: GRAY };
-  if (status === "cancelado") return { text: "Cancelado", color: GRAY };
-  if (status === "aguardando você") return { text: "Aguardando você", color: AMBER };
-  if (status === "enviado") return { text: "Enviado", color: GREEN };
-  if (kind === "bill_deleted") return { text: "Removida", color: RED };
-  if (kind.endsWith("_deleted")) return { text: "Apagado", color: RED };
-  if (kind === "expense_added") return { text: "Lançado", color: GREEN };
-  if (kind === "task_done") return { text: "Concluída", color: GREEN };
-  if (kind === "document_saved") return { text: "Guardado", color: GREEN };
-  if (kind === "bill_added") return { text: "Cadastrada", color: GREEN };
-  if (kind === "meeting_summarized") return { text: "Ata pronta", color: GREEN };
-  if (kind === "booking_received") return { text: "Agendado", color: GREEN };
-  if (kind === "export_created") return { text: "Gerado", color: GREEN };
-  return { text: "Criado", color: GREEN };
+  if (status === "desfeito") return { text: t("Desfeito"), color: GRAY };
+  if (status === "cancelado") return { text: t("Cancelado"), color: GRAY };
+  if (status === "aguardando você") return { text: t("Aguardando você"), color: AMBER };
+  if (status === "enviado") return { text: t("Enviado"), color: GREEN };
+  if (kind === "bill_deleted") return { text: t("Removida"), color: RED };
+  if (kind.endsWith("_deleted")) return { text: t("Apagado"), color: RED };
+  if (kind === "expense_added") return { text: t("Lançado"), color: GREEN };
+  if (kind === "task_done") return { text: t("Concluída"), color: GREEN };
+  if (kind === "document_saved") return { text: t("Guardado"), color: GREEN };
+  if (kind === "bill_added") return { text: t("Cadastrada"), color: GREEN };
+  if (kind === "meeting_summarized") return { text: t("Ata pronta"), color: GREEN };
+  if (kind === "booking_received") return { text: t("Agendado"), color: GREEN };
+  if (kind === "export_created") return { text: t("Gerado"), color: GREEN };
+  return { text: t("Criado"), color: GREEN };
 }
 const fmtDate = (iso: string) => {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? "" : `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
-// Ícones desenhados com Views (sem biblioteca nativa): traço fino e neutro, no estilo dos apps de chat
+// ---------- Ícones desenhados com Views (sem biblioteca nativa): traço fino, no estilo dos apps de chat ----------
 function PlusIcon({ color, size = 20 }: { color: string; size?: number }) {
-  const t = 2;
+  const w = 2;
   return (
     <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
-      <View style={{ position: "absolute", width: size * 0.8, height: t, borderRadius: 1, backgroundColor: color }} />
-      <View style={{ position: "absolute", width: t, height: size * 0.8, borderRadius: 1, backgroundColor: color }} />
+      <View style={{ position: "absolute", width: size * 0.8, height: w, borderRadius: 1, backgroundColor: color }} />
+      <View style={{ position: "absolute", width: w, height: size * 0.8, borderRadius: 1, backgroundColor: color }} />
     </View>
   );
 }
@@ -166,9 +214,9 @@ function MicIcon({ color, size = 22 }: { color: string; size?: number }) {
   );
 }
 
-function ArrowUpIcon({ color, size = 18 }: { color: string; size?: number }) {
+function ArrowUpIcon({ color, size = 18, down = false }: { color: string; size?: number; down?: boolean }) {
   return (
-    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center", transform: down ? [{ rotate: "180deg" }] : [] }}>
       <View style={{ position: "absolute", top: size * 0.2, width: 2.2, height: size * 0.75, borderRadius: 1, backgroundColor: color }} />
       <View style={{ position: "absolute", top: size * 0.12, width: size * 0.48, height: size * 0.48, borderLeftWidth: 2.2, borderTopWidth: 2.2,
         borderColor: color, transform: [{ rotate: "45deg" }] }} />
@@ -176,28 +224,54 @@ function ArrowUpIcon({ color, size = 18 }: { color: string; size?: number }) {
   );
 }
 
-// Texto com links, e-mails e telefones tocáveis (abre navegador, e-mail ou discador)
-const LINK_RE = /(\[[^\]\n]{1,80}\]\((https?:\/\/[^\s)]+)\))|(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])|(www\.[^\s<>"']+[^\s<>"'.,;:!?)\]])|([\w.+-]+@[\w-]+\.[\w.-]*[a-z]{2,})|((?:\+|00)\d[\d\s-]{7,16}\d)/gi;
+function MenuIcon({ color, size = 22 }: { color: string; size?: number }) {
+  return (
+    <View style={{ width: size, height: size, justifyContent: "center", gap: size * 0.22 }}>
+      <View style={{ width: size * 0.9, height: 2, borderRadius: 1, backgroundColor: color }} />
+      <View style={{ width: size * 0.55, height: 2, borderRadius: 1, backgroundColor: color }} />
+    </View>
+  );
+}
 
-function LinkText({ text, style, linkColor }: { text: string; style: any; linkColor: string }) {
-  const parts: any[] = [];
-  let last = 0, m: RegExpExecArray | null, k = 0;
-  LINK_RE.lastIndex = 0;
-  while ((m = LINK_RE.exec(text))) {
-    if (m.index > last) parts.push(text.slice(last, m.index));
-    let label = m[0], url = m[0];
-    if (m[1]) { label = m[1].slice(1, m[1].indexOf("](")); url = m[2]; }
-    else if (m[4]) url = "https://" + m[4];
-    else if (m[5]) url = "mailto:" + m[5];
-    else if (m[6]) url = "tel:" + m[6].replace(/[\s-]/g, "").replace(/^00/, "+");
-    const target = url;
-    parts.push(
-      <Text key={k++} style={{ color: linkColor, textDecorationLine: "underline" }}
-        onPress={() => Linking.openURL(target).catch(() => Alert.alert("Link", "Não consegui abrir este link."))}>{label}</Text>);
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) parts.push(text.slice(last));
-  return <Text selectable style={style}>{parts}</Text>;
+function PencilIcon({ color, size = 18 }: { color: string; size?: number }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ width: size * 0.3, height: size * 0.95, borderWidth: 1.6, borderColor: color, borderRadius: 2,
+        borderBottomLeftRadius: size * 0.15, borderBottomRightRadius: size * 0.15, transform: [{ rotate: "45deg" }] }} />
+      <View style={{ position: "absolute", width: size * 0.3, height: 1.6, backgroundColor: color, top: size * 0.3, left: size * 0.48,
+        transform: [{ rotate: "45deg" }] }} />
+    </View>
+  );
+}
+
+function CopyIcon({ color, size = 18 }: { color: string; size?: number }) {
+  const b = size * 0.62;
+  return (
+    <View style={{ width: size, height: size }}>
+      <View style={{ position: "absolute", left: 0, top: 0, width: b, height: b, borderRadius: 3, borderWidth: 1.6, borderColor: color }} />
+      <View style={{ position: "absolute", right: 0, bottom: 0, width: b, height: b, borderRadius: 3, borderWidth: 1.6, borderColor: color }} />
+    </View>
+  );
+}
+
+function MailIcon({ color, size = 18 }: { color: string; size?: number }) {
+  const w = size, h = size * 0.72;
+  return (
+    <View style={{ width: w, height: size, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ width: w, height: h, borderRadius: 3, borderWidth: 1.6, borderColor: color, overflow: "hidden", alignItems: "center" }}>
+        <View style={{ width: w * 0.62, height: w * 0.62, marginTop: -w * 0.36, borderWidth: 1.6, borderColor: color, transform: [{ rotate: "45deg" }] }} />
+      </View>
+    </View>
+  );
+}
+
+function ComposeIcon({ color, size = 22 }: { color: string; size?: number }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ position: "absolute", width: size * 0.82, height: size * 0.82, borderRadius: size * 0.22, borderWidth: 1.8, borderColor: color }} />
+      <PlusIcon color={color} size={size * 0.5} />
+    </View>
+  );
 }
 
 function WaveIcon({ color, size = 20 }: { color: string; size?: number }) {
@@ -229,17 +303,137 @@ function RecordingBars({ color }: { color: string }) {
   );
 }
 
+// Texto com links, e-mails e telefones tocáveis (abre navegador, e-mail ou discador)
+const LINK_RE = /(\[[^\]\n]{1,80}\]\((https?:\/\/[^\s)]+)\))|(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])|(www\.[^\s<>"']+[^\s<>"'.,;:!?)\]])|([\w.+-]+@[\w-]+\.[\w.-]*[a-z]{2,})|((?:\+|00)\d[\d\s-]{7,16}\d)/gi;
+
+function LinkText({ text, style, linkColor }: { text: string; style: any; linkColor: string }) {
+  const parts: any[] = [];
+  let last = 0, m: RegExpExecArray | null, k = 0;
+  LINK_RE.lastIndex = 0;
+  while ((m = LINK_RE.exec(text))) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    let label = m[0], url = m[0];
+    if (m[1]) { label = m[1].slice(1, m[1].indexOf("](")); url = m[2]; }
+    else if (m[4]) url = "https://" + m[4];
+    else if (m[5]) url = "mailto:" + m[5];
+    else if (m[6]) url = "tel:" + m[6].replace(/[\s-]/g, "").replace(/^00/, "+");
+    const target = url;
+    parts.push(
+      <Text key={k++} style={{ color: linkColor, textDecorationLine: "underline" }}
+        onPress={() => Linking.openURL(target).catch(() => Alert.alert(t("Link"), t("Não consegui abrir este link.")))}>{label}</Text>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return <Text selectable style={style}>{parts}</Text>;
+}
+
+// Corpo de e-mail com **negrito** e listas com • (igual ao que o destinatário vai ver)
+function FormattedText({ text, color }: { text: string; color: string }) {
+  const inline = (line: string, key: string) => line.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((p, i) =>
+    p.startsWith("**") && p.endsWith("**")
+      ? <Text key={`${key}-${i}`} style={{ fontWeight: "700" }}>{p.slice(2, -2)}</Text>
+      : <Text key={`${key}-${i}`}>{p}</Text>);
+  return (
+    <View style={{ gap: 2 }}>
+      {(text || "").split("\n").map((line, i) => {
+        const b = line.match(/^\s*(?:•|-|\*)\s+(.*)$/);
+        if (b) return (
+          <View key={i} style={{ flexDirection: "row", paddingLeft: 4 }}>
+            <Text style={{ color, width: 16, lineHeight: 22 }}>•</Text>
+            <Text selectable style={{ color, flex: 1, lineHeight: 22, fontSize: 15 }}>{inline(b[1], String(i))}</Text>
+          </View>);
+        if (!line.trim()) return <View key={i} style={{ height: 8 }} />;
+        return <Text key={i} selectable style={{ color, lineHeight: 22, fontSize: 15 }}>{inline(line, String(i))}</Text>;
+      })}
+    </View>
+  );
+}
+
+function Card({ c, children, onPress, style }: any) {
+  return <Pressable onPress={onPress} disabled={!onPress} style={[s.actCard, { backgroundColor: c.card }, style]}>{children}</Pressable>;
+}
+
+// Cartão de e-mail no estilo do Claude: cabeçalho com editar, copiar e enviar; destinatário, assunto e texto formatado
+function EmailCard({ a, c, dark, onSend, onCancel, onSave, onCopy, onEditing }: {
+  a: Action; c: any; dark: boolean; onSend: () => void; onCancel: () => void;
+  onSave: (p: { to: string; subject: string; body: string }) => Promise<boolean>; onCopy: (text: string) => void;
+  onEditing: (on: boolean) => void;
+}) {
+  const [editing, setEditingRaw] = useState(false);
+  const setEditing = (on: boolean) => { setEditingRaw(on); onEditing(on); };  // em edição, "envia" não manda este rascunho
+  const [to, setTo] = useState(a.payload.to);
+  const [subject, setSubject] = useState(a.payload.subject);
+  const [body, setBody] = useState(a.payload.body);
+  const pending = a.status === "pending";
+  const line = dark ? "#26375A" : "#E3E8F0";
+  const statusText = a.status === "sending" ? t("Enviando…") : a.status === "sent" ? t("Enviado ✓") : a.status === "cancelled" ? t("Descartado") : "";
+  return (
+    <View style={[s.emailCard, { backgroundColor: c.card, borderColor: line }]}>
+      <View style={[s.emailHead, { borderBottomColor: line }]}>
+        <MailIcon color={c.sub} size={17} />
+        <Text style={{ color: c.text, fontWeight: "700", fontSize: 15, flex: 1, marginLeft: 8 }}>{t("Email")}</Text>
+        {pending && !editing && (
+          <Pressable hitSlop={8} onPress={() => setEditing(true)} style={s.headBtn} accessibilityLabel={t("Editar")}>
+            <PencilIcon color={c.sub} /></Pressable>)}
+        <Pressable hitSlop={8} style={s.headBtn} accessibilityLabel={t("Copiar")}
+          onPress={() => onCopy(`${t("Para")}: ${to}\n${t("Assunto")}: ${subject}\n\n${body.replace(/\*\*/g, "")}`)}>
+          <CopyIcon color={c.sub} /></Pressable>
+        {pending && !editing && (
+          <Pressable onPress={onSend} accessibilityLabel={t("Enviar")} style={[s.sendBlue, { backgroundColor: BLUE }]}>
+            <ArrowUpIcon color="#fff" size={16} /></Pressable>)}
+        {!!statusText && <Text style={{ color: a.status === "sent" ? GREEN : c.sub, fontSize: 12, fontWeight: "600", marginLeft: 6 }}>{statusText}</Text>}
+      </View>
+      {editing ? (
+        <View style={{ padding: 14, gap: 8 }}>
+          <Text style={{ color: c.sub, fontSize: 12 }}>{t("Para")}</Text>
+          <TextInput value={to} onChangeText={setTo} autoCapitalize="none" keyboardType="email-address"
+            style={[s.editInput, { color: c.text, borderColor: line }]} />
+          <Text style={{ color: c.sub, fontSize: 12 }}>{t("Assunto")}</Text>
+          <TextInput value={subject} onChangeText={setSubject} style={[s.editInput, { color: c.text, borderColor: line }]} />
+          <TextInput value={body} onChangeText={setBody} multiline
+            style={[s.editInput, { color: c.text, borderColor: line, minHeight: 160, textAlignVertical: "top" }]} />
+          <View style={s.row}>
+            <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => {
+              setTo(a.payload.to); setSubject(a.payload.subject); setBody(a.payload.body); setEditing(false); }}>
+              <Text style={{ color: c.text }}>{t("Cancelar")}</Text></Pressable>
+            <Pressable style={[s.primarySm, { backgroundColor: BLUE }]} onPress={async () => {
+              if (await onSave({ to, subject, body })) setEditing(false); }}>
+              <Text style={s.primaryText}>{t("Salvar")}</Text></Pressable>
+          </View>
+        </View>
+      ) : (<>
+        <View style={[s.emailRow, { borderBottomColor: line }]}>
+          <Text style={{ color: c.sub, width: 64 }}>{t("Para")}</Text>
+          <Text selectable style={{ color: c.text, flex: 1 }}>{to}</Text>
+        </View>
+        <View style={[s.emailRow, { borderBottomColor: line }]}>
+          <Text style={{ color: c.sub, width: 64 }}>{t("Assunto")}</Text>
+          <Text selectable style={{ color: c.text, flex: 1, fontWeight: "700" }}>{subject}</Text>
+        </View>
+        <View style={{ padding: 14 }}><FormattedText text={body} color={c.text} /></View>
+        {pending && (
+          <View style={[s.emailFoot, { borderTopColor: line }]}>
+            <Text style={{ color: c.sub, fontSize: 12, flex: 1 }}>{t("Toque na seta azul ou diga “envia”.")}</Text>
+            <Pressable hitSlop={8} onPress={onCancel}><Text style={{ color: c.sub, fontSize: 13, textDecorationLine: "underline" }}>{t("Descartar")}</Text></Pressable>
+          </View>)}
+      </>)}
+    </View>
+  );
+}
+
 export default function App() {
   return <SafeAreaProvider><FidusApp /></SafeAreaProvider>;
 }
 
 function FidusApp() {
   const dark = useColorScheme() === "dark";
-  const c = dark ? { bg: "#0B1426", card: "#14223F", text: "#EEF2F8", sub: "#9AA8C0" }
-                 : { bg: "#F5F7FB", card: "#FFFFFF", text: NAVY, sub: "#5B6B85" };
+  const c = dark ? { bg: "#0B1426", card: "#14223F", text: "#EEF2F8", sub: "#9AA8C0", line: "#24365A" }
+                 : { bg: "#F5F7FB", card: "#FFFFFF", text: NAVY, sub: "#5B6B85", line: "#DDE3EC" };
 
+  const [, setTrVer] = useState(0);
   const [server, setServer] = useState(DEFAULT_SERVER);
   const [loginCode, setLoginCode] = useState("");
+  const [refCode, setRefCode] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
   const [me, setMe] = useState<any>(null);
@@ -270,19 +464,72 @@ function FidusApp() {
   const listRef = useRef<FlatList>(null);
   const insets = useSafeAreaInsets();
   const [kb, setKb] = useState(0);
-  const [tab, setTab] = useState<"chat" | "tasks" | "activity" | "admin">("chat");
+  const [screen, setScreen] = useState<Screen>("chat");
   const [acts, setActs] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [newTask, setNewTask] = useState("");
   const [actsLoading, setActsLoading] = useState(false);
+  // menu lateral e telas do menu
+  const [drawer, setDrawer] = useState(false);
+  const drawerX = useRef(new Animated.Value(-340)).current;
+  const [convs, setConvs] = useState<any[]>([]);
+  const [docs, setDocs] = useState<Doc[]>([]);
+  const [docQuery, setDocQuery] = useState("");
+  const [meetings, setMeetings] = useState<any>(null);
+  const [expenses, setExpenses] = useState<any>(null);
+  const [expMonth, setExpMonth] = useState("");
+  const [booking, setBooking] = useState<any>(null);
+  const [referral, setReferral] = useState<any>(null);
+  const [refApply, setRefApply] = useState("");
+  const [loadingScreen, setLoadingScreen] = useState(false);
+  const [reader, setReader] = useState<{ title: string; text: string } | null>(null);
+  const [toast, setToast] = useState("");
+  const [atBottom, setAtBottom] = useState(true);
+  const [nameEdit, setNameEdit] = useState("");
+  const [pendingMeet, setPendingMeet] = useState<string | null>(null);
+  // rascunhos na tela e fora de edição: só esses podem sair quando o usuário diz "envia"
+  const itemsRef = useRef<Item[]>([]);
+  itemsRef.current = items;
+  const editingIds = useRef(new Set<string>());
+  const visibleDrafts = () => itemsRef.current
+    .filter((it) => it.type === "action" && it.action.status === "pending" && !editingIds.current.has(it.action.id))
+    .map((it: any) => it.action.id as string);
+
+  const bump = () => setTrVer((v) => v + 1);
+  const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 1800); };
+
+  // ---------- Idioma ----------
+  async function loadLang(lang: string) {
+    LANG = (lang || "pt").split("-")[0].toLowerCase();
+    if (LANG === "pt") { TR = {}; bump(); return; }
+    let cacheFile: any = null;
+    try {
+      cacheFile = new File(Paths.document, `i18n-${LANG}.json`);
+      if (cacheFile.exists) { TR = JSON.parse(cacheFile.textSync()); bump(); }
+    } catch { /* sem cópia no celular */ }
+    try {
+      const r = await fetch(base() + "/v1/i18n", { method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token.trim()}` } : {}) },
+        body: JSON.stringify({ lang: LANG, strings: I18N_KEYS }) });
+      const j = await r.json();
+      if (j?.strings && Object.keys(j.strings).length) {
+        TR = { ...TR, ...j.strings }; bump();
+        try { if (cacheFile) { if (!cacheFile.exists) cacheFile.create(); cacheFile.write(JSON.stringify(TR)); } } catch {}
+      }
+    } catch { /* sem rede: fica com a cópia ou o português */ }
+  }
+
+  useEffect(() => {  // tela de entrada já no idioma do celular
+    LOCALE = deviceLocale();
+    loadLang(LOCALE);
+  }, []);
 
   // Android (tela cheia): o teclado cobre o app, então empurramos o conteúdo para cima
   useEffect(() => {
     if (Platform.OS !== "android") return;
     const show = Keyboard.addListener("keyboardDidShow", (e) => {
-      console.log("[Fidus] teclado", JSON.stringify(e.endCoordinates), "insets", JSON.stringify(insets));
       setKb(e.endCoordinates.height);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
     });
@@ -303,29 +550,48 @@ function FidusApp() {
     } catch { return null; }
   }
 
-  // ao abrir, carrega a conversa salva no servidor; na primeira abertura do dia, mostra o "bom dia"
+  async function loadWaitingDrafts() {  // rascunhos que ainda esperam você voltam a aparecer ao abrir o app
+    try {
+      const r = await api("/v1/actions", {}, 15000);
+      setItems((prev) => {
+        const have = new Set(prev.filter((it) => it.type === "action").map((it: any) => it.action.id));
+        return [...prev, ...(r.actions || []).filter((a: Action) => !have.has(a.id)).map((a: Action) => ({ id: uid(), type: "action", action: a } as Item))];
+      });
+    } catch { /* servidor antigo */ }
+  }
+
+  // ao abrir: idioma/país do celular, conversa salva, "bom dia" na primeira abertura do dia
   useEffect(() => {
     if (!configured) return;
     (async () => {
+      try {
+        const loc = deviceLocale(); const region = (loc.split("-")[1] || "").toUpperCase();
+        await api("/v1/profile", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ language: loc, ...(/^[A-Z]{2}$/.test(region) ? { country: region } : {}),
+            ...(deviceTimezone() ? { timezone: deviceTimezone() } : {}), only_if_empty: true }) }, 15000);
+      } catch { /* servidor antigo */ }
+      for (let i = 0; i < 3; i++) {  // dados da conta; tenta de novo se a rede falhar
+        try { const m = await api("/v1/me", {}, 15000); setMe(m); if (m.language && m.language !== LANG) loadLang(m.language); break; }
+        catch { await new Promise((r) => setTimeout(r, 3000)); }
+      }
       await loadHistory();
+      await loadWaitingDrafts();
       const n = new Date();
       const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
       try {
-        if ((await SecureStore.getItemAsync("lastBrief")) === today) return;
-        const b = await api("/v1/briefing", {}, 30000);
-        if (b?.text) { push({ id: uid(), type: "fidus", text: b.text }); await SecureStore.setItemAsync("lastBrief", today); }
+        if ((await SecureStore.getItemAsync("lastBrief")) !== today) {
+          const b = await api("/v1/briefing", {}, 45000);
+          if (b?.text) { push({ id: uid(), type: "fidus", text: b.text }); await SecureStore.setItemAsync("lastBrief", today); }
+        }
       } catch { /* sem bom dia hoje */ }
       try {  // segunda-feira: resumo da semana
         if (new Date().getDay() === 1 && (await SecureStore.getItemAsync("lastWeekly")) !== today) {
-          const w = await api("/v1/weekly", {}, 30000);
+          const w = await api("/v1/weekly", {}, 45000);
           if (w?.text) { push({ id: uid(), type: "fidus", text: w.text }); await SecureStore.setItemAsync("lastWeekly", today); }
         }
       } catch { /* sem resumo semanal */ }
       setupNotifications();
       try { setPlan(await api("/v1/plan", {}, 15000)); } catch { /* servidor antigo */ }
-      for (let i = 0; i < 3; i++) {  // dados da conta (aba Clientes do dono); tenta de novo se a rede falhar
-        try { setMe(await api("/v1/me", {}, 15000)); break; } catch { await new Promise((r) => setTimeout(r, 3000)); }
-      }
     })();
   }, [configured]);
 
@@ -333,23 +599,23 @@ function FidusApp() {
   // normalmente termina o pedido mesmo assim, então buscamos a resposta no histórico.
   const isNetErr = (e: any) => !/^\d{3}:/.test(e?.message ?? "") && e?.name !== "AbortError";
   async function recover(e: any, before: number) {
-    if (!isNetErr(e)) return push({ id: uid(), type: "fidus", text: `Erro: ${e?.message ?? e}` });
-    push({ id: uid(), type: "fidus", text: "A conexão caiu. Buscando a resposta no servidor…" });
+    if (!isNetErr(e)) return push({ id: uid(), type: "fidus", text: `${t("Erro")}: ${e?.message ?? e}` });
+    push({ id: uid(), type: "fidus", text: t("A conexão caiu. Buscando a resposta no servidor…") });
     for (let i = 0; i < 12; i++) {
       await new Promise((r) => setTimeout(r, 5000));
       const msgs = await loadHistory();
       if (msgs && msgs.length > before && msgs[msgs.length - 1].role === "assistant") return;
     }
-    push({ id: uid(), type: "fidus", text: "Não consegui buscar a resposta. Confira sua internet e veja a aba Atividade antes de repetir o pedido." });
+    push({ id: uid(), type: "fidus", text: t("Não consegui buscar a resposta. Confira sua internet e veja a Atividade antes de repetir o pedido.") });
   }
   const histLen = useRef(0);  // quantas mensagens o servidor tinha na última vez que olhamos
   const historyCount = () => histLen.current;
 
   useEffect(() => {
     (async () => {
-      const s = await SecureStore.getItemAsync("server");
-      const t = await SecureStore.getItemAsync("token");
-      if (s && t) { setServer(s); setToken(t); setConfigured(true); }
+      const sv = await SecureStore.getItemAsync("server");
+      const tk = await SecureStore.getItemAsync("token");
+      if (sv && tk) { setServer(sv); setToken(tk); setConfigured(true); }
     })();
   }, []);
 
@@ -363,7 +629,6 @@ function FidusApp() {
 
   async function api(path: string, init: RequestInit = {}, timeoutMs = 180000) {
     const url = base() + path;
-    console.log("[Fidus] ->", init.method || "GET", url);
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
@@ -371,28 +636,29 @@ function FidusApp() {
         ...init, signal: ctrl.signal,
         headers: { Authorization: `Bearer ${token.trim()}`, ...(init.headers || {}) },
       });
-      console.log("[Fidus] <-", r.status, path);
       if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
       return r.json();
     } catch (e: any) {
       console.log("[Fidus] erro", path, e?.message ?? e);
-      if (e?.name === "AbortError") throw new Error("o servidor demorou demais para responder");
+      if (e?.name === "AbortError") throw new Error(t("o servidor demorou demais para responder"));
       throw e;
     } finally { clearTimeout(timer); }
   }
+  const post = (path: string, body: any = {}, timeoutMs?: number) =>
+    api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, timeoutMs);
+  const errMsg = (e: any) => String(e?.message ?? e).replace(/^\d{3}: /, "").replace(/^\{"detail":"(.*)"\}$/, "$1");
 
   async function testConnection() {
-    push({ id: uid(), type: "fidus", text: `Testando ${base()} …` });
     try {
       const h = await api("/health", {}, 15000);
-      push({ id: uid(), type: "fidus", text: `Conexão ok. Google: ${h.google_connected ? "conectado" : "não conectado"}.` });
-    } catch (e: any) { push({ id: uid(), type: "fidus", text: `Erro de conexão: ${e?.message ?? e}` }); }
+      Alert.alert(t("Conexão"), `${t("Conexão ok.")} Google: ${h.google_connected ? t("conectado") : t("não conectado")}.`);
+    } catch (e: any) { Alert.alert(t("Conexão"), `${t("Erro de conexão")}: ${errMsg(e)}`); }
   }
 
   async function loadActivity() {
     setActsLoading(true);
     try { const r = await api("/v1/activity", {}, 15000); setActs(r.items || []); setStats(r.stats || null); }
-    catch (e: any) { Alert.alert("Atividade", e?.message ?? String(e)); }
+    catch (e: any) { Alert.alert(t("Atividade"), errMsg(e)); }
     finally { setActsLoading(false); }
   }
 
@@ -407,18 +673,19 @@ function FidusApp() {
         await Notifications.setNotificationChannelAsync("fidus", { name: "Fidus", importance: Notifications.AndroidImportance.HIGH });
       const perm = await Notifications.requestPermissionsAsync();
       if (!perm.granted) return;
-      if ((await SecureStore.getItemAsync("notifV")) === "1") return;  // já agendado
+      const ver = `2-${LANG}`;  // agenda de novo quando o idioma muda
+      if ((await SecureStore.getItemAsync("notifV")) === ver) return;
       await Notifications.cancelAllScheduledNotificationsAsync();
       const T = Notifications.SchedulableTriggerInputTypes;
       await Notifications.scheduleNotificationAsync({
-        content: { title: "Bom dia ☀️", body: "Sua agenda, tarefas e contas de hoje estão prontas no Fidus." },
+        content: { title: t("Bom dia ☀️"), body: t("Sua agenda, tarefas e contas de hoje estão prontas no Fidus.") },
         trigger: { type: T.DAILY, hour: 8, minute: 0, channelId: "fidus" },
       });
       await Notifications.scheduleNotificationAsync({
-        content: { title: "Sua semana com o Fidus 📊", body: "Veja o que foi resolvido e o que vem pela frente." },
+        content: { title: t("Sua semana com o Fidus 📊"), body: t("Veja o que foi resolvido e o que vem pela frente.") },
         trigger: { type: T.WEEKLY, weekday: 2, hour: 8, minute: 5, channelId: "fidus" },
       });
-      await SecureStore.setItemAsync("notifV", "1");
+      await SecureStore.setItemAsync("notifV", ver);
     } catch (e: any) { console.log("[Fidus] notificações", e?.message ?? e); }
   }
 
@@ -434,34 +701,36 @@ function FidusApp() {
     if (busy || recording || meeting) return;
     try {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
-      if (!perm.granted) return fail("permissão do microfone negada.");
+      if (!perm.granted) return fail(t("permissão do microfone negada."));
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true,
                                 shouldPlayInBackground: true } as any);
       await meetRec.prepareToRecordAsync();
       meetRec.record();
       try { await KeepAwake?.activateKeepAwakeAsync("meeting"); } catch {}
-      setMeetSecs(0); setMeeting(true); setTab("chat");
+      setMeetSecs(0); setMeeting(true); setScreen("chat");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e: any) { fail(`ao iniciar a gravação da reunião: ${e?.message ?? e}`); }
+    } catch (e: any) { fail(`${t("ao iniciar a gravação da reunião")}: ${e?.message ?? e}`); }
   }
 
-  function upsellLocal(feature: string) {
-    const p = (plan?.plans || []).find((x: any) => x.id === "negocio");
+  function upsellCard(feature: string, planId = "negocio") {
+    const p = (plan?.plans || []).find((x: any) => x.id === planId);
     if (!p) return false;
-    push({ id: uid(), type: "fidus", text: "Gravar reuniões e gerar a ata faz parte do plano Negócio." });
     push({ id: uid(), type: "upsell", up: { feature_label: feature, plan: p.id, name: p.name, month: p.month, year: p.year,
-      highlights: p.highlights, current_plan: plan.name, url: plan.url } });
+      highlights: p.highlights, current_plan: plan.name, url: plan.url, symbol: plan.symbol } });
     return true;
   }
 
   function meetingMenu() {
     if (meeting) return finishMeeting();
-    if (plan?.locked_features?.includes("meetings_record") && upsellLocal("gravar reuniões e gerar a ata")) return;
-    Alert.alert("Gravar reunião", "Deixe o celular na mesa. No fim, o Fidus transcreve, resume e cria suas tarefas.\n\n"
-      + (KeepAwake ? "" : "Mantenha a tela ligada e o Fidus aberto durante a gravação.\n\n")
-      + "Avise os participantes que a reunião está sendo gravada.", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Começar", onPress: startMeeting },
+    if (plan?.locked_features?.includes("meetings_record")) {
+      push({ id: uid(), type: "fidus", text: t("Gravar reuniões e gerar a ata faz parte do plano Negócio.") });
+      if (upsellCard("gravar reuniões e gerar a ata")) return;
+    }
+    Alert.alert(t("Gravar reunião"), t("Deixe o celular na mesa. No fim, o Fidus transcreve, resume e cria suas tarefas.") + "\n\n"
+      + (KeepAwake ? "" : t("Mantenha a tela ligada e o Fidus aberto durante a gravação.") + "\n\n")
+      + t("Avise os participantes que a reunião está sendo gravada."), [
+      { text: t("Cancelar"), style: "cancel" },
+      { text: t("Começar"), onPress: startMeeting },
     ]);
   }
 
@@ -472,10 +741,10 @@ function FidusApp() {
   }
 
   function finishMeeting() {
-    Alert.alert("Encerrar reunião?", `${fmtClock(meetSecs)} gravados.`, [
-      { text: "Continuar gravando", style: "cancel" },
-      { text: "Descartar", style: "destructive", onPress: () => stopMeetingRecorder() },
-      { text: "Gerar ata", onPress: uploadMeeting },
+    Alert.alert(t("Encerrar reunião?"), t("{0} gravados.", fmtClock(meetSecs)), [
+      { text: t("Continuar gravando"), style: "cancel" },
+      { text: t("Descartar"), style: "destructive", onPress: () => stopMeetingRecorder() },
+      { text: t("Gerar ata"), onPress: uploadMeeting },
     ]);
   }
 
@@ -483,24 +752,23 @@ function FidusApp() {
     const secs = meetSecs;
     await stopMeetingRecorder();
     const uri = meetRec.uri;
-    if (!uri) return fail("nenhum áudio foi gravado.");
-    push({ id: uid(), type: "user", text: `🎙 Reunião gravada (${fmtClock(secs)})` });
+    if (!uri) return fail(t("nenhum áudio foi gravado."));
+    push({ id: uid(), type: "user", text: `🎙 ${t("Reunião gravada")} (${fmtClock(secs)})` });
     await sendMeetingFile(uri);
   }
 
   async function sendMeetingFile(uri: string) {
-    await SecureStore.setItemAsync("pendingMeeting", uri);  // se o envio falhar, dá para reenviar pelo menu ⋯
+    await SecureStore.setItemAsync("pendingMeeting", uri);  // se o envio falhar, dá para reenviar pelo menu
     setBusy(true);
     try {
       const audio_b64 = await new File(uri).base64();
       const ext = (uri.match(/\.[a-z0-9]+$/i)?.[0] || ".m4a").toLowerCase();
-      const r = await api("/v1/meeting_b64", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ audio_b64, ext }) }, 600000);
-      if (r.locked) { await SecureStore.deleteItemAsync("pendingMeeting"); return showResult({ upsell: r.upsell }, false); }
+      const r = await post("/v1/meeting_b64", { audio_b64, ext }, 600000);
       await SecureStore.deleteItemAsync("pendingMeeting");
-      push({ id: uid(), type: "fidus", text: "Recebi a gravação. Estou transcrevendo e preparando a ata; aviso aqui quando ficar pronta (leva alguns minutos)." });
+      if (r.locked) return showResult({ upsell: r.upsell }, false);
+      push({ id: uid(), type: "fidus", text: t("Recebi a gravação. Estou transcrevendo e preparando a ata; aviso aqui quando ficar pronta (leva alguns minutos).") });
       pollMeeting(r.meeting_id);
-    } catch (e: any) { fail(`ao enviar a reunião: ${e?.message ?? e}. A gravação ficou guardada: toque em ⋯ > Reenviar reunião.`); }
+    } catch (e: any) { fail(`${t("ao enviar a reunião")}: ${e?.message ?? e}. ${t("A gravação ficou guardada: abra o menu > Configurações > Reenviar reunião.")}`); }
     finally { setBusy(false); }
   }
 
@@ -513,10 +781,10 @@ function FidusApp() {
           histLen.current += 1;
           push({ id: uid(), type: "fidus", text: st.text });
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          try { await Notifications?.scheduleNotificationAsync({ content: { title: "Ata pronta 🎙", body: st.title || "Sua reunião" }, trigger: null }); } catch {}
+          try { await Notifications?.scheduleNotificationAsync({ content: { title: t("Ata pronta 🎙"), body: st.title || t("Sua reunião") }, trigger: null }); } catch {}
           return;
         }
-        if (st.status === "erro") return fail(`na ata: ${st.error}`);
+        if (st.status === "erro") return fail(`${t("na ata")}: ${st.error}`);
       } catch { /* rede instável: tenta de novo */ }
     }
   }
@@ -536,13 +804,13 @@ function FidusApp() {
   async function openVoice() {
     if (busy || recording || meeting) return;
     const perm = await AudioModule.requestRecordingPermissionsAsync();
-    if (!perm.granted) return fail("permissão do microfone negada.");
+    if (!perm.granted) return fail(t("permissão do microfone negada."));
     voiceActive.current = true;
-    setVHeard(""); setVReply(Speech ? "Pode falar. Eu escuto e respondo em voz alta." :
-      "Pode falar. (Para ouvir as respostas em voz alta, instale o APK novo.)");
+    setVHeard(""); setVReply(Speech ? t("Pode falar. Eu escuto e respondo em voz alta.") :
+      t("Pode falar. (Para ouvir as respostas em voz alta, instale o APK novo.)"));
     setVoiceOpen(true);
     try { await KeepAwake?.activateKeepAwakeAsync("voice"); } catch {}
-    speak("Pode falar.");
+    speak(t("Pode falar."));
   }
 
   async function closeVoice() {
@@ -554,13 +822,18 @@ function FidusApp() {
     setVoiceOpen(false); setVState("idle");
   }
 
+  function ttsLanguage() {
+    const dev = deviceLocale();
+    return dev.split("-")[0].toLowerCase() === LANG ? dev : (TTS_LOCALE[LANG] || LANG);
+  }
+
   function speak(text: string) {
     if (!voiceActive.current) return;
     if (!Speech) { setTimeout(listen, 1200); return; }
     setVState("speaking");
     try { Speech.stop(); } catch {}
     Speech.speak(text, {
-      language: "pt-BR", rate: 1.02,
+      language: ttsLanguage(), rate: 1.02,
       onDone: () => { if (voiceActive.current) listen(); },
       onError: () => { if (voiceActive.current) listen(); },
     });
@@ -572,7 +845,7 @@ function FidusApp() {
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await voiceRec.prepareToRecordAsync();
       voiceRec.record();
-    } catch (e: any) { setVReply(`Não consegui abrir o microfone: ${e?.message ?? e}`); return; }
+    } catch (e: any) { setVReply(`${t("Não consegui abrir o microfone")}: ${e?.message ?? e}`); return; }
     setVState("listening");
     const v = vad.current;
     v.t0 = Date.now(); v.samples = []; v.speechAt = 0; v.lastLoud = 0; v.floor = -60;
@@ -602,18 +875,17 @@ function FidusApp() {
     try {
       const audio_b64 = await new File(uri).base64();
       const ext = (uri.match(/\.[a-z0-9]+$/i)?.[0] || ".m4a").toLowerCase();
-      const r = await api("/v1/voice_b64", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ audio_b64, ext, mode: "voice" }) });
+      const r = await post("/v1/voice_b64", { audio_b64, ext, mode: "voice", drafts: visibleDrafts() });
       if (!voiceActive.current) return;
-      if (!r.transcript) { speak("Não entendi. Pode repetir?"); return; }
+      if (!r.transcript) { speak(t("Não entendi. Pode repetir?")); return; }
       setVHeard(r.transcript);
-      if (EXIT_RE.test(r.transcript)) { setVReply("Até mais!"); speak("Até mais!"); setTimeout(closeVoice, 1600); return; }
+      if (EXIT_RE.test(r.transcript)) { setVReply(t("Até mais!")); speak(t("Até mais!")); setTimeout(closeVoice, 1600); return; }
       showResult(r);  // vai também para a conversa, com cartões de rascunho, documentos etc.
       setVReply(r.reply || "");
-      speak(r.speech || r.reply || "Feito.");
+      speak(r.speech || r.reply || t("Feito."));
     } catch (e: any) {
-      setVReply(`Falha de conexão: ${e?.message ?? e}`);
-      speak("Perdi a conexão com o servidor. Tente de novo em instantes.");
+      setVReply(`${t("Falha de conexão")}: ${e?.message ?? e}`);
+      speak(t("Perdi a conexão com o servidor. Tente de novo em instantes."));
     }
   }
 
@@ -622,52 +894,51 @@ function FidusApp() {
     else if (vState === "listening") finishUtterance();
   }
 
+  // ---------- Tarefas ----------
   async function loadTasks() {
     setTasksLoading(true);
     try { setTasks((await api("/v1/tasks", {}, 15000)).tasks || []); }
-    catch (e: any) { Alert.alert("Tarefas", e?.message ?? String(e)); }
+    catch (e: any) { Alert.alert(t("Tarefas"), errMsg(e)); }
     finally { setTasksLoading(false); }
   }
 
-  async function toggleTask(t: Task) {
+  async function toggleTask(tk: Task) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setTasks((prev) => prev.filter((x) => x.id !== t.id));  // some da lista na hora
-    try { await api(`/v1/tasks/${t.id}/done`, { method: "POST" }); }
-    catch (e: any) { Alert.alert("Tarefas", e?.message ?? String(e)); loadTasks(); }
+    setTasks((prev) => prev.filter((x) => x.id !== tk.id));  // some da lista na hora
+    try { await api(`/v1/tasks/${tk.id}/done`, { method: "POST" }); }
+    catch (e: any) { Alert.alert(t("Tarefas"), errMsg(e)); loadTasks(); }
   }
 
   async function addTaskQuick() {
     const title = newTask.trim();
     if (!title) return;
     setNewTask("");
-    try {
-      await api("/v1/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }) });
-      loadTasks();
-    } catch (e: any) { Alert.alert("Tarefas", e?.message ?? String(e)); }
+    try { await post("/v1/tasks", { title }); loadTasks(); }
+    catch (e: any) { Alert.alert(t("Tarefas"), errMsg(e)); }
   }
 
-  function removeTask(t: Task) {
-    Alert.alert("Apagar tarefa?", t.title, [
-      { text: "Não", style: "cancel" },
-      { text: "Apagar", style: "destructive", onPress: async () => {
-          try { await api(`/v1/tasks/${t.id}`, { method: "DELETE" }); loadTasks(); }
-          catch (e: any) { Alert.alert("Erro", e?.message ?? String(e)); }
+  function removeTask(tk: Task) {
+    Alert.alert(t("Apagar tarefa?"), tk.title, [
+      { text: t("Não"), style: "cancel" },
+      { text: t("Apagar"), style: "destructive", onPress: async () => {
+          try { await api(`/v1/tasks/${tk.id}`, { method: "DELETE" }); loadTasks(); }
+          catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
         } },
     ]);
   }
 
   function undo(a: any) {
     const what: Record<string, string> = {
-      expense_added: `Apagar o gasto "${a.title}"?`, task_added: `Apagar a tarefa "${a.title}"?`,
-      task_done: `Reabrir a tarefa "${a.title}"?`, document_saved: `Apagar o documento "${a.title}"?`,
-      bill_added: `Remover a conta fixa "${a.title}" e o aviso mensal?`, reminder_created: `Apagar o lembrete "${a.title}"?`,
-      export_created: `Apagar o pacote "${a.title}"?`,
+      expense_added: t("Apagar o gasto \"{0}\"?", a.title), task_added: t("Apagar a tarefa \"{0}\"?", a.title),
+      task_done: t("Reabrir a tarefa \"{0}\"?", a.title), document_saved: t("Apagar o documento \"{0}\"?", a.title),
+      bill_added: t("Remover a conta fixa \"{0}\" e o aviso mensal?", a.title), reminder_created: t("Apagar o lembrete \"{0}\"?", a.title),
+      export_created: t("Apagar o pacote \"{0}\"?", a.title),
     };
-    Alert.alert("Desfazer?", what[a.kind] ?? `Apagar "${a.title}" da sua agenda?`, [
-      { text: "Não", style: "cancel" },
-      { text: "Desfazer", style: "destructive", onPress: async () => {
+    Alert.alert(t("Desfazer?"), what[a.kind] ?? t("Apagar \"{0}\" da sua agenda?", a.title), [
+      { text: t("Não"), style: "cancel" },
+      { text: t("Desfazer"), style: "destructive", onPress: async () => {
           try { await api(`/v1/activity/${a.id}/undo`, { method: "POST" }); loadActivity(); }
-          catch (e: any) { Alert.alert("Erro", e?.message ?? String(e)); }
+          catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
         } },
     ]);
   }
@@ -675,7 +946,7 @@ function FidusApp() {
   async function logout() {
     try { await api("/v1/auth/logout", { method: "POST" }, 8000); } catch { /* sem rede: sai assim mesmo */ }
     await SecureStore.deleteItemAsync("token");
-    setToken(""); setMe(null); setItems([]); setTab("chat"); setConfigured(false);
+    setToken(""); setMe(null); setItems([]); setScreen("chat"); setConfigured(false);
   }
 
   // ---------- Entrar com Google ----------
@@ -686,33 +957,36 @@ function FidusApp() {
     setServer(sv); await SecureStore.setItemAsync("server", sv);
     const secret = randomSecret();
     await SecureStore.setItemAsync("loginSecret", secret);  // guardado: o app pode ser fechado enquanto o Google abre
-    await Linking.openURL(`${sv}/auth/google/login?cc=${sha256hex(secret)}`);
+    const ref = refCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    await Linking.openURL(`${sv}/auth/google/login?cc=${sha256hex(secret)}${ref ? `&ref=${ref}` : ""}`);
   }
 
   async function redeem(code: string) {
     const clean = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-    if (clean.length < 8) return Alert.alert("Código", "Digite o código de 8 letras que apareceu depois do Google.");
+    if (clean.length < 8) return Alert.alert(t("Código"), t("Digite o código de 8 letras que apareceu depois do Google."));
     const sv = normServer();
     setLoggingIn(true);
     try {
       const verifier = await SecureStore.getItemAsync("loginSecret");
       const r = await fetch(`${sv}/v1/auth/exchange`, { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: clean, verifier }) });
-      if (!r.ok) throw new Error(r.status === 400 ? "código inválido ou expirado. Entre com o Google de novo." : `erro ${r.status}`);
+      if (!r.ok) throw new Error(r.status === 400 ? t("código inválido ou expirado. Entre com o Google de novo.") : `${t("erro")} ${r.status}`);
       const j = await r.json();
       await SecureStore.setItemAsync("server", sv); await SecureStore.setItemAsync("token", j.token);
       await SecureStore.deleteItemAsync("loginSecret");
       setServer(sv); setToken(j.token); setLoginCode(""); setConfigured(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e: any) { Alert.alert("Não deu certo", e?.message ?? String(e)); }
+    } catch (e: any) { Alert.alert(t("Não deu certo"), e?.message ?? String(e)); }
     finally { setLoggingIn(false); }
   }
 
-  // o site de login reabre o app com fidus://login?code=XXXX (APK com o "scheme" fidus)
+  // links que abrem o app: fidus://login?code=XXXX (depois do Google) e fidus://invite?code=XXXX (convite)
   useEffect(() => {
     const handle = (url?: string | null) => {
       const m = url && url.match(/login\?code=([A-Za-z0-9-]+)/);
       if (m && !configured) redeem(m[1]);
+      const inv = url && url.match(/invite\?code=([A-Za-z0-9]+)/);
+      if (inv) { setRefCode(inv[1]); setRefApply(inv[1]); }
     };
     Linking.getInitialURL().then(handle).catch(() => {});
     const sub = Linking.addEventListener("url", (e: any) => handle(e.url));
@@ -723,36 +997,35 @@ function FidusApp() {
   async function loadAdmin() {
     setAdminLoading(true);
     try { setAdmin(await api("/v1/admin/users", {}, 20000)); }
-    catch (e: any) { Alert.alert("Clientes", e?.message ?? String(e)); }
+    catch (e: any) { Alert.alert(t("Clientes"), errMsg(e)); }
     finally { setAdminLoading(false); }
   }
 
-  async function sendInvite(plan: string) {
+  async function sendInvite(planId: string) {
     const email = inviteEmail.trim().toLowerCase();
-    if (!email.includes("@")) return Alert.alert("Convite", "Digite o e-mail Google da pessoa.");
+    if (!email.includes("@")) return Alert.alert(t("Convite"), t("Digite o e-mail Google da pessoa."));
     try {
-      await api("/v1/admin/invites", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, plan }) });
+      await post("/v1/admin/invites", { email, plan: planId });
       setInviteEmail(""); loadAdmin();
-      Alert.alert("Convite criado", `${email} já pode entrar com o Google no app (plano ${PLAN_NAMES[plan]}).`);
-    } catch (e: any) { Alert.alert("Convite", e?.message ?? String(e)); }
+      Alert.alert(t("Convite criado"), t("{0} já pode entrar com o Google no app (plano {1}).", email, PLAN_NAMES[planId]));
+    } catch (e: any) { Alert.alert(t("Convite"), errMsg(e)); }
   }
 
   function inviteMenu() {
-    setSheet({ title: `Convidar ${inviteEmail.trim() || "…"} no plano:`, items:
-      Object.entries(PLAN_NAMES).map(([id, name]) => [name, () => sendInvite(id)] as [string, () => void]) });
+    setSheet({ title: t("Convidar {0} no plano:", inviteEmail.trim() || "…"), items:
+      Object.entries(PLAN_NAMES).map(([id, name]) => [t(name), () => sendInvite(id)] as [string, () => void]) });
   }
 
   function clientMenu(u: any) {
-    const post = (path: string, body: any) => async () => {
-      try { await api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); loadAdmin(); }
-      catch (e: any) { Alert.alert("Erro", e?.message ?? String(e)); }
+    const act = (path: string, body: any) => async () => {
+      try { await post(path, body); loadAdmin(); }
+      catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
     };
     setSheet({ title: u.email || u.name || u.id, items: [
       ...Object.entries(PLAN_NAMES).filter(([id]) => id !== u.plan)
-        .map(([id, name]) => [`Mudar para ${name}`, post(`/v1/admin/users/${u.id}/plan`, { plan: id })] as [string, () => void]),
-      ...(u.is_owner ? [] : [[u.status === "ativo" ? "Suspender acesso" : "Reativar acesso",
-        post(`/v1/admin/users/${u.id}/status`, { status: u.status === "ativo" ? "suspenso" : "ativo" })] as [string, () => void]]),
+        .map(([id, name]) => [t("Mudar para {0}", t(name)), act(`/v1/admin/users/${u.id}/plan`, { plan: id })] as [string, () => void]),
+      ...(u.is_owner ? [] : [[u.status === "ativo" ? t("Suspender acesso") : t("Reativar acesso"),
+        act(`/v1/admin/users/${u.id}/status`, { status: u.status === "ativo" ? "suspenso" : "ativo" })] as [string, () => void]]),
     ] });
   }
 
@@ -763,10 +1036,12 @@ function FidusApp() {
     for (const a of res.pending_actions || []) push({ id: uid(), type: "action", action: a });
     for (const d of res.documents || []) push({ id: uid(), type: "doc", doc: d });
     if (res.upsell) push({ id: uid(), type: "upsell", up: res.upsell });
+    for (const id of res.sent_actions || []) updateAction(id, { status: "sent" });  // "envia" na conversa
+    if ((res.sent_actions || []).length) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }
 
   // ---------- Voz: tocar para gravar, tocar de novo para enviar ----------
-  const fail = (msg: string) => push({ id: uid(), type: "fidus", text: `Erro: ${msg}` });
+  const fail = (msg: string) => push({ id: uid(), type: "fidus", text: `${t("Erro")}: ${msg}` });
 
   useEffect(() => {  // cronômetro da gravação de voz
     if (!recording) return;
@@ -787,30 +1062,27 @@ function FidusApp() {
     if (recording) return stopRec();
     try {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
-      if (!perm.granted) return fail("permissão do microfone negada. Libere em Configurações > Apps > Expo Go.");
+      if (!perm.granted) return fail(t("permissão do microfone negada. Libere nas configurações do celular."));
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await recorder.prepareToRecordAsync();
       recorder.record();
       setRecording(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch (e: any) { fail(`ao iniciar gravação: ${e?.message ?? e}`); }
+    } catch (e: any) { fail(`${t("ao iniciar gravação")}: ${e?.message ?? e}`); }
   }
 
   async function stopRec() {
     setRecording(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try { await recorder.stop(); } catch (e: any) { return fail(`ao parar gravação: ${e?.message ?? e}`); }
+    try { await recorder.stop(); } catch (e: any) { return fail(`${t("ao parar gravação")}: ${e?.message ?? e}`); }
     const uri = recorder.uri;
-    if (!uri) return fail("nenhum áudio foi gravado. Tente de novo.");
+    if (!uri) return fail(t("nenhum áudio foi gravado. Tente de novo."));
     setBusy(true);
     const before = historyCount();
     try {
       const audio_b64 = await new File(uri).base64();
       const ext = (uri.match(/\.[a-z0-9]+$/i)?.[0] || ".m4a").toLowerCase();
-      showResult(await api("/v1/voice_b64", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ audio_b64, ext }),
-      }));
+      showResult(await post("/v1/voice_b64", { audio_b64, ext, drafts: visibleDrafts() }));
     } catch (e: any) { await recover(e, before); }
     finally { setBusy(false); }
   }
@@ -821,32 +1093,29 @@ function FidusApp() {
       const perm = source === "camera"
         ? await ImagePicker.requestCameraPermissionsAsync()
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) return fail("permissão negada para câmera/galeria.");
+      if (!perm.granted) return fail(t("permissão negada para câmera/galeria."));
       const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.5, base64: true };
       const res = source === "camera" ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
       if (res.canceled || !res.assets?.[0]?.base64) return;
       const asset = res.assets[0];
       const note = typed.trim();
       setTyped("");
-      push({ id: uid(), type: "user", text: `📷 Foto enviada${note ? `: ${note}` : ""}` });
+      push({ id: uid(), type: "user", text: `📷 ${t("Foto enviada")}${note ? `: ${note}` : ""}` });
       setBusy(true);
       const before = historyCount();
       try {
         const media_type = asset.mimeType && ["image/jpeg", "image/png", "image/webp"].includes(asset.mimeType) ? asset.mimeType : "image/jpeg";
-        showResult(await api("/v1/photo", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image_b64: asset.base64, media_type, text: note }),
-        }), false);
+        showResult(await post("/v1/photo", { image_b64: asset.base64, media_type, text: note }), false);
       } catch (e: any) { await recover(e, before); }
       finally { setBusy(false); }
-    } catch (e: any) { fail(`foto: ${e?.message ?? e}`); }
+    } catch (e: any) { fail(`${t("foto")}: ${e?.message ?? e}`); }
   }
 
   function photoMenu() {
-    setSheet({ title: "Recibo, fatura, contrato ou documento", items: [
-      ["📷  Tirar foto", () => pickPhoto("camera")],
-      ["🖼  Escolher da galeria", () => pickPhoto("library")],
-      ...(DocumentPicker ? [["📎  PDF", pickPdf] as [string, () => void]] : []),
+    setSheet({ title: t("Recibo, fatura, contrato ou documento"), items: [
+      [`📷  ${t("Tirar foto")}`, () => pickPhoto("camera")],
+      [`🖼  ${t("Escolher da galeria")}`, () => pickPhoto("library")],
+      ...(DocumentPicker ? [[`📎  ${t("PDF")}`, pickPdf] as [string, () => void]] : []),
     ] });
   }
 
@@ -856,34 +1125,22 @@ function FidusApp() {
       const res = await DocumentPicker.getDocumentAsync({ type: "application/pdf", copyToCacheDirectory: true });
       if (res.canceled || !res.assets?.[0]) return;
       const a = res.assets[0];
-      const media_type = "application/pdf";
-      if ((a.size || 0) > 15 * 1024 * 1024) return fail("arquivo grande demais (máx. 15 MB).");
+      if ((a.size || 0) > 15 * 1024 * 1024) return fail(t("arquivo grande demais (máx. 15 MB)."));
       const note = typed.trim(); setTyped("");
-      push({ id: uid(), type: "user", text: `📎 ${a.name || "Arquivo"}${note ? `: ${note}` : ""}` });
+      push({ id: uid(), type: "user", text: `📎 ${a.name || t("Arquivo")}${note ? `: ${note}` : ""}` });
       setBusy(true);
       const before = historyCount();
       try {
         const image_b64 = await new File(a.uri).base64();
-        showResult(await api("/v1/photo", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image_b64, media_type, text: note }) }), false);
+        showResult(await post("/v1/photo", { image_b64, media_type: "application/pdf", text: note }), false);
       } catch (e: any) { await recover(e, before); }
       finally { setBusy(false); }
-    } catch (e: any) { fail(`arquivo: ${e?.message ?? e}`); }
+    } catch (e: any) { fail(`${t("arquivo")}: ${e?.message ?? e}`); }
   }
 
   async function reconnectGoogle() {
     try { await Linking.openURL((await api("/v1/auth/google/link", {}, 15000)).url); }
-    catch (e: any) { fail(`Google: ${e?.message ?? e}`); }
-  }
-
-  async function moreMenu() {
-    const pending = await SecureStore.getItemAsync("pendingMeeting");
-    setSheet({ title: me?.email ? `${me.email} · ${PLAN_NAMES[me.plan] ?? ""}` : base(), items: [
-      ["🔌  Testar conexão", testConnection],
-      ...(pending ? [["🎙  Reenviar reunião", () => sendMeetingFile(pending)] as [string, () => void]] : []),
-      ["🔑  Reconectar Google", reconnectGoogle],
-      ["↩️  Sair da conta", logout],
-    ] });
+    catch (e: any) { Alert.alert("Google", errMsg(e)); }
   }
 
   async function sendText(preset?: string) {
@@ -894,11 +1151,8 @@ function FidusApp() {
     setBusy(true);
     push({ id: uid(), type: "user", text });  // aparece na hora
     const before = historyCount();
-    try {
-      showResult(await api("/v1/message", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }),
-      }), false);
-    } catch (e: any) { await recover(e, before); }
+    try { showResult(await post("/v1/message", { text, drafts: visibleDrafts() }), false); }
+    catch (e: any) { await recover(e, before); }
     finally { setBusy(false); }
   }
 
@@ -909,15 +1163,15 @@ function FidusApp() {
   }
 
   async function confirmInvite(a: Action) {
-    Alert.alert("Enviar convite?", `${a.payload.title}\nPara: ${(a.payload.emails || []).join(", ")}\n\nO Google manda o convite por e-mail.`, [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Enviar", onPress: async () => {
+    Alert.alert(t("Enviar convite?"), `${a.payload.title}\n${t("Para")}: ${(a.payload.emails || []).join(", ")}\n\n${t("O Google manda o convite por e-mail.")}`, [
+      { text: t("Cancelar"), style: "cancel" },
+      { text: t("Enviar"), onPress: async () => {
           updateAction(a.id, { status: "sending" });  // esconde os botões: um toque = um envio
           try {
             await api(`/v1/actions/${a.id}/confirm`, { method: "POST" });
             updateAction(a.id, { status: "sent" });
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          } catch (e: any) { updateAction(a.id, { status: "pending" }); Alert.alert("Falha ao enviar", e.message); }
+          } catch (e: any) { updateAction(a.id, { status: "pending" }); Alert.alert(t("Falha ao enviar"), errMsg(e)); }
         } },
     ]);
   }
@@ -928,201 +1182,554 @@ function FidusApp() {
       const fresh = (await api(`/v1/documents?q=${encodeURIComponent(d.title)}`, {}, 15000)).documents
         ?.find((x: Doc) => x.document_id === d.document_id);
       await Linking.openURL((fresh || d).url);
-    } catch (e: any) { Alert.alert("Documento", e?.message ?? String(e)); }
+    } catch (e: any) { Alert.alert(t("Documento"), errMsg(e)); }
   }
 
-  async function confirmSend(a: Action) {
-    Alert.alert("Enviar e-mail?", `Para: ${a.payload.to}`, [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Enviar", onPress: async () => {
+  async function saveDraft(a: Action, p: { to: string; subject: string; body: string }) {
+    try {
+      const r = await post(`/v1/actions/${a.id}/edit`, p, 20000);
+      updateAction(a.id, { payload: r.payload });
+      flash(t("Rascunho salvo"));
+      return true;
+    } catch (e: any) { Alert.alert(t("Rascunho"), errMsg(e)); return false; }
+  }
+
+  function confirmSend(a: Action) {
+    Alert.alert(t("Enviar e-mail?"), `${t("Para")}: ${a.payload.to}\n${a.payload.subject}`, [
+      { text: t("Cancelar"), style: "cancel" },
+      { text: t("Enviar"), onPress: async () => {
+          updateAction(a.id, { status: "sending" });  // esconde os botões: um toque = um envio
           try {
-            await api(`/v1/actions/${a.id}/edit`, {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ body: a.payload.body }),
-            });
-            updateAction(a.id, { status: "sending" });  // esconde os botões: um toque = um envio
             await api(`/v1/actions/${a.id}/confirm`, { method: "POST" });
             updateAction(a.id, { status: "sent" });
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          } catch (e: any) { updateAction(a.id, { status: "pending" }); Alert.alert("Falha ao enviar", e.message); }
+          } catch (e: any) { updateAction(a.id, { status: "pending" }); Alert.alert(t("Falha ao enviar"), errMsg(e)); }
         } },
     ]);
   }
 
   async function cancel(a: Action) {
     try { await api(`/v1/actions/${a.id}/cancel`, { method: "POST" }); updateAction(a.id, { status: "cancelled" }); }
-    catch (e: any) { Alert.alert("Erro", e.message); }
+    catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
   }
+
+  async function copyText(text: string) {
+    try {
+      if (Clipboard?.setStringAsync) { await Clipboard.setStringAsync(text); flash(t("Copiado")); return; }
+    } catch {}
+    try { await Share.share({ message: text }); } catch {}
+  }
+
+  // ---------- Menu lateral ----------
+  function openDrawer() {
+    Keyboard.dismiss();
+    setDrawer(true);
+    api("/v1/conversations", {}, 15000).then((r) => setConvs(r.conversations || [])).catch(() => {});
+    Animated.timing(drawerX, { toValue: 0, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }
+  function closeDrawer(then?: () => void) {
+    Animated.timing(drawerX, { toValue: -340, duration: 180, easing: Easing.in(Easing.cubic), useNativeDriver: true })
+      .start(() => { setDrawer(false); then?.(); });
+  }
+  const go = (sc: Screen) => closeDrawer(() => { setScreen(sc); loadScreen(sc); });
+
+  async function loadScreen(sc: Screen, arg?: string) {
+    if (sc === "tasks") return loadTasks();
+    if (sc === "activity") return loadActivity();
+    if (sc === "admin") return loadAdmin();
+    setLoadingScreen(true);
+    try {
+      if (sc === "convs") setConvs((await api("/v1/conversations", {}, 15000)).conversations || []);
+      if (sc === "docs") setDocs((await api(`/v1/documents${arg ? `?q=${encodeURIComponent(arg)}` : ""}`, {}, 15000)).documents || []);
+      if (sc === "meetings") setMeetings(await api("/v1/meetings", {}, 15000));
+      if (sc === "expenses") setExpenses(await api(`/v1/expenses/summary${arg ? `?month=${arg}` : ""}`, {}, 20000));
+      if (sc === "booking") setBooking(await api("/v1/booking", {}, 15000));
+      if (sc === "invite") setReferral(await api("/v1/referral", {}, 15000));
+      if (sc === "settings") {
+        setPlan(await api("/v1/plan", {}, 15000));
+        const m = await api("/v1/me", {}, 15000); setMe(m); setNameEdit(m.profile?.name || m.name || "");
+        setPendingMeet(await SecureStore.getItemAsync("pendingMeeting"));
+      }
+    } catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
+    finally { setLoadingScreen(false); }
+  }
+
+  async function newChat() {
+    closeDrawer();
+    if (busy) return;
+    try { await post("/v1/conversations/new", {}, 15000); } catch (e: any) { return Alert.alert(t("Erro"), errMsg(e)); }
+    histLen.current = 0;
+    setItems([]); setScreen("chat");
+  }
+
+  async function openConversation(id: number) {
+    closeDrawer();
+    try {
+      await api(`/v1/conversations/${id}/open`, { method: "POST" }, 15000);
+      setItems([]); setScreen("chat");
+      await loadHistory();
+    } catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
+  }
+
+  async function openMeeting(m: any) {
+    try {
+      const st = await api(`/v1/meetings/${m.meeting_id}`, {}, 15000);
+      setReader({ title: st.title || m.title || t("Reunião"), text: st.text || st.error || t("Ainda processando…") });
+    } catch (e: any) { Alert.alert(t("Reunião"), errMsg(e)); }
+  }
+
+  function chooseLanguage() {
+    setSheet({ title: t("Idioma do Fidus"), items: LANG_CHOICES.map(([code, label]) => [label, async () => {
+      try { await post("/v1/profile", { language: code }); } catch (e: any) { return Alert.alert(t("Erro"), errMsg(e)); }
+      await loadLang(code);
+      try { await SecureStore.deleteItemAsync("notifV"); setupNotifications(); } catch {}
+      loadScreen("settings");
+    }] as [string, () => void]) });
+  }
+
+  async function saveName() {
+    const name = nameEdit.trim();
+    if (!name) return;
+    try { await post("/v1/profile", { name }); flash(t("Salvo")); loadScreen("settings"); }
+    catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
+  }
+
+  async function shareInvite() {
+    if (!referral) return;
+    const msg = t("Estou usando o Fidus, um assessor pessoal por voz: agenda, e-mails, gastos e recibos. Com o meu convite você ganha {0} dias grátis: {1} (código {2})",
+      referral.trial_days, referral.link, referral.code);
+    try { await Share.share({ message: msg }); } catch {}
+  }
+
+  async function applyReferral() {
+    const code = refApply.trim();
+    if (!code) return;
+    try { const r = await post("/v1/referral/apply", { code }); setRefApply("");
+      Alert.alert(t("Convite"), t("Pronto! Você ganhou {0} dias grátis.", r.trial_days)); loadScreen("invite"); }
+    catch (e: any) { Alert.alert(t("Convite"), errMsg(e)); }
+  }
+
+  function subscribe(p: any) {
+    if (plan?.url) Linking.openURL(plan.url);
+    else Alert.alert(t("Plano {0}", t(p.name)), t("A assinatura pelo app chega em breve. Por enquanto, fale com a gente pelo e-mail de suporte."));
+  }
+
+  const SCREEN_TITLE = (): Record<Screen, string> => ({
+    chat: "Fidus", convs: t("Conversas"), tasks: t("Tarefas"), docs: t("Documentos"), meetings: t("Reuniões e atas"),
+    expenses: t("Gastos e contas"), booking: t("Link de agendamento"), activity: t("Atividade"),
+    invite: t("Convide e ganhe"), admin: t("Clientes"), settings: t("Configurações"),
+  });
 
   // ---------- Telas ----------
   if (!configured) {
     return (
       <SafeAreaView edges={["top", "bottom"]} style={[s.flex, { backgroundColor: c.bg }]}>
-        <View style={s.setup}>
+        <ScrollView contentContainerStyle={s.setup} keyboardShouldPersistTaps="handled">
           <Text style={[s.logo, { color: c.text }]}>Fidus</Text>
-          <Text style={{ color: c.sub, marginBottom: 28, fontSize: 16 }}>Fale. O Fidus resolve.</Text>
+          <Text style={{ color: c.sub, marginBottom: 28, fontSize: 16 }}>{t("Fale. O Fidus resolve.")}</Text>
           <Pressable style={[s.primary, { flexDirection: "row", justifyContent: "center", gap: 10 }]} onPress={loginGoogle}>
-            <Text style={[s.primaryText, { fontSize: 17 }]}>Entrar com o Google</Text></Pressable>
-          <Text style={{ color: c.sub, marginTop: 22, marginBottom: 8 }}>Depois do Google, se o app não abrir sozinho, digite o código:</Text>
+            <Text style={[s.primaryText, { fontSize: 17 }]}>{t("Entrar com o Google")}</Text></Pressable>
+          <Text style={{ color: c.sub, marginTop: 16, marginBottom: 6, fontSize: 13 }}>{t("Tem um código de convite? (opcional)")}</Text>
+          <TextInput style={[s.input, { color: c.text, backgroundColor: c.card, letterSpacing: 2 }]}
+            placeholder="AB12CD" placeholderTextColor={c.sub} autoCapitalize="characters" autoCorrect={false}
+            value={refCode} onChangeText={setRefCode} />
+          <Text style={{ color: c.sub, marginTop: 10, marginBottom: 8 }}>{t("Depois do Google, se o app não abrir sozinho, digite o código:")}</Text>
           <View style={[s.row, { gap: 8 }]}>
             <TextInput style={[s.input, s.flex, { color: c.text, backgroundColor: c.card, marginBottom: 0, letterSpacing: 3, fontSize: 18 }]}
               placeholder="ABCD-1234" placeholderTextColor={c.sub} autoCapitalize="characters" autoCorrect={false}
               value={loginCode} onChangeText={setLoginCode} onSubmitEditing={() => redeem(loginCode)} />
             <Pressable style={[s.primarySm, { justifyContent: "center", opacity: loggingIn ? 0.5 : 1 }]} disabled={loggingIn}
-              onPress={() => redeem(loginCode)}><Text style={s.primaryText}>{loggingIn ? "…" : "Entrar"}</Text></Pressable>
+              onPress={() => redeem(loginCode)}><Text style={s.primaryText}>{loggingIn ? "…" : t("Entrar")}</Text></Pressable>
           </View>
           <Pressable onPress={() => setShowAdvanced(!showAdvanced)} style={{ marginTop: 28 }}>
-            <Text style={{ color: c.sub, textDecorationLine: "underline" }}>{showAdvanced ? "Fechar opções avançadas" : "Opções avançadas"}</Text></Pressable>
+            <Text style={{ color: c.sub, textDecorationLine: "underline" }}>{showAdvanced ? t("Fechar opções avançadas") : t("Opções avançadas")}</Text></Pressable>
           {showAdvanced && (<>
             <TextInput style={[s.input, { color: c.text, backgroundColor: c.card, marginTop: 12 }]} placeholder={DEFAULT_SERVER}
               placeholderTextColor={c.sub} autoCapitalize="none" value={server} onChangeText={setServer} />
-            <TextInput style={[s.input, { color: c.text, backgroundColor: c.card }]} placeholder="Token de administrador"
+            <TextInput style={[s.input, { color: c.text, backgroundColor: c.card }]} placeholder={t("Token de administrador")}
               placeholderTextColor={c.sub} autoCapitalize="none" secureTextEntry value={token} onChangeText={setToken} />
             <Pressable style={[s.secondary, { borderColor: c.sub, alignItems: "center" }]} onPress={async () => {
               const sv = normServer(); const tk = token.trim(); if (!tk) return;
               setServer(sv); setToken(tk);
               await SecureStore.setItemAsync("server", sv); await SecureStore.setItemAsync("token", tk);
               setConfigured(true);
-            }}><Text style={{ color: c.text }}>Entrar com token</Text></Pressable>
+            }}><Text style={{ color: c.text }}>{t("Entrar com token")}</Text></Pressable>
           </>)}
-        </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
 
+  const Empty = ({ text }: { text: string }) => <Text style={[s.empty, { color: c.sub }]}>{loadingScreen ? t("Carregando…") : text}</Text>;
+  const Lock = ({ r }: { r: any }) => r?.locked && r.upsell ? (
+    <View style={{ padding: 16, gap: 10 }}>
+      <Text style={{ color: c.text }}>{t("{0} faz parte do plano {1}.", t(r.upsell.feature_label), t(r.upsell.name))}</Text>
+      <UpsellCard u={r.upsell} />
+    </View>) : null;
+  const UpsellCard = ({ u, onClose }: { u: Upsell; onClose?: () => void }) => (
+    <View style={[s.draft, { backgroundColor: NAVY, borderColor: MINT }]}>
+      <Text style={{ color: MINT, fontSize: 12, fontWeight: "700", letterSpacing: 0.5 }}>{t("PLANO {0}", t(u.name).toUpperCase())}</Text>
+      <Text style={{ color: "#fff", fontSize: 22, fontWeight: "800", marginTop: 4 }}>{money(u.month, u.symbol)}<Text style={{ fontSize: 13, fontWeight: "400", color: "#B9C6DD" }}> {t("/mês · ou {0}/ano", money(u.year, u.symbol))}</Text></Text>
+      <Text style={{ color: "#DDE5F2", marginTop: 6 }}>{t("Libera {0} e mais:", t(u.feature_label))}</Text>
+      {u.highlights.slice(0, 4).map((h) => <Text key={h} style={{ color: "#fff", marginTop: 3 }}>✓ {t(h)}</Text>)}
+      <View style={[s.row, { marginTop: 12 }]}>
+        {onClose && <Pressable style={[s.secondary, { borderColor: "#5B6B85" }]} onPress={onClose}>
+          <Text style={{ color: "#DDE5F2" }}>{t("Agora não")}</Text></Pressable>}
+        <Pressable style={[s.primarySm, { backgroundColor: MINT }]} onPress={() => subscribe(u)}>
+          <Text style={{ color: NAVY, fontWeight: "700" }}>{t("Conhecer o {0}", t(u.name))}</Text></Pressable>
+      </View>
+    </View>);
+
+  const sumLine = (byCur: Record<string, number>) => Object.entries(byCur || {}).map(([cur, v]) => `${v.toFixed(2)} ${cur}`).join(" · ");
+  const shiftMonth = (m: string, d: number) => { if (!/^\d{4}-\d{2}$/.test(m)) return ""; const [y, mm] = m.split("-").map(Number); const x = new Date(y, mm - 1 + d, 1);
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}`; };
+
+  function renderScreen() {
+    if (screen === "admin") return (
+      <FlatList
+        data={admin.users} keyExtractor={(u) => u.id} contentContainerStyle={{ padding: 16, gap: 8 }}
+        refreshing={adminLoading} onRefresh={loadAdmin}
+        ListHeaderComponent={
+          <View style={{ gap: 8, marginBottom: 8 }}>
+            <View style={[s.row, { gap: 8 }]}>
+              <TextInput style={[s.input, s.flex, { color: c.text, backgroundColor: c.card, marginBottom: 0 }]}
+                placeholder={t("E-mail Google para convidar")} placeholderTextColor={c.sub} autoCapitalize="none"
+                keyboardType="email-address" value={inviteEmail} onChangeText={setInviteEmail} />
+              <Pressable onPress={inviteMenu} style={[s.primarySm, { justifyContent: "center" }]}>
+                <Text style={s.primaryText}>{t("Convidar")}</Text></Pressable>
+            </View>
+            <Text style={{ color: c.sub, fontSize: 13 }}>
+              {t("{0} conta(s) · {1} convite(s) aguardando", admin.users.length, admin.invites.filter((i: any) => !i.used_at).length)}
+            </Text>
+            {admin.invites.filter((i: any) => !i.used_at).map((i: any) => (
+              <Text key={i.email} style={{ color: c.sub, fontSize: 13 }}>✉️ {i.email} · {t(PLAN_NAMES[i.plan] ?? i.plan)}</Text>
+            ))}
+          </View>}
+        renderItem={({ item: u }) => (
+          <Pressable onPress={() => clientMenu(u)} style={[s.actCard, { backgroundColor: c.card, opacity: u.status === "ativo" ? 1 : 0.5 }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: c.text, fontWeight: "700" }}>{u.name || u.email}{u.is_owner ? ` (${t("você")})` : ""}</Text>
+              <Text style={{ color: c.sub, fontSize: 13 }}>{u.email}</Text>
+              <Text style={{ color: c.sub, fontSize: 12, marginTop: 2 }}>
+                {t(PLAN_NAMES[u.plan] ?? u.plan)} · {t("{0} ações no mês", u.actions_this_month)} · {u.google_connected ? t("Google ok") : t("sem Google")}
+                {u.status !== "ativo" ? ` · ${t("SUSPENSO")}` : ""}</Text>
+            </View>
+            <Text style={{ color: c.sub }}>›</Text>
+          </Pressable>
+        )}
+      />
+    );
+    if (screen === "tasks") return (
+      <View style={s.flex}>
+        <View style={[s.row, { paddingHorizontal: 16, paddingTop: 12, gap: 8 }]}>
+          <TextInput style={[s.input, s.flex, { color: c.text, backgroundColor: c.card, marginBottom: 0 }]}
+            placeholder={t("Nova tarefa…")} placeholderTextColor={c.sub} value={newTask} onChangeText={setNewTask}
+            onSubmitEditing={addTaskQuick} returnKeyType="done" />
+          <Pressable onPress={addTaskQuick} style={[s.sendBtn2, { backgroundColor: NAVY, width: 48, height: 48, borderRadius: 24 }]}>
+            <PlusIcon color="#fff" /></Pressable>
+        </View>
+        <FlatList
+          data={tasks} keyExtractor={(x) => String(x.id)} contentContainerStyle={{ padding: 16, gap: 8 }}
+          refreshing={tasksLoading} onRefresh={loadTasks}
+          ListEmptyComponent={<Text style={[s.empty, { color: c.sub }]}>
+            {tasksLoading ? t("Carregando…") : t("Nenhuma tarefa aberta.\nDiga, por exemplo: “cria a tarefa de revisar o contrato até sexta”.")}</Text>}
+          renderItem={({ item: tk }) => (
+            <Pressable onLongPress={() => removeTask(tk)} style={[s.actCard, { backgroundColor: c.card, paddingVertical: 12 }]}>
+              <Pressable onPress={() => toggleTask(tk)} hitSlop={10}
+                style={[s.check, { borderColor: tk.priority === "alta" ? RED : c.sub }]} accessibilityLabel={t("Concluir")} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: c.text, fontWeight: "600" }}>{tk.title}</Text>
+                {(!!tk.due || tk.priority === "alta") && (
+                  <Text style={{ color: tk.overdue ? RED : c.sub, fontSize: 12, marginTop: 2 }}>
+                    {tk.due ? (tk.overdue ? t("atrasada · era {0}", fmtDay(tk.due)) : t("até {0}", fmtDay(tk.due))) : ""}
+                    {tk.priority === "alta" ? `${tk.due ? " · " : ""}${t("prioridade alta")}` : ""}</Text>)}
+              </View>
+            </Pressable>
+          )}
+        />
+      </View>
+    );
+    if (screen === "activity") return (
+      <FlatList
+        data={acts} keyExtractor={(a) => String(a.id)} contentContainerStyle={{ padding: 16, gap: 10 }}
+        refreshing={actsLoading} onRefresh={loadActivity}
+        ListHeaderComponent={stats && stats.actions_this_month > 0 ? (
+          <View style={[s.statCard, { backgroundColor: NAVY }]}>
+            <Text style={{ color: MINT, fontSize: 28, fontWeight: "800" }}>{stats.actions_this_month}</Text>
+            <Text style={{ color: "#fff", flex: 1 }}>{t("coisas que o Fidus resolveu por você este mês")}{"\n"}
+              <Text style={{ color: "#B9C6DD", fontSize: 12 }}>≈ {stats.minutes_saved_estimate >= 60
+                ? `${Math.round(stats.minutes_saved_estimate / 6) / 10} h` : `${stats.minutes_saved_estimate} min`} {t("poupados (estimativa)")}</Text></Text>
+          </View>) : null}
+        ListEmptyComponent={<Text style={[s.empty, { color: c.sub }]}>
+          {actsLoading ? t("Carregando…") : t("Nada por aqui ainda.\nTudo o que o Fidus fizer por você aparece nesta lista.")}</Text>}
+        renderItem={({ item: a }) => {
+          const p = pill(a.kind, a.status);
+          const faded = a.status === "desfeito" || a.status === "cancelado";
+          return (
+            <View style={[s.actCard, { backgroundColor: c.card, opacity: faded ? 0.55 : 1 }]}>
+              <Text style={s.actIcon}>{ICON[a.kind] ?? "•"}</Text>
+              <View style={{ flex: 1 }}>
+                <View style={[s.pill, { backgroundColor: p.color + "22", borderColor: p.color }]}>
+                  <Text style={{ color: p.color, fontSize: 11, fontWeight: "700" }}>{p.text.toUpperCase()}</Text>
+                </View>
+                <Text style={{ color: c.text, fontWeight: "600", textDecorationLine: faded || a.kind.endsWith("_deleted") ? "line-through" : "none" }}>{a.title}</Text>
+                {!!a.detail && <Text style={{ color: c.sub }}>{a.detail}</Text>}
+                <Text style={{ color: c.sub, fontSize: 12, marginTop: 2 }}>{LABEL()[a.kind] ?? a.kind} · {fmtDate(a.created_at)}</Text>
+              </View>
+              {a.can_undo && (
+                <Pressable style={[s.chip, { borderColor: c.sub }]} onPress={() => undo(a)}>
+                  <Text style={{ color: c.text, fontSize: 12 }}>{t("Desfazer")}</Text></Pressable>
+              )}
+            </View>
+          );
+        }}
+      />
+    );
+    if (screen === "convs") return (
+      <FlatList data={convs} keyExtractor={(x) => String(x.id)} contentContainerStyle={{ padding: 16, gap: 8 }}
+        refreshing={loadingScreen} onRefresh={() => loadScreen("convs")}
+        ListEmptyComponent={<Empty text={t("Nenhuma conversa ainda.")} />}
+        renderItem={({ item: cv }) => (
+          <Card c={c} onPress={() => openConversation(cv.id)}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: c.text, fontWeight: "600" }} numberOfLines={1}>{cv.title === "Conversa" ? t("Conversa") : cv.title}</Text>
+              <Text style={{ color: c.sub, fontSize: 12, marginTop: 2 }}>{fmtDate(cv.last)} · {t("{0} mensagens", cv.messages)}</Text>
+            </View>
+            <Text style={{ color: c.sub }}>›</Text>
+          </Card>)} />
+    );
+    if (screen === "docs") return (
+      <View style={s.flex}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+          <TextInput style={[s.input, { color: c.text, backgroundColor: c.card, marginBottom: 0 }]} placeholder={t("Buscar documento…")}
+            placeholderTextColor={c.sub} value={docQuery} onChangeText={setDocQuery} returnKeyType="search"
+            onSubmitEditing={() => loadScreen("docs", docQuery.trim())} />
+        </View>
+        <FlatList data={docs} keyExtractor={(d) => String(d.document_id)} contentContainerStyle={{ padding: 16, gap: 8 }}
+          refreshing={loadingScreen} onRefresh={() => loadScreen("docs", docQuery.trim())}
+          ListEmptyComponent={<Empty text={t("Nenhum documento guardado.\nMande a foto de um seguro, contrato ou carta e o Fidus guarda aqui.")} />}
+          renderItem={({ item: d }) => (
+            <Card c={c} onPress={() => openDoc(d)}>
+              <Text style={s.actIcon}>📄</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: c.text, fontWeight: "600" }}>{d.title}</Text>
+                {!!d.expires_on && <Text style={{ color: c.sub, fontSize: 12 }}>{t("vence {0}", `${fmtDay(d.expires_on)}/${d.expires_on.slice(0, 4)}`)}</Text>}
+              </View>
+              <Text style={{ color: MINT, fontWeight: "700" }}>{t("Abrir")}</Text>
+            </Card>)} />
+      </View>
+    );
+    if (screen === "meetings") return meetings?.locked ? <ScrollView><Lock r={meetings} /></ScrollView> : (
+      <FlatList data={meetings?.meetings || []} keyExtractor={(m) => String(m.meeting_id)} contentContainerStyle={{ padding: 16, gap: 8 }}
+        refreshing={loadingScreen} onRefresh={() => loadScreen("meetings")}
+        ListHeaderComponent={<Pressable onPress={() => { setScreen("chat"); meetingMenu(); }} style={[s.primary, { marginBottom: 8 }]}>
+          <Text style={s.primaryText}>🎙 {t("Gravar reunião agora")}</Text></Pressable>}
+        ListEmptyComponent={<Empty text={t("Nenhuma reunião gravada ainda.")} />}
+        renderItem={({ item: m }) => (
+          <Card c={c} onPress={() => openMeeting(m)}>
+            <Text style={s.actIcon}>🎙</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: c.text, fontWeight: "600" }}>{m.title || t("Reunião")}</Text>
+              <Text style={{ color: c.sub, fontSize: 12 }}>{fmtDay(m.date)}/{(m.date || "").slice(0, 4)} · {m.status === "pronta" ? t("ata pronta") : m.status === "erro" ? t("erro") : t("processando")}</Text>
+            </View>
+            <Text style={{ color: c.sub }}>›</Text>
+          </Card>)} />
+    );
+    if (screen === "expenses") {
+      const e = expenses;
+      const month = e?.month || expMonth;
+      return (
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
+          <View style={[s.actCard, { backgroundColor: NAVY, justifyContent: "space-between" }]}>
+            <Pressable hitSlop={10} onPress={() => { const m = shiftMonth(month, -1); setExpMonth(m); loadScreen("expenses", m); }}>
+              <Text style={{ color: "#fff", fontSize: 22 }}>‹</Text></Pressable>
+            <View style={{ alignItems: "center" }}>
+              <Text style={{ color: "#B9C6DD", fontSize: 12 }}>{month ? `${month.slice(5)}/${month.slice(0, 4)}` : ""}</Text>
+              <Text style={{ color: "#fff", fontSize: 20, fontWeight: "800" }}>{e ? (sumLine(e.totals_by_currency) || "0.00") : "…"}</Text>
+              <Text style={{ color: "#B9C6DD", fontSize: 12 }}>{e ? t("{0} lançamentos", e.count) : ""}</Text>
+            </View>
+            <Pressable hitSlop={10} onPress={() => { const m = shiftMonth(month, 1); setExpMonth(m); loadScreen("expenses", m); }}>
+              <Text style={{ color: "#fff", fontSize: 22 }}>›</Text></Pressable>
+          </View>
+          {!!e && Object.keys(e.by_business || {}).length > 0 && (
+            <Card c={c} style={{ flexDirection: "column", alignItems: "stretch" }}>
+              <Text style={{ color: c.sub, fontSize: 12, marginBottom: 4 }}>{t("POR EMPRESA")}</Text>
+              {Object.entries(e.by_business).map(([b, v]: any) => (
+                <View key={b} style={s.kv}><Text style={{ color: c.text }}>{b}</Text><Text style={{ color: c.text, fontWeight: "600" }}>{sumLine(v)}</Text></View>))}
+            </Card>)}
+          {!!e && Object.keys(e.by_category || {}).length > 0 && (
+            <Card c={c} style={{ flexDirection: "column", alignItems: "stretch" }}>
+              <Text style={{ color: c.sub, fontSize: 12, marginBottom: 4 }}>{t("POR CATEGORIA")}</Text>
+              {Object.entries(e.by_category).map(([k, v]: any) => (
+                <View key={k} style={s.kv}><Text style={{ color: c.text }}>{t(k)}</Text><Text style={{ color: c.text }}>{sumLine(v)}</Text></View>))}
+            </Card>)}
+          {!!e?.recent?.length && (
+            <Card c={c} style={{ flexDirection: "column", alignItems: "stretch" }}>
+              <Text style={{ color: c.sub, fontSize: 12, marginBottom: 4 }}>{t("ÚLTIMOS LANÇAMENTOS")}</Text>
+              {e.recent.map((r: any) => (
+                <View key={r.id} style={s.kv}>
+                  <Text style={{ color: c.text, flex: 1 }} numberOfLines={1}>{fmtDay(r.date)} · {r.merchant || t(r.category)} · {r.business}</Text>
+                  <Text style={{ color: c.text, fontWeight: "600" }}>{r.amount.toFixed(2)} {r.currency}</Text></View>))}
+            </Card>)}
+          {!!e?.bills?.length && (
+            <Card c={c} style={{ flexDirection: "column", alignItems: "stretch" }}>
+              <Text style={{ color: c.sub, fontSize: 12, marginBottom: 4 }}>{t("CONTAS FIXAS")}</Text>
+              {e.bills.map((b: any) => (
+                <View key={b.bill_id} style={s.kv}>
+                  <Text style={{ color: c.text, flex: 1 }}>{b.name} · {t("dia {0}", b.day_of_month)}</Text>
+                  <Text style={{ color: c.text }}>{b.amount != null ? `${Number(b.amount).toFixed(2)} ${b.currency || ""}` : ""}</Text></View>))}
+            </Card>)}
+          {!!e && !e.count && !e.bills?.length && <Empty text={t("Nenhum gasto neste mês.\nDiga “paguei 30 libras de gasolina” ou mande a foto do recibo.")} />}
+        </ScrollView>
+      );
+    }
+    if (screen === "booking") return booking?.locked ? <ScrollView><Lock r={booking} /></ScrollView> : (
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
+        {loadingScreen && !booking ? <Empty text="" /> : booking && (<>
+          <Text style={{ color: c.sub }}>{t("Mande este link para clientes marcarem horário direto na sua agenda, só nos horários livres.")}</Text>
+          <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+            <Text selectable style={{ color: c.text, fontWeight: "600" }}>{booking.link}</Text>
+            <View style={[s.row, { justifyContent: "flex-start", flexWrap: "wrap" }]}>
+              <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => copyText(booking.link)}><Text style={{ color: c.text }}>{t("Copiar")}</Text></Pressable>
+              <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => Share.share({ message: booking.link })}><Text style={{ color: c.text }}>{t("Compartilhar")}</Text></Pressable>
+              <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => Linking.openURL(booking.link)}><Text style={{ color: c.text }}>{t("Abrir")}</Text></Pressable>
+            </View>
+          </Card>
+          <Card c={c} style={{ flexDirection: "column", alignItems: "stretch" }}>
+            <View style={s.kv}><Text style={{ color: c.sub }}>{t("Dias")}</Text><Text style={{ color: c.text }}>{booking.days}</Text></View>
+            <View style={s.kv}><Text style={{ color: c.sub }}>{t("Horário")}</Text><Text style={{ color: c.text }}>{booking.hours}</Text></View>
+            <View style={s.kv}><Text style={{ color: c.sub }}>{t("Antecedência")}</Text><Text style={{ color: c.text }}>{booking.min_notice_hours} h</Text></View>
+            {(booking.types || []).map((x: string) => <Text key={x} style={{ color: c.text, marginTop: 4 }}>• {x}</Text>)}
+          </Card>
+          <Text style={{ color: c.sub, fontSize: 13 }}>{t("Para mudar dias, horários ou tipos de atendimento, peça ao Fidus na conversa.")}</Text>
+        </>)}
+      </ScrollView>
+    );
+    if (screen === "invite") return (
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+        <View style={[s.draft, { backgroundColor: NAVY, borderColor: MINT }]}>
+          <Text style={{ color: MINT, fontWeight: "800", fontSize: 13 }}>{t("CONVIDE E GANHE")}</Text>
+          <Text style={{ color: "#fff", fontSize: 20, fontWeight: "800", marginTop: 6 }}>
+            {t("{0}% de desconto na sua próxima cobrança", referral?.percent ?? 10)}</Text>
+          <Text style={{ color: "#DDE5F2", marginTop: 6 }}>
+            {t("Para cada amigo que assinar o Fidus. Seu amigo ganha {0} dias grátis.", referral?.trial_days ?? 7)}</Text>
+          {!!referral && (<>
+            <Text selectable style={{ color: "#fff", fontSize: 28, fontWeight: "800", letterSpacing: 4, marginTop: 14 }}>{referral.code}</Text>
+            <Text selectable style={{ color: "#B9C6DD", fontSize: 12 }}>{referral.link}</Text>
+            <View style={[s.row, { marginTop: 12, justifyContent: "flex-start" }]}>
+              <Pressable style={[s.primarySm, { backgroundColor: MINT }]} onPress={shareInvite}>
+                <Text style={{ color: NAVY, fontWeight: "700" }}>{t("Enviar convite")}</Text></Pressable>
+              <Pressable style={[s.secondary, { borderColor: "#5B6B85" }]} onPress={() => copyText(referral.link)}>
+                <Text style={{ color: "#DDE5F2" }}>{t("Copiar link")}</Text></Pressable>
+            </View>
+          </>)}
+        </View>
+        {!!referral && (
+          <Card c={c} style={{ flexDirection: "column", alignItems: "stretch" }}>
+            <View style={s.kv}><Text style={{ color: c.sub }}>{t("Amigos convidados")}</Text><Text style={{ color: c.text, fontWeight: "700" }}>{referral.invited}</Text></View>
+            <View style={s.kv}><Text style={{ color: c.sub }}>{t("Já assinaram")}</Text><Text style={{ color: c.text, fontWeight: "700" }}>{referral.paid}</Text></View>
+            <View style={s.kv}><Text style={{ color: c.sub }}>{t("Descontos guardados")}</Text><Text style={{ color: c.text, fontWeight: "700" }}>{referral.credits_available}</Text></View>
+            <View style={s.kv}><Text style={{ color: c.sub }}>{t("Próxima cobrança")}</Text>
+              <Text style={{ color: referral.next_discount ? GREEN : c.text, fontWeight: "700" }}>{referral.next_discount ? `-${referral.next_discount}%` : t("sem desconto")}</Text></View>
+          </Card>)}
+        <Text style={{ color: c.sub, fontSize: 13, lineHeight: 19 }}>
+          {t("Como funciona: o desconto entra quando o amigo paga o primeiro mês. Os descontos não somam: vale um por cobrança, e os que sobram ficam para as cobranças seguintes.")}</Text>
+        {!!referral && !referral.invited_by && (
+          <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+            <Text style={{ color: c.text, fontWeight: "600" }}>{t("Alguém te convidou?")}</Text>
+            <View style={[s.row, { gap: 8 }]}>
+              <TextInput style={[s.input, s.flex, { color: c.text, backgroundColor: c.bg, marginBottom: 0 }]} placeholder="AB12CD"
+                placeholderTextColor={c.sub} autoCapitalize="characters" value={refApply} onChangeText={setRefApply} />
+              <Pressable style={[s.primarySm, { justifyContent: "center" }]} onPress={applyReferral}><Text style={s.primaryText}>{t("Usar")}</Text></Pressable>
+            </View>
+          </Card>)}
+        {!!referral?.invited_by && <Text style={{ color: c.sub }}>{t("Você entrou pelo convite de {0} 🎁", referral.invited_by)}</Text>}
+      </ScrollView>
+    );
+    if (screen === "settings") return (
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+        <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+          <Text style={{ color: c.sub, fontSize: 12 }}>{t("SEU NOME")}</Text>
+          <View style={[s.row, { gap: 8 }]}>
+            <TextInput style={[s.input, s.flex, { color: c.text, backgroundColor: c.bg, marginBottom: 0 }]} value={nameEdit} onChangeText={setNameEdit} />
+            <Pressable style={[s.primarySm, { justifyContent: "center" }]} onPress={saveName}><Text style={s.primaryText}>{t("Salvar")}</Text></Pressable>
+          </View>
+          <Text style={{ color: c.sub, fontSize: 13 }}>{me?.email}</Text>
+        </Card>
+        <Card c={c} onPress={chooseLanguage}>
+          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600" }}>{t("Idioma")}</Text>
+            <Text style={{ color: c.sub, fontSize: 13 }}>{(LANG_CHOICES.find(([k]) => k === LANG) || [LANG, LANG])[1]}</Text></View>
+          <Text style={{ color: c.sub }}>›</Text></Card>
+        <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+          <Text style={{ color: c.sub, fontSize: 12 }}>{t("SEU PLANO")}</Text>
+          <Text style={{ color: c.text, fontSize: 18, fontWeight: "800" }}>{plan ? t(plan.name) : "…"}</Text>
+          {(plan?.plans || []).map((p: any) => (
+            <View key={p.id} style={[s.planRow, { borderColor: p.id === plan.plan ? MINT : c.line }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: c.text, fontWeight: "700" }}>{t(p.name)} · {money(p.month, plan.symbol)}<Text style={{ color: c.sub, fontWeight: "400" }}>{t("/mês")}</Text></Text>
+                <Text style={{ color: c.sub, fontSize: 12 }}>{t("ou {0}/ano (2 meses grátis)", money(p.year, plan.symbol))}</Text>
+                {p.highlights.slice(0, 3).map((h: string) => <Text key={h} style={{ color: c.sub, fontSize: 12 }}>✓ {t(h)}</Text>)}
+              </View>
+              {p.id === plan.plan ? <Text style={{ color: GREEN, fontWeight: "700" }}>{t("Atual")}</Text> :
+                <Pressable style={[s.chip, { borderColor: c.sub }]} onPress={() => subscribe(p)}><Text style={{ color: c.text }}>{t("Escolher")}</Text></Pressable>}
+            </View>))}
+        </Card>
+        <Card c={c} onPress={reconnectGoogle}>
+          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600" }}>Google</Text>
+            <Text style={{ color: c.sub, fontSize: 13 }}>{me?.google_connected ? t("Conectado · tocar para reconectar") : t("Não conectado · tocar para conectar")}</Text></View>
+          <Text style={{ color: c.sub }}>›</Text></Card>
+        {!!pendingMeet && <Card c={c} onPress={() => { const p = pendingMeet; setPendingMeet(null); setScreen("chat"); sendMeetingFile(p); }}>
+          <Text style={{ color: c.text, flex: 1 }}>🎙 {t("Reenviar reunião")}</Text></Card>}
+        <Card c={c} onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Fidus`).catch(() => {})}>
+          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600" }}>{t("Ajuda e contato")}</Text>
+            <Text style={{ color: c.sub, fontSize: 13 }}>{SUPPORT_EMAIL}</Text></View>
+          <Text style={{ color: c.sub }}>›</Text></Card>
+        <Card c={c} onPress={testConnection}><Text style={{ color: c.text, flex: 1 }}>{t("Testar conexão")}</Text></Card>
+        <Card c={c} onPress={() => Alert.alert(t("Sair da conta?"), "", [{ text: t("Cancelar"), style: "cancel" }, { text: t("Sair"), style: "destructive", onPress: logout }])}>
+          <Text style={{ color: RED, fontWeight: "600", flex: 1 }}>{t("Sair da conta")}</Text></Card>
+        <Text style={{ color: c.sub, fontSize: 11, textAlign: "center" }}>{base()}</Text>
+      </ScrollView>
+    );
+    return null;
+  }
+
+
+  const userInitial = (me?.name || me?.email || "?").trim().charAt(0).toUpperCase();
+
   return (
     <SafeAreaView edges={["top", "bottom"]} style={[s.flex, { backgroundColor: c.bg }]}>
-      <KeyboardAvoidingView style={s.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={s.topbar}>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.header, { color: c.text, paddingHorizontal: 0 }]}>Fidus</Text>
-            <Text style={{ color: c.sub, fontSize: 12 }} numberOfLines={1}>{base()}</Text>
-          </View>
-          <Pressable style={[s.chip, meeting ? { backgroundColor: RED, borderColor: RED } : { borderColor: c.sub }]} onPress={meetingMenu}
-            accessibilityLabel="Gravar reunião">
-            <Text style={{ color: meeting ? "#fff" : c.text, fontSize: 13, fontWeight: meeting ? "700" : "400" }}>
-              {meeting ? `● ${fmtClock(meetSecs)}` : "🎙 Reunião"}</Text></Pressable>
-          <Pressable style={[s.chip, { borderColor: c.sub, paddingHorizontal: 12 }]} onPress={moreMenu} accessibilityLabel="Mais opções">
-            <Text style={{ color: c.text, fontSize: 13 }}>⋯</Text></Pressable>
+          <Pressable onPress={openDrawer} hitSlop={10} style={s.iconBtn} accessibilityLabel={t("Menu")}>
+            <MenuIcon color={c.text} /></Pressable>
+          <Text style={[s.header, { color: c.text, flex: 1 }]} numberOfLines={1}>{SCREEN_TITLE()[screen]}</Text>
+          {screen === "chat" ? (<>
+            <Pressable style={[s.chip, meeting ? { backgroundColor: RED, borderColor: RED } : { borderColor: c.line }]} onPress={meetingMenu}
+              accessibilityLabel={t("Gravar reunião")}>
+              <Text style={{ color: meeting ? "#fff" : c.text, fontSize: 13, fontWeight: meeting ? "700" : "400" }}>
+                {meeting ? `● ${fmtClock(meetSecs)}` : `🎙 ${t("Reunião")}`}</Text></Pressable>
+            <Pressable onPress={newChat} hitSlop={10} style={s.iconBtn} accessibilityLabel={t("Nova conversa")}>
+              <ComposeIcon color={c.text} /></Pressable>
+          </>) : (
+            <Pressable onPress={() => setScreen("chat")} hitSlop={10} style={[s.chip, { borderColor: c.line }]}>
+              <Text style={{ color: c.text, fontSize: 13 }}>{t("Conversa")}</Text></Pressable>
+          )}
         </View>
-        <View style={s.tabs}>
-          {(me?.is_owner ? (["chat", "tasks", "activity", "admin"] as const) : (["chat", "tasks", "activity"] as const)).map((t) => (
-            <Pressable key={t} onPress={() => { setTab(t); if (t === "activity") loadActivity(); if (t === "tasks") loadTasks(); if (t === "admin") loadAdmin(); }}
-              style={[s.tab, tab === t && { borderBottomColor: MINT }]}>
-              <Text style={{ color: tab === t ? c.text : c.sub, fontWeight: tab === t ? "700" : "400" }}>
-                {t === "chat" ? "Conversa" : t === "tasks" ? "Tarefas" : t === "activity" ? "Atividade" : "Clientes"}</Text>
-            </Pressable>
-          ))}
-        </View>
-        {tab === "admin" ? (
-          <FlatList
-            data={admin.users} keyExtractor={(u) => u.id} contentContainerStyle={{ padding: 16, gap: 8 }}
-            refreshing={adminLoading} onRefresh={loadAdmin}
-            ListHeaderComponent={
-              <View style={{ gap: 8, marginBottom: 8 }}>
-                <View style={[s.row, { gap: 8 }]}>
-                  <TextInput style={[s.input, s.flex, { color: c.text, backgroundColor: c.card, marginBottom: 0 }]}
-                    placeholder="E-mail Google para convidar" placeholderTextColor={c.sub} autoCapitalize="none"
-                    keyboardType="email-address" value={inviteEmail} onChangeText={setInviteEmail} />
-                  <Pressable onPress={inviteMenu} style={[s.primarySm, { justifyContent: "center" }]}>
-                    <Text style={s.primaryText}>Convidar</Text></Pressable>
-                </View>
-                <Text style={{ color: c.sub, fontSize: 13 }}>
-                  {admin.users.length} conta(s) · {admin.invites.filter((i: any) => !i.used_at).length} convite(s) aguardando
-                </Text>
-                {admin.invites.filter((i: any) => !i.used_at).map((i: any) => (
-                  <Text key={i.email} style={{ color: c.sub, fontSize: 13 }}>✉️ {i.email} · {PLAN_NAMES[i.plan] ?? i.plan}</Text>
-                ))}
-              </View>}
-            renderItem={({ item: u }) => (
-              <Pressable onPress={() => clientMenu(u)} style={[s.actCard, { backgroundColor: c.card, opacity: u.status === "ativo" ? 1 : 0.5 }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: c.text, fontWeight: "700" }}>{u.name || u.email}{u.is_owner ? " (você)" : ""}</Text>
-                  <Text style={{ color: c.sub, fontSize: 13 }}>{u.email}</Text>
-                  <Text style={{ color: c.sub, fontSize: 12, marginTop: 2 }}>
-                    {PLAN_NAMES[u.plan] ?? u.plan} · {u.actions_this_month} ações no mês · {u.google_connected ? "Google ok" : "sem Google"}
-                    {u.status !== "ativo" ? " · SUSPENSO" : ""}</Text>
-                </View>
-                <Text style={{ color: c.sub }}>›</Text>
-              </Pressable>
-            )}
-          />
-        ) : tab === "tasks" ? (
-          <View style={s.flex}>
-            <View style={[s.row, { paddingHorizontal: 16, paddingTop: 12, gap: 8 }]}>
-              <TextInput style={[s.input, s.flex, { color: c.text, backgroundColor: c.card, marginBottom: 0 }]}
-                placeholder="Nova tarefa…" placeholderTextColor={c.sub} value={newTask} onChangeText={setNewTask}
-                onSubmitEditing={addTaskQuick} returnKeyType="done" />
-              <Pressable onPress={addTaskQuick} style={[s.mic, { backgroundColor: NAVY, width: 48, height: 48 }]}>
-                <Text style={s.micText}>＋</Text></Pressable>
-            </View>
-            <FlatList
-              data={tasks} keyExtractor={(t) => String(t.id)} contentContainerStyle={{ padding: 16, gap: 8 }}
-              refreshing={tasksLoading} onRefresh={loadTasks}
-              ListEmptyComponent={<Text style={[s.empty, { color: c.sub }]}>
-                {tasksLoading ? "Carregando…" : "Nenhuma tarefa aberta.\nDiga, por exemplo: “cria a tarefa de revisar o contrato até sexta”."}</Text>}
-              renderItem={({ item: t }) => (
-                <Pressable onLongPress={() => removeTask(t)} style={[s.actCard, { backgroundColor: c.card, paddingVertical: 12 }]}>
-                  <Pressable onPress={() => toggleTask(t)} hitSlop={10}
-                    style={[s.check, { borderColor: t.priority === "alta" ? RED : c.sub }]} accessibilityLabel="Concluir" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: c.text, fontWeight: "600" }}>{t.title}</Text>
-                    {(!!t.due || t.priority === "alta") && (
-                      <Text style={{ color: t.overdue ? RED : c.sub, fontSize: 12, marginTop: 2 }}>
-                        {t.due ? (t.overdue ? `atrasada · era ${fmtDay(t.due)}` : `até ${fmtDay(t.due)}`) : ""}
-                        {t.priority === "alta" ? `${t.due ? " · " : ""}prioridade alta` : ""}</Text>)}
-                  </View>
-                </Pressable>
-              )}
-            />
-          </View>
-        ) : tab === "activity" ? (
-          <FlatList
-            data={acts} keyExtractor={(a) => String(a.id)} contentContainerStyle={{ padding: 16, gap: 10 }}
-            refreshing={actsLoading} onRefresh={loadActivity}
-            ListHeaderComponent={stats && stats.actions_this_month > 0 ? (
-              <View style={[s.statCard, { backgroundColor: NAVY }]}>
-                <Text style={{ color: MINT, fontSize: 28, fontWeight: "800" }}>{stats.actions_this_month}</Text>
-                <Text style={{ color: "#fff", flex: 1 }}>coisas que o Fidus resolveu por você este mês{"\n"}
-                  <Text style={{ color: "#B9C6DD", fontSize: 12 }}>≈ {stats.minutes_saved_estimate >= 60
-                    ? `${Math.round(stats.minutes_saved_estimate / 6) / 10} h` : `${stats.minutes_saved_estimate} min`} poupados (estimativa)</Text></Text>
-              </View>) : null}
-            ListEmptyComponent={<Text style={[s.empty, { color: c.sub }]}>
-              {actsLoading ? "Carregando…" : "Nada por aqui ainda.\nTudo o que o Fidus fizer por você aparece nesta lista."}</Text>}
-            renderItem={({ item: a }) => {
-              const p = pill(a.kind, a.status);
-              const faded = a.status === "desfeito" || a.status === "cancelado";
-              return (
-              <View style={[s.actCard, { backgroundColor: c.card, opacity: faded ? 0.55 : 1 }]}>
-                <Text style={s.actIcon}>{ICON[a.kind] ?? "•"}</Text>
-                <View style={{ flex: 1 }}>
-                  <View style={[s.pill, { backgroundColor: p.color + "22", borderColor: p.color }]}>
-                    <Text style={{ color: p.color, fontSize: 11, fontWeight: "700" }}>{p.text.toUpperCase()}</Text>
-                  </View>
-                  <Text style={{ color: c.text, fontWeight: "600", textDecorationLine: faded || a.kind.endsWith("_deleted") ? "line-through" : "none" }}>{a.title}</Text>
-                  {!!a.detail && <Text style={{ color: c.sub }}>{a.detail}</Text>}
-                  <Text style={{ color: c.sub, fontSize: 12, marginTop: 2 }}>
-                    {LABEL[a.kind] ?? a.kind} · {fmtDate(a.created_at)}</Text>
-                </View>
-                {a.can_undo && (
-                  <Pressable style={[s.chip, { borderColor: c.sub }]} onPress={() => undo(a)}>
-                    <Text style={{ color: c.text, fontSize: 12 }}>Desfazer</Text></Pressable>
-                )}
-              </View>
-              );
-            }}
-          />
-        ) : (<>
+        {screen !== "chat" ? renderScreen() : (<>
+        <View style={s.flex}>
         <FlatList
           ref={listRef} data={items} keyExtractor={(i) => i.id} contentContainerStyle={{ padding: 16, gap: 10 }}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="handled" scrollEventThrottle={100}
+          onScroll={(e) => {
+            const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+            setAtBottom(contentSize.height - (contentOffset.y + layoutMeasurement.height) < 250);
+          }}
           ListFooterComponent={busy ? (
             <View style={[s.bubble, { backgroundColor: c.card, flexDirection: "row", alignItems: "center", gap: 8 }]}>
-              <ActivityIndicator color={c.sub} /><Text style={{ color: c.sub }}>Fidus está pensando…</Text>
+              <ActivityIndicator color={c.sub} /><Text style={{ color: c.sub }}>{t("Fidus está pensando…")}</Text>
             </View>) : null}
           ListEmptyComponent={<Text style={[s.empty, { color: c.sub }]}>
-            Toque no microfone, fale e toque de novo para enviar.{"\n"}Ex.: “Marca visita técnica dia 12 às 4pm”,{"\n"}“Me lembra de pagar o IVA dia 5”,{"\n"}“Paguei 60 libras de gasolina, HomB” ou{"\n"}📷 mande a foto de um recibo ou documento.{"\n"}{"\n"}🎙 Reunião no topo grava e gera a ata.
+            {t("Toque no microfone, fale e toque de novo para enviar.\nEx.: “Marca visita técnica dia 12 às 4pm”,\n“Me lembra de pagar o IVA dia 5”,\n“Paguei 60 libras de gasolina, HomB” ou\n📷 mande a foto de um recibo ou documento.\n\n🎙 Reunião no topo grava e gera a ata.")}
           </Text>}
           renderItem={({ item }) => {
             if (item.type === "user")
@@ -1130,24 +1737,8 @@ function FidusApp() {
             if (item.type === "fidus")
               return <View style={[s.bubble, { backgroundColor: c.card }]}>
                 <LinkText text={item.text} style={{ color: c.text }} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} /></View>;
-            if (item.type === "upsell") {
-              const u = item.up;
-              return (
-                <View style={[s.draft, { backgroundColor: NAVY, borderColor: MINT }]}>
-                  <Text style={{ color: MINT, fontSize: 12, fontWeight: "700", letterSpacing: 0.5 }}>PLANO {u.name.toUpperCase()}</Text>
-                  <Text style={{ color: "#fff", fontSize: 22, fontWeight: "800", marginTop: 4 }}>{eur(u.month)}<Text style={{ fontSize: 13, fontWeight: "400", color: "#B9C6DD" }}> /mês · ou {eur(u.year)}/ano</Text></Text>
-                  <Text style={{ color: "#DDE5F2", marginTop: 6 }}>Libera {u.feature_label} e mais:</Text>
-                  {u.highlights.slice(0, 4).map((h) => <Text key={h} style={{ color: "#fff", marginTop: 3 }}>✓ {h}</Text>)}
-                  <View style={[s.row, { marginTop: 12 }]}>
-                    <Pressable style={[s.secondary, { borderColor: "#5B6B85" }]} onPress={() => setItems((prev) => prev.filter((x) => x.id !== item.id))}>
-                      <Text style={{ color: "#DDE5F2" }}>Agora não</Text></Pressable>
-                    <Pressable style={[s.primarySm, { backgroundColor: MINT }]} onPress={() => u.url ? Linking.openURL(u.url)
-                      : Alert.alert(`Plano ${u.name}`, "A assinatura pelo app chega em breve. Por enquanto, fale com a gente pelo e-mail de suporte.")}>
-                      <Text style={{ color: NAVY, fontWeight: "700" }}>Conhecer o {u.name}</Text></Pressable>
-                  </View>
-                </View>
-              );
-            }
+            if (item.type === "upsell")
+              return <UpsellCard u={item.up} onClose={() => setItems((prev) => prev.filter((x) => x.id !== item.id))} />;
             if (item.type === "doc") {
               const d = item.doc;
               return (
@@ -1155,9 +1746,9 @@ function FidusApp() {
                   <Text style={s.actIcon}>📄</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: c.text, fontWeight: "600" }}>{d.title}</Text>
-                    {!!d.expires_on && <Text style={{ color: c.sub, fontSize: 12 }}>vence {fmtDay(d.expires_on)}/{d.expires_on.slice(0, 4)}</Text>}
+                    {!!d.expires_on && <Text style={{ color: c.sub, fontSize: 12 }}>{t("vence {0}", `${fmtDay(d.expires_on)}/${d.expires_on.slice(0, 4)}`)}</Text>}
                   </View>
-                  <Text style={{ color: MINT, fontWeight: "700" }}>Abrir</Text>
+                  <Text style={{ color: MINT, fontWeight: "700" }}>{t("Abrir")}</Text>
                 </Pressable>
               );
             }
@@ -1165,53 +1756,46 @@ function FidusApp() {
             if (a.kind === "calendar_invite") {
               return (
                 <View style={[s.draft, { backgroundColor: c.card, borderColor: MINT }]}>
-                  <Text style={[s.draftLabel, { color: c.sub }]}>Convite · {a.status === "pending" ? "aguardando você" : a.status === "sending" ? "enviando…" : a.status === "sent" ? "enviado ✓" : "cancelado"}</Text>
+                  <Text style={[s.draftLabel, { color: c.sub }]}>{t("Convite")} · {a.status === "pending" ? t("aguardando você") : a.status === "sending" ? t("enviando…") : a.status === "sent" ? t("enviado ✓") : t("cancelado")}</Text>
                   <Text style={{ color: c.text, fontWeight: "600" }}>{a.payload.title}</Text>
                   {!!a.payload.start && <Text style={{ color: c.sub }}>{fmtDate(a.payload.start)}</Text>}
-                  <Text style={{ color: c.text, marginVertical: 6 }}>Para: {(a.payload.emails || []).join(", ")}</Text>
+                  <Text style={{ color: c.text, marginVertical: 6 }}>{t("Para")}: {(a.payload.emails || []).join(", ")}</Text>
                   {a.status === "pending" && (
                     <View style={s.row}>
                       <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => cancel(a)}>
-                        <Text style={{ color: c.text }}>Cancelar</Text></Pressable>
+                        <Text style={{ color: c.text }}>{t("Cancelar")}</Text></Pressable>
                       <Pressable style={s.primarySm} onPress={() => confirmInvite(a)}>
-                        <Text style={s.primaryText}>Enviar convite</Text></Pressable>
+                        <Text style={s.primaryText}>{t("Enviar convite")}</Text></Pressable>
                     </View>
                   )}
                 </View>
               );
             }
-            return (
-              <View style={[s.draft, { backgroundColor: c.card, borderColor: MINT }]}>
-                <Text style={[s.draftLabel, { color: c.sub }]}>Rascunho de e-mail · {a.status === "pending" ? "aguardando você" : a.status === "sending" ? "enviando…" : a.status === "sent" ? "enviado ✓" : "cancelado"}</Text>
-                <Text style={{ color: c.text, fontWeight: "600" }}>Para: {a.payload.to}</Text>
-                <Text style={{ color: c.text, marginBottom: 8 }}>{a.payload.subject}</Text>
-                <TextInput multiline editable={a.status === "pending"} value={a.payload.body}
-                  onChangeText={(t) => updateAction(a.id, { payload: { ...a.payload, body: t } })}
-                  style={[s.draftBody, { color: c.text, borderColor: c.sub }]} />
-                {a.status === "pending" && (
-                  <View style={s.row}>
-                    <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => cancel(a)}>
-                      <Text style={{ color: c.text }}>Cancelar</Text></Pressable>
-                    <Pressable style={s.primarySm} onPress={() => confirmSend(a)}>
-                      <Text style={s.primaryText}>Enviar</Text></Pressable>
-                  </View>
-                )}
-              </View>
-            );
+            return <EmailCard key={a.id} a={a} c={c} dark={dark} onSend={() => confirmSend(a)} onCancel={() => cancel(a)}
+              onSave={(p) => saveDraft(a, p)} onCopy={copyText}
+              onEditing={(on) => { if (on) editingIds.current.add(a.id); else editingIds.current.delete(a.id); }} />;
           }}
         />
+        {!atBottom && items.length > 3 && (
+          <Pressable onPress={() => { listRef.current?.scrollToEnd({ animated: true }); setAtBottom(true); }}
+            accessibilityLabel={t("Ir para o fim da conversa")}
+            style={[s.toBottom, { backgroundColor: c.card, borderColor: c.line }]}>
+            <ArrowUpIcon color={c.text} size={18} down />
+          </Pressable>
+        )}
+        </View>
         {meeting && (
           <Pressable onPress={finishMeeting} style={[s.meetBar, { backgroundColor: c.card, borderColor: RED }]}>
             <Text style={{ color: RED, fontWeight: "800" }}>● REC {fmtClock(meetSecs)}</Text>
-            <Text style={{ color: c.text, flex: 1 }}>Gravando a reunião. Mantenha o Fidus aberto.</Text>
-            <Text style={{ color: c.text, fontWeight: "700" }}>Encerrar</Text>
+            <Text style={{ color: c.text, flex: 1 }}>{t("Gravando a reunião. Mantenha o Fidus aberto.")}</Text>
+            <Text style={{ color: c.text, fontWeight: "700" }}>{t("Encerrar")}</Text>
           </Pressable>
         )}
         {!meeting && !recording && typed.length === 0 && kb === 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 6, gap: 8, alignItems: "center" }}
             style={{ flexGrow: 0, flexShrink: 0, height: 54 }}>
-            {SUGGESTIONS.map(([label, q]) => (
+            {SUGGESTIONS().map(([label, q]) => (
               <Pressable key={label} disabled={busy} onPress={() => sendText(q)}
                 style={[s.chip, { borderColor: c.sub, backgroundColor: c.card, paddingVertical: 9, paddingHorizontal: 14 }]}>
                 <Text style={{ color: c.text, fontSize: 14, lineHeight: 18 }} numberOfLines={1}>{label}</Text></Pressable>
@@ -1219,9 +1803,9 @@ function FidusApp() {
           </ScrollView>
         )}
         <View style={[s.bottom, Platform.OS === "android" && kb > 0 ? { marginBottom: Math.max(kb - insets.bottom, 0) + 56 } : null]}>
-          <View style={[s.composer, { backgroundColor: c.card, borderColor: recording ? RED : (dark ? "#24365A" : "#DDE3EC") }]}>
+          <View style={[s.composer, { backgroundColor: c.card, borderColor: recording ? RED : c.line }]}>
             {recording ? (<>
-              <Pressable onPress={cancelRec} accessibilityLabel="Cancelar gravação" hitSlop={8}
+              <Pressable onPress={cancelRec} accessibilityLabel={t("Cancelar gravação")} hitSlop={8}
                 style={[s.iconBtn, { backgroundColor: dark ? "#22345A" : "#EEF1F6" }]}>
                 <CloseIcon color={c.text} />
               </Pressable>
@@ -1229,31 +1813,31 @@ function FidusApp() {
                 <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: RED }} />
                 <Text style={{ color: c.text, fontVariant: ["tabular-nums"], fontWeight: "600" }}>{fmtClock(recSecs)}</Text>
                 <RecordingBars color={c.sub} />
-                <Text style={{ color: c.sub, fontSize: 13 }} numberOfLines={1}>Gravando…</Text>
+                <Text style={{ color: c.sub, fontSize: 13 }} numberOfLines={1}>{t("Gravando…")}</Text>
               </View>
-              <Pressable onPress={stopRec} accessibilityLabel="Enviar áudio" style={[s.sendBtn2, { backgroundColor: NAVY }]}>
+              <Pressable onPress={stopRec} accessibilityLabel={t("Enviar áudio")} style={[s.sendBtn2, { backgroundColor: NAVY }]}>
                 <ArrowUpIcon color="#fff" />
               </Pressable>
             </>) : (<>
-              <Pressable onPress={photoMenu} disabled={busy} accessibilityLabel="Adicionar foto ou arquivo" hitSlop={6}
+              <Pressable onPress={photoMenu} disabled={busy} accessibilityLabel={t("Adicionar foto ou arquivo")} hitSlop={6}
                 style={[s.iconBtn, { borderWidth: 1, borderColor: dark ? "#2C3F66" : "#D5DCE6" }]}>
                 <PlusIcon color={c.text} />
               </Pressable>
               <TextInput style={[s.composerInput, { color: c.text }]}
-                placeholder="Fale ou escreva…" multiline blurOnSubmit placeholderTextColor={c.sub} value={typed}
+                placeholder={t("Fale ou escreva…")} multiline blurOnSubmit placeholderTextColor={c.sub} value={typed}
                 onChangeText={setTyped} onSubmitEditing={() => sendText()} returnKeyType="send" />
               {typed.trim().length > 0 ? (
-                <Pressable onPress={() => sendText()} disabled={busy} accessibilityLabel="Enviar"
+                <Pressable onPress={() => sendText()} disabled={busy} accessibilityLabel={t("Enviar")}
                   style={[s.sendBtn2, { backgroundColor: busy ? c.sub : NAVY }]}>
                   <ArrowUpIcon color="#fff" />
                 </Pressable>
               ) : (
                 <>
-                  <Pressable onPress={toggleRec} disabled={busy || meeting} accessibilityLabel="Gravar áudio" hitSlop={6}
+                  <Pressable onPress={toggleRec} disabled={busy || meeting} accessibilityLabel={t("Gravar áudio")} hitSlop={6}
                     style={[s.iconBtn, { opacity: busy || meeting ? 0.4 : 1 }]}>
                     <MicIcon color={c.text} size={24} />
                   </Pressable>
-                  <Pressable onPress={openVoice} disabled={busy || meeting} accessibilityLabel="Modo conversa"
+                  <Pressable onPress={openVoice} disabled={busy || meeting} accessibilityLabel={t("Modo conversa")}
                     style={[s.sendBtn2, { backgroundColor: NAVY, opacity: busy || meeting ? 0.4 : 1 }]}>
                     <WaveIcon color="#fff" />
                   </Pressable>
@@ -1264,15 +1848,60 @@ function FidusApp() {
         </View>
         </>)}
       </KeyboardAvoidingView>
+
+      {/* Menu lateral (como no Claude) */}
+      <Modal visible={drawer} transparent animationType="none" onRequestClose={() => closeDrawer()} statusBarTranslucent>
+        <View style={{ flex: 1, flexDirection: "row" }}>
+          <Animated.View style={[s.drawer, { backgroundColor: c.bg, paddingTop: insets.top + 10, paddingBottom: insets.bottom + 10,
+            transform: [{ translateX: drawerX }] }]}>
+            <Text style={[s.logo, { color: c.text, fontSize: 26, paddingHorizontal: 18, marginBottom: 8 }]}>Fidus</Text>
+            <Pressable onPress={newChat} style={[s.drawerNew, { backgroundColor: c.card, borderColor: c.line }]}>
+              <ComposeIcon color={c.text} size={20} /><Text style={{ color: c.text, fontWeight: "700", fontSize: 15 }}>{t("Nova conversa")}</Text>
+            </Pressable>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 12 }}>
+              {([
+                ["convs", "💬", t("Conversas")], ["tasks", "📝", t("Tarefas")], ["docs", "📄", t("Documentos")],
+                ["meetings", "🎙", t("Reuniões e atas")], ["expenses", "💷", t("Gastos e contas")],
+                ["booking", "🔗", t("Link de agendamento")], ["activity", "✅", t("Atividade")],
+                ["invite", "🎁", t("Convide e ganhe")],
+                ...(me?.is_owner ? [["admin", "👥", t("Clientes")]] : []),
+              ] as [Screen, string, string][]).map(([sc, ic, label]) => (
+                <Pressable key={sc} onPress={() => go(sc)} style={[s.drawerItem, screen === sc && { backgroundColor: c.card }]}>
+                  <Text style={{ fontSize: 17, width: 28 }}>{ic}</Text>
+                  <Text style={{ color: c.text, fontSize: 15 }}>{label}</Text>
+                </Pressable>
+              ))}
+              {convs.length > 0 && (<>
+                <Text style={{ color: c.sub, fontSize: 12, marginTop: 14, marginBottom: 4, paddingHorizontal: 18 }}>{t("Recentes")}</Text>
+                {convs.slice(0, 8).map((cv) => (
+                  <Pressable key={cv.id} onPress={() => openConversation(cv.id)} style={s.drawerRecent}>
+                    <Text style={{ color: c.text, fontSize: 14 }} numberOfLines={1}>{cv.title === "Conversa" ? t("Conversa") : cv.title}</Text>
+                  </Pressable>
+                ))}
+              </>)}
+            </ScrollView>
+            <Pressable onPress={() => go("settings")} style={[s.drawerUser, { borderTopColor: c.line }]}>
+              <View style={[s.avatar, { backgroundColor: NAVY }]}><Text style={{ color: "#fff", fontWeight: "800" }}>{userInitial}</Text></View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: c.text, fontWeight: "700" }} numberOfLines={1}>{me?.name || me?.email || "Fidus"}</Text>
+                <Text style={{ color: c.sub, fontSize: 12 }}>{t("Plano {0}", t(me?.plan_name || PLAN_NAMES[me?.plan] || ""))}</Text>
+              </View>
+              <Text style={{ color: c.sub, fontSize: 18 }}>⚙︎</Text>
+            </Pressable>
+          </Animated.View>
+          <Pressable style={{ flex: 1, backgroundColor: "#0007" }} onPress={() => closeDrawer()} />
+        </View>
+      </Modal>
+
       <Modal visible={voiceOpen} animationType="fade" onRequestClose={closeVoice} statusBarTranslucent>
         <View style={{ flex: 1, backgroundColor: "#07090D", paddingTop: insets.top + 12, paddingBottom: insets.bottom + 20, paddingHorizontal: 24 }}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Text style={{ color: "#F2F5F7", fontSize: 18, fontWeight: "700", flex: 1 }}>Modo conversa</Text>
-            <Pressable onPress={closeVoice} accessibilityLabel="Fechar modo conversa" hitSlop={10}
+            <Text style={{ color: "#F2F5F7", fontSize: 18, fontWeight: "700", flex: 1 }}>{t("Modo conversa")}</Text>
+            <Pressable onPress={closeVoice} accessibilityLabel={t("Fechar modo conversa")} hitSlop={10}
               style={[s.iconBtn, { backgroundColor: "#161B23" }]}><CloseIcon color="#F2F5F7" /></Pressable>
           </View>
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 28 }}>
-            <Pressable onPress={tapVoiceCircle} accessibilityLabel="Enviar agora ou interromper">
+            <Pressable onPress={tapVoiceCircle} accessibilityLabel={t("Enviar agora ou interromper")}>
               <Animated.View style={{ width: 190, height: 190, borderRadius: 95, alignItems: "center", justifyContent: "center",
                 backgroundColor: vState === "thinking" ? "#1E2530" : vState === "speaking" ? "#2F5BD8" : MINT,
                 transform: [{ scale: pulse }] }}>
@@ -1280,32 +1909,372 @@ function FidusApp() {
               </Animated.View>
             </Pressable>
             <Text style={{ color: "#F2F5F7", fontSize: 22, fontWeight: "700" }}>
-              {vState === "listening" ? "Ouvindo…" : vState === "thinking" ? "Pensando…" : vState === "speaking" ? "Falando…" : ""}</Text>
+              {vState === "listening" ? t("Ouvindo…") : vState === "thinking" ? t("Pensando…") : vState === "speaking" ? t("Falando…") : ""}</Text>
             {!!vHeard && <Text style={{ color: "#8D98A8", fontSize: 16, textAlign: "center" }} numberOfLines={3}>“{vHeard}”</Text>}
             {!!vReply && <Text style={{ color: "#F2F5F7", fontSize: 20, lineHeight: 28, textAlign: "center" }} numberOfLines={7}>{vReply}</Text>}
           </View>
           <Text style={{ color: "#6F7B8C", textAlign: "center", marginBottom: 14 }}>
-            Fale normalmente: quando você parar, eu respondo. Toque no círculo para enviar na hora ou para me interromper. Diga “tchau” para sair.</Text>
+            {t("Fale normalmente: quando você parar, eu respondo. Toque no círculo para enviar na hora ou para me interromper. Diga “tchau” para sair.")}</Text>
           <Pressable onPress={closeVoice} style={{ backgroundColor: "#161B23", borderRadius: 18, paddingVertical: 18, alignItems: "center" }}>
-            <Text style={{ color: "#F2F5F7", fontSize: 18, fontWeight: "700" }}>Encerrar</Text></Pressable>
+            <Text style={{ color: "#F2F5F7", fontSize: 18, fontWeight: "700" }}>{t("Encerrar")}</Text></Pressable>
         </View>
       </Modal>
+
+      <Modal visible={!!reader} animationType="slide" onRequestClose={() => setReader(null)}>
+        <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 8, paddingBottom: insets.bottom }}>
+          <View style={s.topbar}>
+            <Text style={[s.header, { color: c.text, flex: 1 }]} numberOfLines={1}>{reader?.title}</Text>
+            <Pressable onPress={() => reader && copyText(reader.text)} hitSlop={10} style={s.iconBtn}><CopyIcon color={c.text} /></Pressable>
+            <Pressable onPress={() => setReader(null)} hitSlop={10} style={s.iconBtn}><CloseIcon color={c.text} /></Pressable>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16 }}>
+            <LinkText text={reader?.text || ""} style={{ color: c.text, lineHeight: 22 }} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} />
+          </ScrollView>
+        </View>
+      </Modal>
+
       <Modal visible={!!sheet} transparent animationType="slide" onRequestClose={() => setSheet(null)}>
         <Pressable style={s.sheetBg} onPress={() => setSheet(null)}>
-          <View style={[s.sheet, { backgroundColor: c.card, paddingBottom: 16 + insets.bottom }]}>
+          <View style={[s.sheet, { backgroundColor: c.card, paddingBottom: 16 + insets.bottom, maxHeight: Dimensions.get("window").height * 0.8 }]}>
             <Text style={{ color: c.sub, marginBottom: 8 }} numberOfLines={1}>{sheet?.title}</Text>
-            {(sheet?.items || []).map(([label, fn]) => (
-              <Pressable key={label} style={[s.sheetBtn, { borderColor: c.sub + "55" }]} onPress={() => { setSheet(null); setTimeout(fn, 250); }}>
-                <Text style={{ color: c.text, fontSize: 17 }}>{label}</Text></Pressable>
-            ))}
+            <ScrollView>
+              {(sheet?.items || []).map(([label, fn]) => (
+                <Pressable key={label} style={[s.sheetBtn, { borderColor: c.sub + "55" }]} onPress={() => { setSheet(null); setTimeout(fn, 250); }}>
+                  <Text style={{ color: c.text, fontSize: 17 }}>{label}</Text></Pressable>
+              ))}
+            </ScrollView>
             <Pressable style={[s.sheetBtn, { borderBottomWidth: 0 }]} onPress={() => setSheet(null)}>
-              <Text style={{ color: c.sub, fontSize: 17 }}>Cancelar</Text></Pressable>
+              <Text style={{ color: c.sub, fontSize: 17 }}>{t("Cancelar")}</Text></Pressable>
           </View>
         </Pressable>
       </Modal>
+
+      {!!toast && (
+        <View pointerEvents="none" style={[s.toast, { bottom: insets.bottom + 90 }]}>
+          <Text style={{ color: "#fff", fontWeight: "600" }}>{toast}</Text></View>
+      )}
     </SafeAreaView>
   );
 }
+
+// Textos do app para tradução (gerado a partir das chamadas t("...") deste arquivo)
+// @i18n-keys-start
+const I18N_KEYS: string[] = [
+  "Voz e texto sem limite",
+  "Agenda, lembretes e bom dia",
+  "E-mail com aprovação",
+  "Gastos e recibos de 1 carteira",
+  "Documentos com validade",
+  "Tarefas",
+  "Empresas e moedas ilimitadas",
+  "Link de agendamento para clientes",
+  "Ata de reunião automática",
+  "Pacote do contador",
+  "Alerta de assinaturas",
+  "Resumo da semana",
+  "Banco conectado: gastos entram sozinhos",
+  "Cobrança e fatura para clientes",
+  "Mais 1 pessoa na conta + acesso do contador",
+  "Atas sem limite e suporte prioritário",
+  "link de agendamento",
+  "atas de reunião",
+  "gravar reuniões e gerar a ata",
+  "pacote do contador",
+  "alerta de assinaturas",
+  "resumo da semana",
+  "gastos de mais de uma empresa",
+  "banco conectado",
+  "cobrança e fatura para clientes",
+  "mais uma pessoa na conta",
+  "Negócio",
+  "Essencial",
+  "Premium",
+  "combustível",
+  "alimentação",
+  "transporte",
+  "materiais",
+  "ferramentas",
+  "manutenção",
+  "escritório",
+  "software",
+  "telefone e internet",
+  "impostos e taxas",
+  "moradia",
+  "saúde",
+  "lazer",
+  "viagem",
+  "salários e prestadores",
+  "outros",
+  "☀️ Bom dia",
+  "Bom dia! O que eu tenho hoje?",
+  "💷 Gastos do mês",
+  "Quanto eu gastei este mês, por empresa?",
+  "📝 Tarefas",
+  "Quais são minhas tarefas abertas?",
+  "📊 Minha semana",
+  "Como foi minha semana?",
+  "🔗 Link de agendamento",
+  "Me manda meu link de agendamento.",
+  "🔁 Assinaturas",
+  "Quais assinaturas e cobranças recorrentes eu pago?",
+  "Agenda",
+  "E-mail",
+  "Gasto",
+  "Lembrete",
+  "Tarefa",
+  "Documento",
+  "Conta fixa",
+  "Convite",
+  "Reunião",
+  "Agendamento",
+  "Contador",
+  "Desfeito",
+  "Cancelado",
+  "Aguardando você",
+  "Enviado",
+  "Removida",
+  "Apagado",
+  "Lançado",
+  "Concluída",
+  "Guardado",
+  "Cadastrada",
+  "Ata pronta",
+  "Agendado",
+  "Gerado",
+  "Criado",
+  "Link",
+  "Não consegui abrir este link.",
+  "Enviando…",
+  "Enviado ✓",
+  "Descartado",
+  "Email",
+  "Editar",
+  "Copiar",
+  "Para",
+  "Assunto",
+  "Enviar",
+  "Cancelar",
+  "Salvar",
+  "Toque na seta azul ou diga “envia”.",
+  "Descartar",
+  "Erro",
+  "A conexão caiu. Buscando a resposta no servidor…",
+  "Não consegui buscar a resposta. Confira sua internet e veja a Atividade antes de repetir o pedido.",
+  "o servidor demorou demais para responder",
+  "Conexão",
+  "Conexão ok.",
+  "conectado",
+  "não conectado",
+  "Erro de conexão",
+  "Atividade",
+  "Bom dia ☀️",
+  "Sua agenda, tarefas e contas de hoje estão prontas no Fidus.",
+  "Sua semana com o Fidus 📊",
+  "Veja o que foi resolvido e o que vem pela frente.",
+  "permissão do microfone negada.",
+  "ao iniciar a gravação da reunião",
+  "Gravar reuniões e gerar a ata faz parte do plano Negócio.",
+  "Gravar reunião",
+  "Deixe o celular na mesa. No fim, o Fidus transcreve, resume e cria suas tarefas.",
+  "Mantenha a tela ligada e o Fidus aberto durante a gravação.",
+  "Avise os participantes que a reunião está sendo gravada.",
+  "Começar",
+  "Encerrar reunião?",
+  "{0} gravados.",
+  "Continuar gravando",
+  "Gerar ata",
+  "nenhum áudio foi gravado.",
+  "Reunião gravada",
+  "Recebi a gravação. Estou transcrevendo e preparando a ata; aviso aqui quando ficar pronta (leva alguns minutos).",
+  "ao enviar a reunião",
+  "A gravação ficou guardada: abra o menu > Configurações > Reenviar reunião.",
+  "Ata pronta 🎙",
+  "Sua reunião",
+  "na ata",
+  "Pode falar. Eu escuto e respondo em voz alta.",
+  "Pode falar. (Para ouvir as respostas em voz alta, instale o APK novo.)",
+  "Pode falar.",
+  "Não consegui abrir o microfone",
+  "Não entendi. Pode repetir?",
+  "Até mais!",
+  "Feito.",
+  "Falha de conexão",
+  "Perdi a conexão com o servidor. Tente de novo em instantes.",
+  "Apagar tarefa?",
+  "Não",
+  "Apagar",
+  "Apagar o gasto \"{0}\"?",
+  "Apagar a tarefa \"{0}\"?",
+  "Reabrir a tarefa \"{0}\"?",
+  "Apagar o documento \"{0}\"?",
+  "Remover a conta fixa \"{0}\" e o aviso mensal?",
+  "Apagar o lembrete \"{0}\"?",
+  "Apagar o pacote \"{0}\"?",
+  "Desfazer?",
+  "Apagar \"{0}\" da sua agenda?",
+  "Desfazer",
+  "Código",
+  "Digite o código de 8 letras que apareceu depois do Google.",
+  "código inválido ou expirado. Entre com o Google de novo.",
+  "erro",
+  "Não deu certo",
+  "Clientes",
+  "Digite o e-mail Google da pessoa.",
+  "Convite criado",
+  "{0} já pode entrar com o Google no app (plano {1}).",
+  "Convidar {0} no plano:",
+  "Mudar para {0}",
+  "Suspender acesso",
+  "Reativar acesso",
+  "permissão do microfone negada. Libere nas configurações do celular.",
+  "ao iniciar gravação",
+  "ao parar gravação",
+  "nenhum áudio foi gravado. Tente de novo.",
+  "permissão negada para câmera/galeria.",
+  "Foto enviada",
+  "foto",
+  "Recibo, fatura, contrato ou documento",
+  "Tirar foto",
+  "Escolher da galeria",
+  "PDF",
+  "arquivo grande demais (máx. 15 MB).",
+  "Arquivo",
+  "arquivo",
+  "Enviar convite?",
+  "O Google manda o convite por e-mail.",
+  "Falha ao enviar",
+  "Rascunho salvo",
+  "Rascunho",
+  "Enviar e-mail?",
+  "Copiado",
+  "Ainda processando…",
+  "Idioma do Fidus",
+  "Salvo",
+  "Estou usando o Fidus, um assessor pessoal por voz: agenda, e-mails, gastos e recibos. Com o meu convite você ganha {0} dias grátis: {1} (código {2})",
+  "Pronto! Você ganhou {0} dias grátis.",
+  "Plano {0}",
+  "A assinatura pelo app chega em breve. Por enquanto, fale com a gente pelo e-mail de suporte.",
+  "Conversas",
+  "Documentos",
+  "Reuniões e atas",
+  "Gastos e contas",
+  "Link de agendamento",
+  "Convide e ganhe",
+  "Configurações",
+  "Fale. O Fidus resolve.",
+  "Entrar com o Google",
+  "Tem um código de convite? (opcional)",
+  "Depois do Google, se o app não abrir sozinho, digite o código:",
+  "Entrar",
+  "Fechar opções avançadas",
+  "Opções avançadas",
+  "Token de administrador",
+  "Entrar com token",
+  "Carregando…",
+  "{0} faz parte do plano {1}.",
+  "PLANO {0}",
+  "/mês · ou {0}/ano",
+  "Libera {0} e mais:",
+  "Agora não",
+  "Conhecer o {0}",
+  "E-mail Google para convidar",
+  "Convidar",
+  "{0} conta(s) · {1} convite(s) aguardando",
+  "você",
+  "{0} ações no mês",
+  "Google ok",
+  "sem Google",
+  "SUSPENSO",
+  "Nova tarefa…",
+  "Nenhuma tarefa aberta.\nDiga, por exemplo: “cria a tarefa de revisar o contrato até sexta”.",
+  "Concluir",
+  "atrasada · era {0}",
+  "até {0}",
+  "prioridade alta",
+  "coisas que o Fidus resolveu por você este mês",
+  "poupados (estimativa)",
+  "Nada por aqui ainda.\nTudo o que o Fidus fizer por você aparece nesta lista.",
+  "Nenhuma conversa ainda.",
+  "Conversa",
+  "{0} mensagens",
+  "Buscar documento…",
+  "Nenhum documento guardado.\nMande a foto de um seguro, contrato ou carta e o Fidus guarda aqui.",
+  "vence {0}",
+  "Abrir",
+  "Gravar reunião agora",
+  "Nenhuma reunião gravada ainda.",
+  "ata pronta",
+  "processando",
+  "{0} lançamentos",
+  "POR EMPRESA",
+  "POR CATEGORIA",
+  "ÚLTIMOS LANÇAMENTOS",
+  "CONTAS FIXAS",
+  "dia {0}",
+  "Nenhum gasto neste mês.\nDiga “paguei 30 libras de gasolina” ou mande a foto do recibo.",
+  "Mande este link para clientes marcarem horário direto na sua agenda, só nos horários livres.",
+  "Compartilhar",
+  "Dias",
+  "Horário",
+  "Antecedência",
+  "Para mudar dias, horários ou tipos de atendimento, peça ao Fidus na conversa.",
+  "CONVIDE E GANHE",
+  "{0}% de desconto na sua próxima cobrança",
+  "Para cada amigo que assinar o Fidus. Seu amigo ganha {0} dias grátis.",
+  "Enviar convite",
+  "Copiar link",
+  "Amigos convidados",
+  "Já assinaram",
+  "Descontos guardados",
+  "Próxima cobrança",
+  "sem desconto",
+  "Como funciona: o desconto entra quando o amigo paga o primeiro mês. Os descontos não somam: vale um por cobrança, e os que sobram ficam para as cobranças seguintes.",
+  "Alguém te convidou?",
+  "Usar",
+  "Você entrou pelo convite de {0} 🎁",
+  "SEU NOME",
+  "Idioma",
+  "SEU PLANO",
+  "/mês",
+  "ou {0}/ano (2 meses grátis)",
+  "Atual",
+  "Escolher",
+  "Conectado · tocar para reconectar",
+  "Não conectado · tocar para conectar",
+  "Reenviar reunião",
+  "Ajuda e contato",
+  "Testar conexão",
+  "Sair da conta?",
+  "Sair",
+  "Sair da conta",
+  "Menu",
+  "Nova conversa",
+  "Fidus está pensando…",
+  "Toque no microfone, fale e toque de novo para enviar.\nEx.: “Marca visita técnica dia 12 às 4pm”,\n“Me lembra de pagar o IVA dia 5”,\n“Paguei 60 libras de gasolina, HomB” ou\n📷 mande a foto de um recibo ou documento.\n\n🎙 Reunião no topo grava e gera a ata.",
+  "aguardando você",
+  "enviando…",
+  "enviado ✓",
+  "cancelado",
+  "Ir para o fim da conversa",
+  "Gravando a reunião. Mantenha o Fidus aberto.",
+  "Encerrar",
+  "Cancelar gravação",
+  "Gravando…",
+  "Enviar áudio",
+  "Adicionar foto ou arquivo",
+  "Fale ou escreva…",
+  "Gravar áudio",
+  "Modo conversa",
+  "Recentes",
+  "Fechar modo conversa",
+  "Enviar agora ou interromper",
+  "Ouvindo…",
+  "Pensando…",
+  "Falando…",
+  "Fale normalmente: quando você parar, eu respondo. Toque no círculo para enviar na hora ou para me interromper. Diga “tchau” para sair.",
+  "...",
+];
+// @i18n-keys-end
 
 const s = StyleSheet.create({
   composer: { flex: 1, flexDirection: "row", alignItems: "flex-end", gap: 6, borderWidth: 1, borderRadius: 26,
@@ -1318,19 +2287,16 @@ const s = StyleSheet.create({
   sheet: { borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 16 },
   sheetBtn: { paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },
   flex: { flex: 1 },
-  setup: { flex: 1, justifyContent: "center", padding: 24 },
+  setup: { flexGrow: 1, justifyContent: "center", padding: 24 },
   logo: { fontSize: 40, fontWeight: "700", marginBottom: 4 },
-  tabs: { flexDirection: "row", paddingHorizontal: 16, marginTop: 8, gap: 16 },
-  tab: { paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: "transparent" },
   actCard: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, padding: 14 },
   actIcon: { fontSize: 22 },
   check: { width: 24, height: 24, borderRadius: 12, borderWidth: 2 },
   statCard: { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 14, padding: 16, marginBottom: 6 },
   pill: { alignSelf: "flex-start", borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, marginBottom: 4 },
-  topbar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingTop: 8 },
+  topbar: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingTop: 6, paddingBottom: 4 },
   chip: { borderWidth: 1, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 10 },
-  sendBtn: { backgroundColor: NAVY, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14 },
-  header: { fontSize: 22, fontWeight: "700", paddingHorizontal: 16, paddingTop: 8 },
+  header: { fontSize: 20, fontWeight: "700" },
   empty: { textAlign: "center", marginTop: 80, lineHeight: 22 },
   input: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 12, fontSize: 16 },
   primary: { backgroundColor: NAVY, borderRadius: 12, padding: 14, alignItems: "center" },
@@ -1342,10 +2308,28 @@ const s = StyleSheet.create({
   userText: { color: "#fff" },
   draft: { borderRadius: 14, padding: 14, borderWidth: 1.5 },
   draftLabel: { fontSize: 12, marginBottom: 6 },
-  draftBody: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, padding: 10, minHeight: 90, marginBottom: 10 },
   row: { flexDirection: "row", justifyContent: "flex-end", gap: 10 },
   bottom: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12 },
-  cam: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
-  mic: { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center" },
-  micText: { fontSize: 26, color: "#fff" },
+  // cartão de e-mail
+  emailCard: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
+  emailHead: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, gap: 4 },
+  headBtn: { width: 34, height: 34, alignItems: "center", justifyContent: "center" },
+  sendBlue: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", marginLeft: 4 },
+  emailRow: { flexDirection: "row", paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  emailFoot: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, gap: 10 },
+  editInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
+  // setinha para o fim da conversa
+  toBottom: { position: "absolute", alignSelf: "center", bottom: 10, width: 40, height: 40, borderRadius: 20, borderWidth: 1,
+    alignItems: "center", justifyContent: "center", elevation: 4, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  // menu lateral
+  drawer: { width: 300, maxWidth: "84%", height: "100%", elevation: 12 },
+  drawerNew: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 12, marginBottom: 10, paddingHorizontal: 14,
+    paddingVertical: 12, borderRadius: 14, borderWidth: 1 },
+  drawerItem: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 18, paddingVertical: 12, marginHorizontal: 6, borderRadius: 12 },
+  drawerRecent: { paddingHorizontal: 18, paddingVertical: 9 },
+  drawerUser: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  avatar: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  kv: { flexDirection: "row", justifyContent: "space-between", gap: 10, paddingVertical: 4 },
+  planRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, padding: 12 },
+  toast: { position: "absolute", alignSelf: "center", backgroundColor: "#000C", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999 },
 });

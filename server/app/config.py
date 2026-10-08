@@ -15,8 +15,11 @@ APP_TOKEN = env("FIDUS_APP_TOKEN", "troque-este-token")
 # Fuso e idioma padrão do usuário
 USER_TIMEZONE = env("FIDUS_TIMEZONE", "Europe/London")
 USER_NAME = env("FIDUS_USER_NAME", "Mike")
+# Idioma e país do dono (os clientes recebem o do celular)
+OWNER_LANGUAGE = env("FIDUS_LANGUAGE", "pt")
 # Países onde buscar endereços (códigos ISO separados por vírgula), ex. "gb,pt,br"
 HOME_COUNTRIES = env("FIDUS_HOME_COUNTRIES", "gb,pt,br")
+OWNER_COUNTRY = (env("FIDUS_COUNTRY") or HOME_COUNTRIES.split(",")[0]).strip().upper()
 
 # Finanças: empresas/carteiras do usuário e moeda padrão
 BUSINESSES = [b.strip() for b in env("FIDUS_BUSINESSES", "Pessoal,HomB,Harvest Coffee,Imóveis Portugal").split(",") if b.strip()]
@@ -69,3 +72,11 @@ OWNER_EMAIL = (env("FIDUS_OWNER_EMAIL", "") or "").strip().lower()  # e-mail Goo
 SIGNUP_OPEN = (env("FIDUS_SIGNUP_OPEN", "0") or "0").strip() in ("1", "true", "yes")  # 0 = só convidados
 NEW_USER_PLAN = env("FIDUS_NEW_USER_PLAN", "essencial")
 APP_SCHEME = env("FIDUS_APP_SCHEME", "fidus")  # link que reabre o app depois do login
+
+# Convites: com 1, um código de indicação válido vale como convite mesmo com o cadastro fechado (até 10 contas
+# novas por código por dia). Padrão 0 enquanto o acesso for só por convite.
+REFERRAL_SIGNUP = (env("FIDUS_REFERRAL_SIGNUP", "0") or "0").strip() in ("1", "true", "yes")
+REFERRAL_TRIAL_DAYS = int(env("FIDUS_REFERRAL_TRIAL_DAYS", "7") or 7)
+REFERRAL_PERCENT = int(env("FIDUS_REFERRAL_PERCENT", "10") or 10)
+APP_DOWNLOAD_URL = env("FIDUS_APP_DOWNLOAD_URL", "")  # página/loja para baixar o app (link de convite)
+BILLING_WEBHOOK_SECRET = (env("FIDUS_BILLING_WEBHOOK_SECRET", "") or "").strip()  # segredo do aviso da RevenueCat

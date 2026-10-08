@@ -7,9 +7,9 @@ from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Uplo
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
-from . import accounts, agent, booking, config, features, google_client, meetings, plans, store, tools
+from . import accounts, actions, agent, booking, config, features, google_client, i18n, meetings, plans, store, tools
 
-app = FastAPI(title="Fidus API", version="0.7.0", docs_url=None, redoc_url=None, openapi_url=None)  # não expõe o mapa da API
+app = FastAPI(title="Fidus API", version="0.9.0", docs_url=None, redoc_url=None, openapi_url=None)  # não expõe o mapa da API
 store.init_db()
 accounts.init()
 if config.APP_TOKEN in ("", "troque-este-token") and not config.PUBLIC_BASE_URL.startswith(("http://localhost", "http://127.0.0.1")):
@@ -65,10 +65,13 @@ def owner_only():
 class TextIn(BaseModel):
     text: str
     mode: str = ""  # "voice" = modo conversa (resposta curta para ouvir)
+    drafts: list[str] | None = None  # rascunhos na tela do app (e não em edição): só esses podem sair por "envia"
 
 
 class EditIn(BaseModel):
     body: str
+    to: str | None = None
+    subject: str | None = None
 
 
 @app.get("/health")
@@ -94,11 +97,11 @@ def _oauth_sig(uid: str, exp: int) -> str:
     return hmac.new(config.APP_TOKEN.encode(), f"oauth:{uid}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
 
 
-def _start_google(user_id: str | None, app_challenge: str | None = None) -> RedirectResponse:
+def _start_google(user_id: str | None, app_challenge: str | None = None, ref: str | None = None) -> RedirectResponse:
     import secrets
     url, state, verifier = google_client.auth_url()
     nonce = secrets.token_urlsafe(24)
-    accounts.new_pending(verifier, user_id, state, nonce, app_challenge)
+    accounts.new_pending(verifier, user_id, state, nonce, app_challenge, ref)
     resp = RedirectResponse(url)
     # o retorno do Google só vale no MESMO navegador que começou (impede alguém mandar o próprio login para a vítima)
     resp.set_cookie("fidus_login", nonce, max_age=900, httponly=True, samesite="lax",
@@ -107,11 +110,13 @@ def _start_google(user_id: str | None, app_challenge: str | None = None) -> Redi
 
 
 @app.get("/auth/google/login")
-def google_login(request: Request, cc: str = ""):
-    """Entrar / criar conta com o Google (aberto pelo app, que manda `cc` = hash de um segredo só dele)."""
+def google_login(request: Request, cc: str = "", ref: str = ""):
+    """Entrar / criar conta com o Google (aberto pelo app, que manda `cc` = hash de um segredo só dele
+    e, se houver, `ref` = código de convite de um amigo)."""
     import re as _re
     _rate_limit(request, 20, "login")
-    return _start_google(None, cc.lower() if _re.fullmatch(r"[0-9a-fA-F]{64}", cc or "") else None)
+    ref = ref if _re.fullmatch(r"[A-Za-z0-9-]{4,14}", ref or "") else ""
+    return _start_google(None, cc.lower() if _re.fullmatch(r"[0-9a-fA-F]{64}", cc or "") else None, ref or None)
 
 
 @app.get("/v1/auth/google/link", dependencies=[Depends(auth)])
@@ -167,7 +172,9 @@ def google_callback(request: Request, state: str = "", error: str = ""):
         with store.as_user(accounts.user_ctx(user)):
             google_client.save_credentials(creds, email)
         return _page("Fidus", "<h1>Google conectado ✓</h1><p>Pode voltar para o app.</p>")
-    user = accounts.find_or_create(email, who.get("name"), who.get("sub"))
+    user = accounts.find_or_create(email, who.get("name"), who.get("sub"), pending.get("ref"))
+    if user and pending.get("ref"):
+        accounts.apply_referral(user["id"], pending["ref"])  # conta nova: liga ao amigo que convidou
     if not user:
         return _page("Fidus", f"<h1>Quase lá</h1><p>O Fidus está em acesso antecipado e <b>{html.escape(email)}</b> ainda não "
                               "está na lista. Peça seu convite e tente de novo.</p>")
@@ -205,7 +212,50 @@ def auth_exchange(body: CodeIn, request: Request):
 def me():
     u = store.current()
     return {"id": u["id"], "email": u.get("email"), "name": store.user_name(), "is_owner": bool(u.get("is_owner")),
-            "plan": plans.current(), "google_connected": google_client.is_connected(), "profile": store.profile()}
+            "plan": plans.current(), "plan_name": plans.PLANS[plans.current()]["name"],
+            "google_connected": google_client.is_connected(), "profile": store.profile(),
+            "language": store.user_lang(), "currency": plans.user_currency()}
+
+
+class ProfileIn(BaseModel):
+    name: str | None = None
+    language: str | None = None
+    country: str | None = None
+    timezone: str | None = None
+    only_if_empty: bool = False  # o app manda o idioma/país do celular; não sobrescreve o que o usuário escolheu
+
+
+@app.post("/v1/profile", dependencies=[Depends(auth)])
+def profile_update(body: ProfileIn):
+    import re
+    from zoneinfo import ZoneInfo
+    cur = store.profile()
+    ch: dict = {}
+    if body.language is not None:
+        lang = i18n.norm(body.language)
+        if not lang:
+            raise HTTPException(400, "idioma não suportado")
+        ch["language"] = lang
+    if body.country is not None:
+        cc = body.country.strip().upper()
+        if not re.fullmatch(r"[A-Z]{2}", cc):
+            raise HTTPException(400, "país inválido")
+        ch["country"] = cc
+    if body.timezone is not None:
+        try:
+            ZoneInfo(body.timezone)
+        except Exception:
+            raise HTTPException(400, "fuso inválido")
+        ch["timezone"] = body.timezone
+    if body.name is not None and body.name.strip():
+        ch["name"] = body.name.strip()[:60]
+    if body.only_if_empty:
+        tz_default = cur.get("timezone") == config.USER_TIMEZONE and not store.kv_get("tz_set")
+        ch = {k: v for k, v in ch.items() if not cur.get(k) or (k == "timezone" and tz_default)}
+    if "timezone" in ch:
+        store.kv_set("tz_set", "1")
+    p = store.save_profile(**ch) if ch else cur
+    return {"profile": p, "language": store.user_lang(), "currency": plans.user_currency()}
 
 
 @app.post("/v1/auth/logout", dependencies=[Depends(auth)])
@@ -275,7 +325,19 @@ def admin_set_status(uid: str, body: StatusIn):
 # ---------- Conversa ----------
 @app.post("/v1/message", dependencies=[Depends(auth)])
 def message(body: TextIn):
+    sent = actions.handle_command(body.text, body.drafts)  # "envia" com rascunho na tela: o próprio usuário autorizou
+    if sent:
+        return {"transcript": body.text, **sent}
     return {"transcript": body.text, **agent.handle(body.text, voice=body.mode == "voice")}
+
+
+def _after_transcript(text: str, voice: bool = False, drafts: list[str] | None = None) -> dict:
+    if not text:
+        return {"transcript": "", "reply": i18n.msg("no_audio"), "pending_actions": [], "events": []}
+    sent = actions.handle_command(text, drafts)
+    if sent:
+        return {"transcript": text, **sent}
+    return {"transcript": text, **agent.handle(text, voice=voice)}
 
 
 @app.post("/v1/voice", dependencies=[Depends(auth)])
@@ -286,19 +348,19 @@ async def voice(audio: UploadFile = File(...)):
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
         f.write(await audio.read())
         path = f.name
+    from .transcribe import prompt_for
     try:
-        text = transcribe(path)
+        text = transcribe(path, prompt_for(store.user_lang()))
     finally:
         os.unlink(path)
-    if not text:
-        return {"transcript": "", "reply": "Não entendi o áudio. Pode repetir?", "pending_actions": [], "events": []}
-    return {"transcript": text, **agent.handle(text)}
+    return _after_transcript(text)
 
 
 class VoiceB64In(BaseModel):
     audio_b64: str
     ext: str = ".m4a"
     mode: str = ""
+    drafts: list[str] | None = None
 
 
 @app.post("/v1/voice_b64", dependencies=[Depends(auth)])
@@ -312,13 +374,12 @@ def voice_b64(body: VoiceB64In):
     with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as f:
         f.write(base64.b64decode(body.audio_b64))
         path = f.name
+    from .transcribe import prompt_for
     try:
-        text = transcribe(path)
+        text = transcribe(path, prompt_for(store.user_lang()))
     finally:
         os.unlink(path)
-    if not text:
-        return {"transcript": "", "reply": "Não entendi o áudio. Pode repetir?", "pending_actions": [], "events": []}
-    return {"transcript": text, **agent.handle(text, voice=body.mode == "voice")}
+    return _after_transcript(text, voice=body.mode == "voice", drafts=body.drafts)
 
 
 class PhotoIn(BaseModel):
@@ -354,17 +415,41 @@ def photo(body: PhotoIn):
 
 @app.get("/v1/history", dependencies=[Depends(auth)])
 def history(limit: int = 60):
-    """Últimas mensagens da conversa, para o app mostrar ao abrir."""
+    """Últimas mensagens da conversa aberta, para o app mostrar ao abrir."""
     import re
 
     out = []
-    for m in store.recent_messages(limit):
+    for m in store.recent_messages(min(max(limit, 1), 300)):
         text = re.sub(r"\n*\[ações executadas:.*\]\s*$", "", m["content"], flags=re.S).strip()
         out.append({"role": m["role"], "text": text})
-    return {"messages": out}
+    return {"messages": out, "conversation": store.current_conv()}
+
+
+# ---------- Conversas (menu) ----------
+@app.get("/v1/conversations", dependencies=[Depends(auth)])
+def conversations():
+    return {"conversations": store.list_conversations(), "current": store.current_conv()}
+
+
+@app.post("/v1/conversations/new", dependencies=[Depends(auth)])
+def conversation_new():
+    return {"conversation": store.new_conversation()}
+
+
+@app.post("/v1/conversations/{cid}/open", dependencies=[Depends(auth)])
+def conversation_open(cid: int):
+    if not store.open_conversation(cid):
+        raise HTTPException(404, "conversa não encontrada")
+    return {"conversation": cid}
 
 
 # ---------- Ações que exigem autorização do usuário ----------
+@app.get("/v1/actions", dependencies=[Depends(auth)])
+def list_actions():
+    """Rascunhos ainda esperando o usuário (o app mostra os cartões de novo ao reabrir)."""
+    return {"actions": actions.waiting(None)}
+
+
 @app.get("/v1/actions/{pid}", dependencies=[Depends(auth)])
 def get_action(pid: str):
     a = store.get_pending(pid)
@@ -379,28 +464,26 @@ def edit_action(pid: str, body: EditIn):
     if not a or a["status"] != "pending":
         raise HTTPException(409, "ação não está pendente")
     a["payload"]["body"] = body.body
-    store.update_pending(pid, "pending", a["payload"])
+    if a["kind"] == "send_email":
+        try:
+            if body.to is not None:
+                a["payload"]["to"] = tools.clean_recipients(body.to)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        if body.subject is not None and body.subject.strip():
+            a["payload"]["subject"] = body.subject.strip()[:200]
+    if not store.update_pending(pid, "pending", a["payload"], only_if="pending"):  # já está sendo enviado
+        raise HTTPException(409, "ação não está pendente")
     return store.get_pending(pid)
 
 
 @app.post("/v1/actions/{pid}/confirm", dependencies=[Depends(auth)])
 def confirm_action(pid: str):
-    a = store.get_pending(pid)
-    if not a or not store.claim_pending(pid):  # trava atômica: um toque = um envio
-        raise HTTPException(409, "ação não está pendente")
-    senders = {"send_email": (tools.send_confirmed_email, "email_draft"),
-               "calendar_invite": (features.send_confirmed_invite, "invite_draft")}
-    if a["kind"] not in senders:
-        store.update_pending(pid, "pending")
-        raise HTTPException(400, "tipo de ação desconhecido")
-    send, act_kind = senders[a["kind"]]
     try:
-        result = send(a["payload"])
-    except Exception as e:
-        store.update_pending(pid, "pending")
-        raise HTTPException(502, f"falha ao enviar: {e}")
-    store.update_pending(pid, "sent")
-    store.update_activity_by_ref(act_kind, pid, "enviado")
+        result = actions.send_pending(pid)  # trava atômica: um toque = um envio
+    except actions.SendError as e:
+        msg = str(e)
+        raise HTTPException(409 if "pendente" in msg else 400 if "desconhecido" in msg else 502, msg)
     return {"status": "sent", **result}
 
 
@@ -518,7 +601,7 @@ def document_file(did: int, exp: int, sig: str, u: str = store.OWNER_ID):
 @app.get("/v1/briefing", dependencies=[Depends(auth)])
 def briefing():
     data = features.briefing_data()
-    return {"text": features.briefing_text(data), "data": data}
+    return {"text": i18n.localize(features.briefing_text(data)), "data": data}
 
 
 @app.get("/v1/stats", dependencies=[Depends(auth)])
@@ -565,7 +648,7 @@ def meeting_status(mid: int):
 @app.get("/v1/weekly", dependencies=[Depends(auth)])
 def weekly():
     data = features.weekly_review_data()
-    return {"text": features.weekly_text(data), "data": data}
+    return {"text": i18n.localize(features.weekly_text(data)), "data": data}
 
 
 # ---------- Link de agendamento (público, sem token) ----------
@@ -685,3 +768,142 @@ def plan_set(body: PlanIn):
     except ValueError as e:
         raise HTTPException(400, str(e))
     return plans.info()
+
+
+# ---------- Telas do menu ----------
+@app.get("/v1/meetings", dependencies=[Depends(auth)])
+def meetings_list():
+    r = tools.run("list_meetings", {})
+    return r if r.get("locked") else {"meetings": r.get("meetings", [])}
+
+
+@app.get("/v1/expenses/summary", dependencies=[Depends(auth)])
+def expenses_summary(month: str | None = None):
+    """Gastos do mês (AAAA-MM; padrão: mês atual), por moeda, empresa e categoria."""
+    import calendar
+    import re
+    m = month if month and re.fullmatch(r"\d{4}-\d{2}", month) else features._now().strftime("%Y-%m")
+    y, mm = int(m[:4]), int(m[5:])
+    if not 1 <= mm <= 12 or not 2000 <= y <= 2100:
+        raise HTTPException(400, "mês inválido")
+    last = calendar.monthrange(y, mm)[1]
+    out = tools.run("summarize_expenses", {"date_from": f"{m}-01", "date_to": f"{m}-{last:02d}"})
+    return {"month": m, **out, "bills": features.list_bills()["bills"]}
+
+
+@app.get("/v1/booking", dependencies=[Depends(auth)])
+def booking_link():
+    return tools.run("get_booking_link", {})
+
+
+# ---------- Idiomas ----------
+class I18nIn(BaseModel):
+    lang: str
+    strings: list[str]
+
+
+@app.post("/v1/i18n")
+def i18n_strings(body: I18nIn, request: Request):
+    """Textos do app traduzidos para o idioma do celular (também na tela de login, sem token)."""
+    lang = i18n.norm(body.lang)
+    if not lang or lang == "pt":
+        return {"lang": lang or "pt", "strings": {}}
+    if store.CURRENT.get() is None:
+        _rate_limit(request, 30, "i18n")
+    return {"lang": lang, "strings": i18n.translate(lang, body.strings)}
+
+
+# ---------- Convide e ganhe ----------
+def _invite_link(code: str) -> str:
+    return f"{config.PUBLIC_BASE_URL.rstrip('/')}/r/{code}"
+
+
+@app.get("/v1/referral", dependencies=[Depends(auth)])
+def referral():
+    uid = store.current()["id"]
+    code = accounts.referral_code(uid)
+    st = accounts.referral_stats(uid)
+    return {"code": code, "link": _invite_link(code), **st}
+
+
+class RefIn(BaseModel):
+    code: str
+
+
+@app.post("/v1/referral/apply", dependencies=[Depends(auth)])
+def referral_apply(body: RefIn, request: Request):
+    _rate_limit(request, 10, "refapply")
+    r = accounts.apply_referral(store.current()["id"], body.code)
+    if r.get("error"):
+        raise HTTPException(400, r["error"])
+    return r
+
+
+@app.get("/r/{code}", response_class=HTMLResponse)
+def referral_page(code: str, request: Request):
+    """Página que o amigo abre pelo link de convite."""
+    ref = accounts.referrer_for_code(code)
+    if not ref:
+        raise HTTPException(404, "convite não encontrado")
+    code = accounts.referral_code(ref["id"])
+    who = html.escape((ref.get("name") or "").split(" ")[0] or "Um amigo")
+    en = not request.headers.get("accept-language", "").lower().startswith("pt")
+    days = config.REFERRAL_TRIAL_DAYS
+    download = (f'<a class="b" href="{html.escape(config.APP_DOWNLOAD_URL)}">{"Get the app" if en else "Baixar o app"}</a>'
+                if config.APP_DOWNLOAD_URL else "")
+    open_app = f'<a class="b" style="background:#11151C;color:#F2F5F7;border:1px solid #222A35" href="{config.APP_SCHEME}://invite?code={code}">{"I already have the app" if en else "Já tenho o app"}</a>'
+    if en:
+        body = (f"<h1>{who} invited you to Fidus</h1><p>Your personal assistant by voice: diary, emails, expenses and "
+                f"receipts. You get <b>{days} days free</b>.</p><div class='code'>{code}</div>"
+                f"<p>Install the app and, on the sign-in screen, enter this invite code.</p>{download}{open_app}")
+    else:
+        body = (f"<h1>{who} convidou você para o Fidus</h1><p>Seu assessor pessoal por voz: agenda, e-mails, gastos e "
+                f"recibos. Você ganha <b>{days} dias grátis</b>.</p><div class='code'>{code}</div>"
+                f"<p>Instale o app e, na tela de entrada, coloque este código de convite.</p>{download}{open_app}")
+    return _page("Fidus", body)
+
+
+# ---------- Assinaturas (Google Play / App Store / Stripe via RevenueCat) ----------
+@app.post("/billing/revenuecat")
+async def billing_webhook(request: Request):
+    """Aviso da RevenueCat: assinou, renovou, trocou de plano, cancelou ou expirou.
+
+    O app identifica o cliente na loja pelo id dele no Fidus (app_user_id). A autorização é o segredo
+    FIDUS_BILLING_WEBHOOK_SECRET, configurado na RevenueCat como cabeçalho Authorization."""
+    import hmac
+    secret = config.BILLING_WEBHOOK_SECRET
+    got = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if not secret or not hmac.compare_digest(got, secret):
+        raise HTTPException(401, "não autorizado")
+    try:
+        body = await request.json()
+    except ValueError:
+        raise HTTPException(400, "json inválido")
+    ev = body.get("event") if isinstance(body, dict) else None
+    if not isinstance(ev, dict):
+        raise HTTPException(400, "evento inválido")
+    kind = ev.get("type", "")
+    uid = ev.get("app_user_id") or ""
+    user = accounts.get_user(uid)
+    if not user:
+        return {"ok": True, "ignored": "cliente desconhecido"}
+    product = (ev.get("new_product_id") or ev.get("product_id") or "").lower()
+    plan = next((p for p in ("premium", "negocio", "essencial") if p in product), None)
+    with store.as_user(accounts.user_ctx(user)):
+        if kind in ("INITIAL_PURCHASE", "RENEWAL", "PRODUCT_CHANGE", "UNCANCELLATION", "NON_RENEWING_PURCHASE") and plan:
+            plans.set_plan(plan)
+            store.kv_set("subscription", f"ativa:{plan}")
+        elif kind in ("CANCELLATION",):
+            store.kv_set("subscription", f"cancelada:{plans.current()}")  # vale até o fim do período pago
+        elif kind in ("EXPIRATION",):
+            store.kv_set("subscription", "expirada")
+            plans.set_plan(config.NEW_USER_PLAN)  # acabou o período pago: perde os recursos do plano
+        elif kind == "BILLING_ISSUE":
+            store.kv_set("subscription", f"problema_pagamento:{plans.current()}")
+    if kind == "CANCELLATION" and ev.get("cancel_reason") == "CUSTOMER_SUPPORT":
+        accounts.revoke_referral_reward(uid)  # reembolso: o desconto de quem convidou não vale (se ainda não foi usado)
+    if kind == "INITIAL_PURCHASE" and ev.get("period_type") != "TRIAL":
+        accounts.mark_paid(uid)  # 1º pagamento de verdade: quem convidou ganha o desconto
+    elif kind == "RENEWAL" and ev.get("is_trial_conversion"):
+        accounts.mark_paid(uid)
+    return {"ok": True}

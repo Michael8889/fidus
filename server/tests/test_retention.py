@@ -195,7 +195,8 @@ def test_essential_plan_upsells_instead_of_acting():
     plans.set_plan("essencial")
     try:
         r = tools.run("get_booking_link", {})
-        assert r["locked"] and r["upsell"]["plan"] == "negocio" and r["upsell"]["month"] == 49.90
+        assert r["locked"] and r["upsell"]["plan"] == "negocio" and r["upsell"]["month"] == 42.90 \
+            and r["upsell"]["currency"] == "GBP"  # dono no Reino Unido: libras
         store.kv_set("primary_business", "Pessoal")
         r = tools.run("add_expense", {"amount": 10, "category": "outros", "business": "HomB"})
         assert r["locked"] and r["upsell"]["feature"] == "extra_business"

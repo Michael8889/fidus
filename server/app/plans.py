@@ -26,6 +26,37 @@ PLANS = {
     },
 }
 
+# Preço por moeda (valores redondos fixos, como nas lojas de apps). Libra no Reino Unido, euro na Europa,
+# dólar no resto do mundo. A cobrança de verdade segue o país do cartão.
+PRICES = {
+    "EUR": {"essencial": 29.90, "negocio": 49.90, "premium": 69.90},
+    "GBP": {"essencial": 24.90, "negocio": 42.90, "premium": 59.90},
+    "USD": {"essencial": 32.90, "negocio": 54.90, "premium": 74.90},
+}
+SYMBOL = {"EUR": "€", "GBP": "£", "USD": "$"}
+EUROPE = set("AD AL AT AX BA BE BG BY CH CY CZ DE DK EE ES FI FO FR GG GI GR HR HU IE IM IS IT JE LI LT LU LV MC MD "
+             "ME MK MT NL NO PL PT RO RS SE SI SJ SK SM UA VA XK".split())
+
+
+def currency_for(country: str | None) -> str:
+    cc = (country or "").strip().upper()
+    if cc in ("GB", "UK"):
+        return "GBP"
+    return "EUR" if cc in EUROPE else "USD"
+
+
+def user_currency() -> str:
+    return currency_for(store.profile().get("country"))
+
+
+def price(plan: str, cur: str | None = None) -> float:
+    return PRICES[cur or user_currency()][plan]
+
+
+def fmt(amount: float, cur: str) -> str:
+    return f"{SYMBOL[cur]}{amount:.2f}"
+
+
 # ferramenta/recurso -> plano mínimo
 FEATURE_MIN = {
     "get_booking_link": "negocio",
@@ -87,14 +118,16 @@ def year_price(month: float) -> float:
 def upsell(feature: str) -> dict:
     need = FEATURE_MIN.get(feature, "negocio")
     p = PLANS[need]
+    cur = user_currency()
+    m = price(need, cur)
     return {"feature": feature, "feature_label": FEATURE_LABEL.get(feature, feature), "plan": need, "name": p["name"],
-            "month": p["month"], "year": year_price(p["month"]), "highlights": p["highlights"],
+            "month": m, "year": year_price(m), "currency": cur, "symbol": SYMBOL[cur], "highlights": p["highlights"],
             "current_plan": PLANS[current()]["name"], "url": config.UPGRADE_URL}
 
 
 def locked(feature: str) -> dict:
     u = upsell(feature)
-    return {"error": f"'{u['feature_label']}' faz parte do plano {u['name']} (€{u['month']:.2f}/mês). "
+    return {"error": f"'{u['feature_label']}' faz parte do plano {u['name']} ({fmt(u['month'], u['currency'])}/mês). "
                      f"O usuário está no plano {u['current_plan']}. Explique o benefício para o pedido dele em "
                      f"uma ou duas frases e diga que o cartão abaixo mostra o plano. Não diga que fez a ação.",
             "locked": True, "upsell": u}
@@ -124,7 +157,8 @@ def gate(tool: str, args: dict) -> dict | None:
 
 def info() -> dict:
     cur = current()
-    return {"plan": cur, "name": PLANS[cur]["name"], "url": config.UPGRADE_URL,
-            "locked_features": sorted(f for f in FEATURE_MIN if not allows(f, cur)),
-            "plans": [{"id": k, "name": v["name"], "month": v["month"], "year": year_price(v["month"]),
+    money = user_currency()
+    return {"plan": cur, "name": PLANS[cur]["name"], "url": config.UPGRADE_URL, "currency": money,
+            "symbol": SYMBOL[money], "locked_features": sorted(f for f in FEATURE_MIN if not allows(f, cur)),
+            "plans": [{"id": k, "name": v["name"], "month": price(k, money), "year": year_price(price(k, money)),
                        "highlights": v["highlights"]} for k, v in PLANS.items()]}

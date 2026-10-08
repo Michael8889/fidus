@@ -119,6 +119,9 @@ def _create(path: str) -> None:
                 status TEXT NOT NULL, created_at TEXT NOT NULL);
             """
         )
+        cols = {r[1] for r in c.execute("PRAGMA table_info(messages)").fetchall()}
+        if "conv" not in cols:  # banco antigo: tudo o que já existe vira a conversa 1
+            c.execute("ALTER TABLE messages ADD COLUMN conv INTEGER NOT NULL DEFAULT 1")
     c0.close()
 
 
@@ -139,13 +142,61 @@ def kv_set(k: str, v: str) -> None:
 
 def add_message(role: str, content: str) -> None:
     with _conn() as c:
-        c.execute("INSERT INTO messages(role,content,created_at) VALUES(?,?,?)", (role, content, now()))
+        c.execute("INSERT INTO messages(role,content,created_at,conv) VALUES(?,?,?,?)",
+                  (role, content, now(), current_conv()))
 
 
-def recent_messages(limit: int = 10) -> list[dict]:
+def recent_messages(limit: int = 10, conv: int | None = None) -> list[dict]:
+    """Últimas mensagens da conversa aberta (ou da conversa `conv`)."""
     with _conn() as c:
-        rows = c.execute("SELECT role, content FROM messages ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        rows = c.execute("SELECT role, content, created_at FROM messages WHERE conv=? ORDER BY id DESC LIMIT ?",
+                         (conv or current_conv(), limit)).fetchall()
     return [dict(r) for r in reversed(rows)]
+
+
+# ---------- Conversas (menu: Nova conversa / Conversas anteriores) ----------
+def current_conv() -> int:
+    try:
+        return int(kv_get("conv") or 1)
+    except ValueError:
+        return 1
+
+
+def new_conversation() -> int:
+    """Abre uma conversa nova. Se a atual ainda está vazia, continua nela."""
+    cur = current_conv()
+    with _conn() as c:
+        used = c.execute("SELECT COUNT(*) FROM messages WHERE conv=?", (cur,)).fetchone()[0]
+        if not used:
+            return cur
+        top = c.execute("SELECT COALESCE(MAX(conv),0) FROM messages").fetchone()[0]
+    nxt = max(top, cur) + 1
+    kv_set("conv", str(nxt))
+    return nxt
+
+
+def open_conversation(conv: int) -> bool:
+    with _conn() as c:
+        ok = c.execute("SELECT 1 FROM messages WHERE conv=? LIMIT 1", (conv,)).fetchone()
+    if ok:
+        kv_set("conv", str(conv))
+    return bool(ok)
+
+
+def list_conversations(limit: int = 50) -> list[dict]:
+    import re
+    with _conn() as c:
+        rows = c.execute("SELECT conv, COUNT(*) n, MIN(created_at) started, MAX(created_at) last, MAX(id) mx "
+                         "FROM messages GROUP BY conv ORDER BY mx DESC LIMIT ?", (limit,)).fetchall()
+        out = []
+        for r in rows:
+            first = c.execute("SELECT content FROM messages WHERE conv=? AND role='user' ORDER BY id LIMIT 1",
+                              (r["conv"],)).fetchone()
+            title = re.sub(r"^\[foto enviada\]\s*", "📷 ", (first["content"] if first else "") or "").strip()
+            title = title.split("\n")[0][:70] or "Conversa"
+            out.append({"id": r["conv"], "title": title, "messages": r["n"], "started": r["started"],
+                        "last": r["last"]})
+    return out
 
 
 def create_pending(kind: str, payload: dict) -> str:
@@ -174,12 +225,17 @@ def claim_pending(pid: str) -> bool:
         return c.execute("UPDATE pending_actions SET status='sending' WHERE id=? AND status='pending'", (pid,)).rowcount == 1
 
 
-def update_pending(pid: str, status: str, payload: dict | None = None) -> None:
+def update_pending(pid: str, status: str, payload: dict | None = None, only_if: str | None = None) -> bool:
+    """Muda status/conteúdo. Com only_if, só muda se o status atual for esse (evita corrida com um envio)."""
     with _conn() as c:
+        if only_if is not None:
+            return c.execute("UPDATE pending_actions SET status=?, payload=COALESCE(?, payload) WHERE id=? AND status=?",
+                             (status, json.dumps(payload) if payload is not None else None, pid, only_if)).rowcount == 1
         if payload is None:
             c.execute("UPDATE pending_actions SET status=? WHERE id=?", (status, pid))
         else:
             c.execute("UPDATE pending_actions SET status=?, payload=? WHERE id=?", (status, json.dumps(payload), pid))
+    return True
 
 
 # ---------- Atividade: registro do que o Fidus fez ----------
@@ -273,10 +329,11 @@ def profile() -> dict:
     u = current()
     if u.get("is_owner"):
         base = {"name": config.USER_NAME, "timezone": config.USER_TIMEZONE, "currency": config.DEFAULT_CURRENCY,
-                "businesses": list(config.BUSINESSES)}
+                "businesses": list(config.BUSINESSES), "language": config.OWNER_LANGUAGE,
+                "country": config.OWNER_COUNTRY}
     else:
         base = {"name": u.get("name") or "", "timezone": config.USER_TIMEZONE, "currency": config.DEFAULT_CURRENCY,
-                "businesses": ["Pessoal"]}
+                "businesses": ["Pessoal"], "language": "", "country": ""}
     raw = kv_get("profile")
     if raw:
         base.update({k: v for k, v in json.loads(raw).items() if v})
@@ -292,6 +349,11 @@ def save_profile(**changes) -> dict:
 
 def user_name() -> str:
     return profile()["name"] or "você"
+
+
+def user_lang() -> str:
+    """Idioma do usuário (código ISO, ex. 'pt', 'en', 'ms'); 'pt' se ainda não sabemos."""
+    return (profile().get("language") or "pt").split("-")[0].lower()
 
 
 def user_tz() -> str:

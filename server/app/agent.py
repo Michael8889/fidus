@@ -3,7 +3,8 @@ import re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import config, features, llm, store, tools
+from . import actions as _actions
+from . import config, features, i18n, llm, store, tools
 
 MAX_STEPS = 6
 
@@ -20,7 +21,8 @@ MODO CONVERSA (o usuário está ouvindo a resposta em voz alta, talvez dirigindo
 - Responda em no máximo 2 frases curtas, como numa ligação. Nada de listas, links, emojis ou símbolos.
 - Diga só o essencial: o que foi feito e o dado principal (dia, hora, valor). Endereço só o nome do lugar e a cidade.
 - Se houver opções, diga no máximo 3, só pelos nomes, e pergunte qual.
-- Rascunhos de e-mail e convites: diga que ficaram para ele aprovar no app quando parar. Nunca leia o e-mail inteiro.
+- Rascunhos de e-mail e convites: diga para quem é e o assunto em uma frase, e que ele pode dizer "envia" para
+  mandar ou revisar no app quando parar. Nunca leia o e-mail inteiro.
 - Se precisar de uma resposta dele, termine com uma pergunta curta.
 """
 
@@ -44,7 +46,8 @@ Use sempre estas datas. Mensagens antigas do histórico podem ter sido escritas 
 NÃO é o amanhã de agora. Ao consultar "hoje" ou "amanhã", use list_calendar_events com as datas acima.
 
 Como agir:
-- Responda no idioma em que o usuário falou (português, inglês ou espanhol), de forma curta e direta.
+- Idioma: responda SEMPRE no idioma em que o usuário escreveu ou falou nesta mensagem. Se não der para saber,
+  use o idioma dele: {i18n.name(prof.get("language") or "pt")}. Seja curto e direto.
 - Escreva em texto simples: sem markdown, sem asteriscos, sem #. Para listas, use "•" no início da linha.
 - Agenda: crie eventos direto quando data e hora estiverem claras. "4pm" = 16:00. Sem duração dita, use 1 hora.
   Se faltar algo essencial (dia ou hora), pergunte em uma frase.
@@ -63,9 +66,13 @@ Como agir:
 - Consultas de gastos ("quanto gastei..."): use summarize_expenses com o período certo. Nunca some moedas
   diferentes; mostre cada moeda separada.
 - E-mail: para responder, primeiro ache o e-mail (search_emails), leia (read_email) e então use
-  prepare_email_reply. Escreva no tom do usuário: educado, objetivo, sem floreios.
-  Você NUNCA envia e-mails. O app mostra o rascunho e o usuário decide. Depois de preparar, diga
-  em uma linha que o rascunho está pronto para revisar.
+  prepare_email_reply. E-mail novo (não é resposta): prepare_new_email. Escreva no tom do usuário: educado,
+  objetivo, sem floreios, no idioma de quem vai receber. No CORPO do e-mail (só nele) você pode usar **negrito**
+  em títulos curtos e listas com "• " quando ajudar a ler; o app mostra formatado e o e-mail sai formatado.
+  Você NUNCA envia e-mails. O app mostra o cartão do rascunho; o usuário envia tocando em Enviar ou dizendo
+  "envia". Depois de preparar, diga em uma linha que o rascunho está pronto e que ele pode tocar em Enviar
+  ou dizer "envia". Não repita o texto do e-mail na resposta (o cartão já mostra).
+  Se ele pedir mudanças no rascunho, prepare um novo com as mudanças.
 - Se houver mais de um e-mail possível, liste as opções (remetente, assunto, data) e pergunte qual.
 - Nunca invente dados: use as ferramentas.
 - Nunca diga que fez algo sem ter usado a ferramenta nesta conversa. O histórico traz linhas
@@ -164,6 +171,8 @@ def _describe(name: str, args: dict, result: dict) -> str:
         return f"mudou regras do link de agendamento ({status})"
     if name == "prepare_email_reply":
         return f"preparou rascunho de resposta ao e-mail {args.get('message_id')} ({status}, aguardando confirmação)"
+    if name == "prepare_new_email":
+        return f"preparou rascunho de e-mail novo para {args.get('to')} ({status}, aguardando confirmação)"
     return f"{name} ({status})"
 
 
@@ -231,6 +240,10 @@ def _record(name: str, args: dict, result: dict) -> None:
         d = result.get("draft", {})
         store.add_activity("email_draft", f"Resposta para {d.get('to', '')}", d.get("subject", ""),
                            "aguardando você", result["pending_action_id"])
+    elif name == "prepare_new_email" and result.get("pending_action_id"):
+        d = result.get("draft", {})
+        store.add_activity("email_draft", f"E-mail para {d.get('to', '')}", d.get("subject", ""),
+                           "aguardando você", result["pending_action_id"])
 
 
 def _action_log(actions: list[str]) -> str:
@@ -266,8 +279,15 @@ def handle(user_text: str, image_b64: str | None = None, media_type: str = "imag
                 messages.append({"role": "user", "content": NUDGE})
                 continue
             store.add_message("assistant", reply + _action_log(actions))
-            return {"reply": reply, "speech": speechify(reply) if voice else None,
-                    "pending_actions": [store.get_pending(p) for p in pending_ids], "events": events,
+            pend = [store.get_pending(p) for p in pending_ids]
+            speech = None
+            if voice:
+                lang = "en" if store.user_lang() == "en" else "pt"
+                # destinatário e assunto ditos pelo servidor (não pela IA): o usuário ouve para quem vai antes de dizer "envia"
+                extra = " ".join(_actions.readback(a, lang) for a in pend if a and a["status"] == "pending")
+                speech = (speechify(reply, store.user_lang()) + (" " + extra if extra else "")).strip()
+            return {"reply": reply, "speech": speech,
+                    "pending_actions": pend, "events": events,
                     "documents": [{**d, "url": features.sign(d["document_id"])} for d in docs.values()],
                     "upsell": upsell}
 
@@ -285,7 +305,8 @@ def handle(user_text: str, image_b64: str | None = None, media_type: str = "imag
             if call["name"] in ("save_document", "export_for_accountant") and result.get("ok"):
                 docs[result["document_id"]] = {"document_id": result["document_id"], "title": result["title"],
                                                "expires_on": result.get("expires_on")}
-            if call["name"] in ("prepare_email_reply", "prepare_event_invite", "prepare_minutes_email") \
+            if call["name"] in ("prepare_email_reply", "prepare_new_email", "prepare_event_invite",
+                                "prepare_minutes_email") \
                     and result.get("pending_action_id"):
                 pending_ids.append(result["pending_action_id"])
             if call["name"] == "create_calendar_event" and result.get("ok"):
@@ -298,27 +319,39 @@ def handle(user_text: str, image_b64: str | None = None, media_type: str = "imag
 
 
 # ---------- Texto para ser falado (modo conversa) ----------
-_MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro",
-          "novembro", "dezembro"]
-_MOEDA = {"GBP": "libras", "EUR": "euros", "BRL": "reais", "USD": "dólares"}
+_SPEECH = {
+    "pt": {"months": ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro",
+                      "outubro", "novembro", "dezembro"], "date": "{d} de {m}", "link": "o link está no app",
+           "money": {"GBP": "libras", "EUR": "euros", "BRL": "reais", "USD": "dólares"}},
+    "en": {"months": ["January", "February", "March", "April", "May", "June", "July", "August", "September",
+                      "October", "November", "December"], "date": "{d} {m}", "link": "the link is in the app",
+           "money": {"GBP": "pounds", "EUR": "euros", "BRL": "reais", "USD": "dollars"}},
+    "es": {"months": ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre",
+                      "octubre", "noviembre", "diciembre"], "date": "{d} de {m}", "link": "el enlace está en la app",
+           "money": {"GBP": "libras", "EUR": "euros", "BRL": "reales", "USD": "dólares"}},
+}
 
 
-def speechify(text: str) -> str:
+def speechify(text: str, lang: str = "pt") -> str:
     """Deixa a resposta boa de ouvir: sem marcadores, links e siglas de moeda; datas por extenso."""
-    t = re.sub(r"https?://\S+", "o link está no app", text or "")
+    L = _SPEECH.get(lang)
+    t = re.sub(r"https?://\S+", L["link"] if L else "", text or "")
     t = re.sub(r"[*_#`>]", "", t)
     t = re.sub(r"^\s*[•\-–]\s*", "", t, flags=re.M)
     t = re.sub(r"\n{2,}", ". ", t)
     t = t.replace("\n", ", ")
-    t = re.sub(r"£\s?(\d[\d.,]*)", r"\1 libras", t)
-    t = re.sub(r"€\s?(\d[\d.,]*)", r"\1 euros", t)
-    t = re.sub(r"R\$\s?(\d[\d.,]*)", r"\1 reais", t)
-    t = re.sub(r"\b(GBP|EUR|BRL|USD)\b", lambda m: _MOEDA[m.group(1)], t)
+    if L:
+        money = L["money"]
+        t = re.sub(r"£\s?(\d[\d.,]*)", lambda m: f"{m.group(1)} {money['GBP']}", t)
+        t = re.sub(r"€\s?(\d[\d.,]*)", lambda m: f"{m.group(1)} {money['EUR']}", t)
+        t = re.sub(r"R\$\s?(\d[\d.,]*)", lambda m: f"{m.group(1)} {money['BRL']}", t)
+        t = re.sub(r"US\$\s?(\d[\d.,]*)|\$\s?(\d[\d.,]*)", lambda m: f"{m.group(1) or m.group(2)} {money['USD']}", t)
+        t = re.sub(r"\b(GBP|EUR|BRL|USD)\b", lambda m: money[m.group(1)], t)
 
-    def _data(m):
-        d, mth = int(m.group(1)), int(m.group(2))
-        return f"{d} de {_MESES[mth - 1]}" if 1 <= d <= 31 and 1 <= mth <= 12 else m.group(0)
-    t = re.sub(r"\b(\d{1,2})/(\d{1,2})(?:/\d{2,4})?\b", _data, t)
+        def _data(m):
+            d, mth = int(m.group(1)), int(m.group(2))
+            return L["date"].format(d=d, m=L["months"][mth - 1]) if 1 <= d <= 31 and 1 <= mth <= 12 else m.group(0)
+        t = re.sub(r"\b(\d{1,2})/(\d{1,2})(?:/\d{2,4})?\b", _data, t)
     t = re.sub(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]", "", t)  # emojis
     t = t.replace(" · ", ", ").replace("·", ",")
     t = re.sub(r"([.:!?;])\s*,", r"\1", t)  # "frase., outra" → "frase. outra"

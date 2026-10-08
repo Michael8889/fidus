@@ -1,12 +1,15 @@
 """Ferramentas que o cérebro do Fidus pode usar.
 
-Regra de segurança fixa: nenhuma ferramenta envia e-mail. `prepare_email_reply`
-apenas cria um rascunho pendente; o envio acontece só em /actions/{id}/confirm,
-chamado quando o usuário toca em Enviar no app.
+Regra de segurança fixa: nenhuma ferramenta envia e-mail. `prepare_email_reply` e `prepare_new_email`
+apenas criam um rascunho pendente; o envio acontece só em actions.send_pending, chamado quando o usuário
+toca em Enviar no app ou manda a ordem ("envia") na conversa.
 """
 import base64
 import threading
 import json
+import html as _html
+import re
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from . import booking, config, features, google_client, meetings, plans, store
@@ -122,6 +125,19 @@ TOOLS = [
             "required": ["message_id", "body"],
         },
     },
+    {
+        "name": "prepare_new_email",
+        "description": "Prepara um e-mail NOVO (não é resposta) como rascunho para o usuário revisar. NÃO envia. "
+                       "Use quando ele pedir para escrever/mandar um e-mail para alguém. Precisa do endereço; se não "
+                       "souber, procure em e-mails anteriores (search_emails) ou pergunte.",
+        "parameters": {
+            "type": "object",
+            "properties": {"to": {"type": "string", "description": "e-mail(s) do destinatário, separados por vírgula"},
+                           "subject": {"type": "string"}, "body": {"type": "string"},
+                           "cc": {"type": "string", "description": "opcional"}},
+            "required": ["to", "subject", "body"],
+        },
+    },
 ]
 
 
@@ -168,6 +184,7 @@ def run(name: str, args: dict) -> dict:
         "search_emails": _search_emails,
         "read_email": _read_email,
         "prepare_email_reply": _prepare_reply,
+        "prepare_new_email": _prepare_new,
     }.get(name) or features.DISPATCH.get(name) or meetings.DISPATCH.get(name) or booking.DISPATCH.get(name)
     if name == "save_document":
         fn = lambda **a: features.save_document(**a, _path=CURRENT_RECEIPT.get("path"))  # noqa: E731
@@ -415,10 +432,69 @@ def _prepare_reply(message_id, body):
     return {"ok": True, "pending_action_id": pid, "status": "aguardando confirmação do usuário", "draft": payload}
 
 
+EMAIL_RE = re.compile(r"^[^@\s,;<>]+@[^@\s,;<>]+\.[^@\s,;<>]+$")
+
+
+def clean_recipients(raw: str | None) -> str:
+    """'a@x.com; Nome <b@y.com>' -> 'a@x.com, b@y.com'. Erro se algum endereço for inválido."""
+    out = []
+    for part in re.split(r"[,;]", raw or ""):
+        part = part.strip()
+        if not part:
+            continue
+        m = re.search(r"<([^>]+)>", part)
+        addr = (m.group(1) if m else part).strip()
+        if not EMAIL_RE.match(addr):
+            raise ValueError(f"e-mail inválido: {part}")
+        out.append(addr)
+    if not out:
+        raise ValueError("faltou o e-mail do destinatário")
+    return ", ".join(out)
+
+
+def _prepare_new(to, subject, body, cc=None):
+    payload = {"to": clean_recipients(to), "subject": (subject or "").strip()[:200] or "(sem assunto)", "body": body}
+    if cc:
+        payload["cc"] = clean_recipients(cc)
+    pid = store.create_pending("send_email", payload)
+    return {"ok": True, "pending_action_id": pid, "status": "aguardando confirmação do usuário", "draft": payload}
+
+
+# ---------- E-mail formatado: **negrito** e listas com • viram HTML; o texto simples vai junto ----------
+def plain_body(body: str) -> str:
+    return re.sub(r"\*\*(.+?)\*\*", r"\1", body or "")
+
+
+def html_body(body: str) -> str:
+    out, in_list = [], False
+    for line in (body or "").splitlines():
+        esc = _html.escape(line.strip())
+        esc = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", esc)
+        bullet = re.match(r"^(?:•|-|\*)\s+(.*)", esc)
+        if bullet:
+            if not in_list:
+                out.append('<ul style="margin:4px 0 8px 18px;padding:0">')
+                in_list = True
+            out.append(f"<li>{bullet.group(1)}</li>")
+            continue
+        if in_list:
+            out.append("</ul>")
+            in_list = False
+        out.append(f"{esc}<br>" if esc else "<br>")
+    if in_list:
+        out.append("</ul>")
+    return ('<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1f2933">'
+            + "\n".join(out) + "</div>")
+
+
 def send_confirmed_email(payload: dict) -> dict:
-    """Chamado SOMENTE pelo endpoint de confirmação do app."""
-    mime = MIMEText(payload["body"], "plain", "utf-8")
+    """Chamado SOMENTE por actions.send_pending (toque em Enviar ou ordem do usuário na conversa)."""
+    mime = MIMEMultipart("alternative")
+    mime.attach(MIMEText(plain_body(payload["body"]), "plain", "utf-8"))
+    mime.attach(MIMEText(html_body(payload["body"]), "html", "utf-8"))
     mime["To"] = payload["to"]
+    if payload.get("cc"):
+        mime["Cc"] = payload["cc"]
     mime["Subject"] = payload["subject"]
     if payload.get("in_reply_to"):
         mime["In-Reply-To"] = payload["in_reply_to"]

@@ -36,10 +36,24 @@ def _load_audio(path: str) -> np.ndarray:
 COMMAND_PROMPT = ("Pedidos ao assessor Fidus em português, às vezes em inglês: "
                   "marca almoço com o contador sexta à uma da tarde; "
                   "responde o e-mail do Carlos; quanto gastei de gasolina este mês.")
+PROMPTS = {
+    "pt": COMMAND_PROMPT,
+    "en": "Requests to the Fidus assistant in English: book lunch with the accountant Friday at 1pm; "
+          "reply to Carlos's email; how much did I spend on fuel this month.",
+    "es": "Pedidos al asistente Fidus en español: agenda almuerzo con el contador el viernes a la una; "
+          "responde el correo de Carlos; cuánto gasté en gasolina este mes.",
+}
+
+
+def prompt_for(lang: str | None) -> str | None:
+    """Dica de contexto no idioma do usuário. Outros idiomas: sem dica (o Whisper detecta sozinho)."""
+    return PROMPTS.get((lang or "pt").split("-")[0].lower())
+
+
 MEETING_PROMPT = "Reunião de trabalho em português ou inglês, com nomes, valores, prazos e próximos passos."
 
 
-def transcribe(path: str, initial_prompt: str = COMMAND_PROMPT, beam_size: int = 5) -> str:
+def transcribe(path: str, initial_prompt: str | None = COMMAND_PROMPT, beam_size: int = 5) -> str:
     audio = _load_audio(path)
     if audio.size == 0:
         return ""

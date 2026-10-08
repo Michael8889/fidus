@@ -44,8 +44,18 @@ def init() -> None:
                 app_challenge TEXT);
             CREATE TABLE IF NOT EXISTS used_links (sig TEXT PRIMARY KEY, expires REAL NOT NULL);
             CREATE TABLE IF NOT EXISTS public_slugs (slug TEXT PRIMARY KEY, user_id TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS referral_codes (user_id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL);
+            CREATE TABLE IF NOT EXISTS referrals (
+                invitee_id TEXT PRIMARY KEY, referrer_id TEXT NOT NULL, created_at TEXT NOT NULL, paid_at TEXT);
+            CREATE TABLE IF NOT EXISTS referral_credits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, invitee_id TEXT UNIQUE NOT NULL,
+                percent INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'disponivel', created_at TEXT NOT NULL,
+                used_at TEXT);
             """
         )
+        pcols = {r[1] for r in c.execute("PRAGMA table_info(login_pending)").fetchall()}
+        if "ref" not in pcols:
+            c.execute("ALTER TABLE login_pending ADD COLUMN ref TEXT")
         cols = {r[1] for r in c.execute("PRAGMA table_info(users)").fetchall()}
         if "google_sub" not in cols:  # banco antigo: acrescenta a coluna
             c.execute("ALTER TABLE users ADD COLUMN google_sub TEXT")
@@ -88,7 +98,7 @@ def set_status(uid: str, status: str) -> None:
             c.execute("UPDATE tokens SET revoked=1 WHERE user_id=?", (uid,))
 
 
-def can_signup(email: str) -> tuple[bool, str | None]:
+def can_signup(email: str, ref: str | None = None) -> tuple[bool, str | None]:
     """(pode entrar?, plano do convite)"""
     if config.OWNER_EMAIL and email.lower() == config.OWNER_EMAIL:
         return True, None
@@ -96,6 +106,8 @@ def can_signup(email: str) -> tuple[bool, str | None]:
         inv = c.execute("SELECT plan FROM invites WHERE lower(email)=lower(?)", (email,)).fetchone()
     if inv:
         return True, inv["plan"]
+    if ref and config.REFERRAL_SIGNUP and referrer_for_code(ref) and _ref_signups_today(ref) < REFERRAL_DAILY_CAP:
+        return True, None  # indicação de um cliente vale como convite (com limite por dia)
     return config.SIGNUP_OPEN, None
 
 
@@ -111,7 +123,7 @@ def _link_sub(uid: str, sub: str | None) -> None:
             c.execute("UPDATE users SET google_sub=? WHERE id=? AND google_sub IS NULL", (sub, uid))
 
 
-def find_or_create(email: str, name: str | None, sub: str | None = None) -> dict | None:
+def find_or_create(email: str, name: str | None, sub: str | None = None, ref: str | None = None) -> dict | None:
     """Usuário existente, ou novo se convidado/cadastro aberto. None = sem permissão.
 
     A conta é presa ao ID permanente do Google (sub): se o e-mail mudar de dono no futuro, quem recebe o
@@ -133,7 +145,7 @@ def find_or_create(email: str, name: str | None, sub: str | None = None) -> dict
             return None  # mesmo e-mail, outra pessoa no Google
         _link_sub(u["id"], sub)
         return u if u["status"] == "ativo" else None
-    ok, invite_plan = can_signup(email)
+    ok, invite_plan = can_signup(email, ref)
     if not ok:
         return None
     uid = uuid.uuid4().hex[:16]
@@ -195,13 +207,14 @@ def revoke(token: str) -> None:
 
 # ---------- ida e volta ao Google ----------
 def new_pending(verifier: str | None, user_id: str | None, state: str, browser_nonce: str,
-                app_challenge: str | None = None) -> None:
+                app_challenge: str | None = None, ref: str | None = None) -> None:
     """Guarda a ida ao Google. `browser_nonce` vai num cookie do navegador que começou o login (anti-CSRF);
     `app_challenge` é o hash de um segredo que só o app que pediu o login conhece."""
     with _db() as c:
         c.execute("DELETE FROM login_pending WHERE expires<?", (time.time(),))
-        c.execute("INSERT INTO login_pending(state,verifier,user_id,expires,browser,app_challenge) VALUES(?,?,?,?,?,?)",
-                  (state, verifier, user_id, time.time() + PENDING_TTL, _h(browser_nonce), app_challenge))
+        c.execute("INSERT INTO login_pending(state,verifier,user_id,expires,browser,app_challenge,ref) "
+                  "VALUES(?,?,?,?,?,?,?)",
+                  (state, verifier, user_id, time.time() + PENDING_TTL, _h(browser_nonce), app_challenge, ref))
 
 
 def take_pending(state: str, browser_nonce: str) -> dict | None:
@@ -273,3 +286,131 @@ def user_for_slug(slug: str) -> dict | None:
         return None
     u = get_user(r["user_id"])
     return u if u and u["status"] == "ativo" else None
+
+
+# ---------- Convide e ganhe ----------
+# Quem convida ganha REFERRAL_PERCENT% de desconto na próxima cobrança quando o convidado paga o 1º mês.
+# Os descontos não somam: no máximo um por cobrança; os que sobram ficam para as cobranças seguintes.
+# Quem é convidado ganha REFERRAL_TRIAL_DAYS dias grátis.
+_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+REFERRAL_WINDOW_DAYS = 7
+REFERRAL_DAILY_CAP = 10  # contas novas por código por dia (um link vazado não abre a porta para todo mundo)
+
+
+def _ref_signups_today(code: str) -> int:
+    ref = referrer_for_code(code)
+    if not ref:
+        return 0
+    from datetime import datetime, timedelta, timezone
+    since = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    with _db() as c:
+        return c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND created_at>=?", (ref["id"], since)).fetchone()[0]  # quem esqueceu o código pode colocar nos primeiros dias da conta
+
+
+def _norm_code(code: str | None) -> str:
+    return "".join(ch for ch in (code or "").upper() if ch.isalnum())[:12]
+
+
+def referral_code(uid: str) -> str:
+    with _db() as c:
+        r = c.execute("SELECT code FROM referral_codes WHERE user_id=?", (uid,)).fetchone()
+        if r:
+            return r["code"]
+        for _ in range(20):
+            code = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(6))
+            try:
+                c.execute("INSERT INTO referral_codes(user_id,code) VALUES(?,?)", (uid, code))
+                return code
+            except sqlite3.IntegrityError:
+                continue
+    raise RuntimeError("não consegui gerar o código de convite")
+
+
+def referrer_for_code(code: str | None) -> dict | None:
+    code = _norm_code(code)
+    if not code:
+        return None
+    with _db() as c:
+        r = c.execute("SELECT user_id FROM referral_codes WHERE code=?", (code,)).fetchone()
+    u = get_user(r["user_id"]) if r else None
+    return u if u and u["status"] == "ativo" else None
+
+
+def apply_referral(invitee_id: str, code: str | None) -> dict:
+    """Liga o convidado a quem convidou. Só vale para conta nova (até 7 dias) e uma vez só."""
+    from datetime import datetime, timedelta, timezone
+    ref = referrer_for_code(code)
+    if not ref:
+        return {"error": "código de convite não encontrado"}
+    if ref["id"] == invitee_id:
+        return {"error": "não dá para usar o próprio código"}
+    u = get_user(invitee_id)
+    if not u or invitee_id == store.OWNER_ID:
+        return {"error": "conta inválida"}
+    try:
+        created = datetime.fromisoformat(u["created_at"])
+    except (TypeError, ValueError):
+        created = datetime.now(timezone.utc)
+    if datetime.now(timezone.utc) - created > timedelta(days=REFERRAL_WINDOW_DAYS):
+        return {"error": "o código de convite só pode ser usado nos primeiros dias da conta"}
+    with _db() as c:
+        try:
+            c.execute("INSERT INTO referrals(invitee_id,referrer_id,created_at) VALUES(?,?,?)",
+                      (invitee_id, ref["id"], store.now()))
+        except sqlite3.IntegrityError:
+            return {"error": "esta conta já usou um código de convite"}
+    return {"ok": True, "referrer_name": (ref.get("name") or "").split(" ")[0],
+            "trial_days": config.REFERRAL_TRIAL_DAYS}
+
+
+def mark_paid(invitee_id: str) -> dict | None:
+    """Chamar quando o convidado pagar a 1ª cobrança (webhook do pagamento): dá o desconto a quem convidou."""
+    with _db() as c:
+        r = c.execute("UPDATE referrals SET paid_at=? WHERE invitee_id=? AND paid_at IS NULL RETURNING referrer_id",
+                      (store.now(), invitee_id)).fetchone()
+        if not r:
+            return None
+        c.execute("INSERT OR IGNORE INTO referral_credits(user_id,invitee_id,percent,created_at) VALUES(?,?,?,?)",
+                  (r["referrer_id"], invitee_id, config.REFERRAL_PERCENT, store.now()))
+    return {"referrer_id": r["referrer_id"], "percent": config.REFERRAL_PERCENT}
+
+
+def revoke_referral_reward(invitee_id: str) -> None:
+    """Convidado pediu reembolso: o crédito de quem convidou some, se ainda não foi usado."""
+    with _db() as c:
+        c.execute("DELETE FROM referral_credits WHERE invitee_id=? AND status='disponivel'", (invitee_id,))
+        c.execute("UPDATE referrals SET paid_at=NULL WHERE invitee_id=?", (invitee_id,))
+
+
+def next_discount(uid: str) -> int:
+    """Desconto (%) da próxima cobrança. Não soma: no máximo um crédito por cobrança."""
+    with _db() as c:
+        r = c.execute("SELECT percent FROM referral_credits WHERE user_id=? AND status='disponivel' ORDER BY id LIMIT 1",
+                      (uid,)).fetchone()
+    return r["percent"] if r else 0
+
+
+def consume_discount(uid: str) -> int:
+    """Chamar ao fechar cada cobrança: usa um crédito (o mais antigo) e devolve o % aplicado."""
+    with _db() as c:
+        r = c.execute("SELECT id, percent FROM referral_credits WHERE user_id=? AND status='disponivel' ORDER BY id LIMIT 1",
+                      (uid,)).fetchone()
+        if not r:
+            return 0
+        done = c.execute("UPDATE referral_credits SET status='usado', used_at=? WHERE id=? AND status='disponivel'",
+                         (store.now(), r["id"])).rowcount
+    return r["percent"] if done else 0
+
+
+def referral_stats(uid: str) -> dict:
+    with _db() as c:
+        invited = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=?", (uid,)).fetchone()[0]
+        paid = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND paid_at IS NOT NULL", (uid,)).fetchone()[0]
+        avail = c.execute("SELECT COUNT(*) FROM referral_credits WHERE user_id=? AND status='disponivel'", (uid,)).fetchone()[0]
+        used = c.execute("SELECT COUNT(*) FROM referral_credits WHERE user_id=? AND status='usado'", (uid,)).fetchone()[0]
+        mine = c.execute("SELECT r.referrer_id, u.name FROM referrals r LEFT JOIN users u ON u.id=r.referrer_id "
+                         "WHERE r.invitee_id=?", (uid,)).fetchone()
+    return {"invited": invited, "paid": paid, "credits_available": avail, "credits_used": used,
+            "next_discount": next_discount(uid), "percent": config.REFERRAL_PERCENT,
+            "trial_days": config.REFERRAL_TRIAL_DAYS,
+            "invited_by": ((mine["name"] or "").split(" ")[0] or "um amigo") if mine else None}

@@ -7,8 +7,9 @@
 - Mudança em `app/App.tsx`: checar sintaxe (ex. `npx esbuild App.tsx --loader:.tsx=tsx --outfile=/dev/null`).
   Módulos nativos novos devem ser carregados com `require` dentro de try/catch, porque celulares com APK
   antigo recebem o JS novo pelo update-app.
-- Toda ação que fala pelo usuário (e-mail, convite, ata) vira pendência confirmada no app. Nunca criar
-  ferramenta que envie direto.
+- Toda ação que fala pelo usuário (e-mail, convite, ata) vira pendência confirmada no app (toque em Enviar ou
+  "envia" na conversa com o rascunho na tela, ver `actions.py`). Nunca criar ferramenta da IA que envie.
+- Mudou textos do app: rodar `python app/i18n-keys.py` (atualiza a lista do app e a do servidor).
 - Ações que mudam dados devem aparecer na aba Atividade (`agent._record`) e, quando possível, ter Desfazer
   (`main.UNDO`).
 - Recursos pagos: declarar o plano mínimo em `plans.FEATURE_MIN`; o bloqueio e a oferta de upgrade já

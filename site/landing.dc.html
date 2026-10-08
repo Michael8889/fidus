@@ -2,7 +2,7 @@
 <html lang="pt">
 <head>
 <meta charset="utf-8">
-<title>Fidus — fale, ele resolve</title>
+<title>Fidus</title>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -44,18 +44,18 @@ input::placeholder{color:#6F7B8C}
 <div style="font-family: 'Figtree', system-ui, sans-serif; color: #F2F5F7; background: #07090D; width: 100%; overflow-x: hidden">
 
 <!-- Navegação -->
-<nav aria-label="Principal" style="position: sticky; top: 0; z-index: 10; background: rgba(7,9,13,0.82); backdrop-filter: blur(12px); border-bottom: 1px solid #161B23">
+<nav aria-label="{{t.navAria}}" style="position: sticky; top: 0; z-index: 10; background: rgba(7,9,13,0.82); backdrop-filter: blur(12px); border-bottom: 1px solid #161B23">
 <div style="max-width: 1200px; margin: 0 auto; padding: 14px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 22px">
 <a href="#topo" style="display: flex; align-items: center; gap: 10px; text-decoration: none; color: #F2F5F7">
 <span style="width: 34px; height: 34px; border-radius: 11px; background: #3DDC97; color: #07090D; display: flex; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 20px">F</span>
 <span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -0.02em">Fidus</span>
 </a>
 <div style="display: flex; flex-wrap: wrap; gap: 22px; margin-left: auto; align-items: center; font-size: 15px; font-weight: 500">
-<a href="#dia" style="color: #B7C0CC; text-decoration: none">Um dia com o Fidus</a>
-<a href="#funcoes" style="color: #B7C0CC; text-decoration: none">Funções</a>
-<a href="#planos" style="color: #B7C0CC; text-decoration: none">Planos</a>
-<a href="#perguntas" style="color: #B7C0CC; text-decoration: none">Perguntas</a>
-<a href="#acesso" style="background: #F2F5F7; color: #07090D; text-decoration: none; font-weight: 700; padding: 10px 18px; border-radius: 999px">Começar agora →</a>
+<a href="#dia" style="color: #B7C0CC; text-decoration: none">{{t.navDay}}</a>
+<a href="#funcoes" style="color: #B7C0CC; text-decoration: none">{{t.navFeat}}</a>
+<a href="#planos" style="color: #B7C0CC; text-decoration: none">{{t.navPlans}}</a>
+<a href="#perguntas" style="color: #B7C0CC; text-decoration: none">{{t.navFaq}}</a>
+<a href="#acesso" style="background: #F2F5F7; color: #07090D; text-decoration: none; font-weight: 700; padding: 10px 18px; border-radius: 999px">{{t.navCta}}</a>
 </div>
 </div>
 </nav>
@@ -67,20 +67,20 @@ input::placeholder{color:#6F7B8C}
 <div style="flex: 1 1 500px; min-width: 0">
 <p style="margin: 0 0 22px; display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: #F2F5F7; font-weight: 600; background: #11151C; border: 1px solid #222A35; padding: 8px 14px; border-radius: 999px">
 <span class="pulse" style="width: 8px; height: 8px; border-radius: 4px; background: #3DDC97"></span>
-Acesso antecipado aberto · Android
+{{t.badge}}
 </p>
-<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(46px, 6.6vw, 88px); line-height: 1.02; letter-spacing: -0.035em">Fale.<br>O Fidus <span class="rot" style="color: #3DDC97"><span class="rot-in"><span>agenda.</span><span>lança.</span><span>responde.</span><span>lembra.</span><span>guarda.</span><span>agenda.</span></span></span></h1>
-<p style="margin: 26px 0 0; font-size: 20px; line-height: 1.5; color: #B7C0CC; max-width: 36ch">O assistente pessoal que cuida da agenda, dos e-mails, dos gastos e dos documentos de quem toca a vida e o negócio entre países. Por voz, em português ou inglês.</p>
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(46px, 6.6vw, 88px); line-height: 1.02; letter-spacing: -0.035em">{{t.h1a}}<br>{{t.h1b}} <span class="rot" style="color: #3DDC97"><span class="rot-in"><span>{{t.r0}}</span><span>{{t.r1}}</span><span>{{t.r2}}</span><span>{{t.r3}}</span><span>{{t.r4}}</span><span>{{t.r0}}</span></span></span></h1>
+<p style="margin: 26px 0 0; font-size: 20px; line-height: 1.5; color: #B7C0CC; max-width: 36ch">{{t.lead}}</p>
 <form id="acesso" style="margin-top: 32px; display: flex; flex-wrap: wrap; gap: 10px; max-width: 540px" onSubmit="{{join}}">
-<label for="email-hero" style="position: absolute; left: -9999px">Seu e-mail</label>
-<input id="email-hero" type="email" required placeholder="seu@email.com" style="flex: 1 1 240px; min-width: 0; padding: 17px 18px; border-radius: 14px; border: 1px solid #2A3341; background: #0E1218; color: #F2F5F7; font: inherit; font-size: 16px">
-<button type="submit" style="padding: 17px 24px; border-radius: 14px; border: 0; background: #3DDC97; color: #07090D; font: inherit; font-weight: 800; font-size: 16px; cursor: pointer">Quero acesso →</button>
+<label for="email-hero" style="position: absolute; left: -9999px">{{t.emailLabel}}</label>
+<input id="email-hero" type="email" required placeholder="{{t.emailPh}}" style="flex: 1 1 240px; min-width: 0; padding: 17px 18px; border-radius: 14px; border: 1px solid #2A3341; background: #0E1218; color: #F2F5F7; font: inherit; font-size: 16px">
+<button type="submit" style="padding: 17px 24px; border-radius: 14px; border: 0; background: #3DDC97; color: #07090D; font: inherit; font-weight: 800; font-size: 16px; cursor: pointer">{{t.join}}</button>
 </form>
 <sc-if value="{{joined}}" hint-placeholder-val="{{ false }}">
-<p class="msg" style="margin: 12px 0 0; color: #3DDC97; font-weight: 600">Pronto. Você entra na próxima turma de testes.</p>
+<p class="msg" style="margin: 12px 0 0; color: #3DDC97; font-weight: 600">{{t.joined}}</p>
 </sc-if>
 <div style="margin-top: 26px; display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 14px; color: #8D98A8">
-<span>✓ Funciona com Google Agenda, Gmail e Meet</span><span>✓ Libras, euros e reais</span><span>✓ Cancele no app</span>
+<span>{{t.c1}}</span><span>{{t.c2}}</span><span>{{t.c3}}</span>
 </div>
 </div>
 
@@ -89,22 +89,22 @@ Acesso antecipado aberto · Android
 <sc-if value="{{toast1}}" hint-placeholder-val="{{ false }}">
 <div class="toast pop" style="left: -8px; top: 70px; background: #F2F5F7; color: #07090D; padding: 12px 14px; border-radius: 14px; box-shadow: 0 16px 40px rgba(0,0,0,0.45); font-size: 14px; display: flex; gap: 10px; align-items: center">
 <span style="width: 28px; height: 28px; border-radius: 8px; background: #DDF8EB; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#14804F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M4 10h16M9 3v4M15 3v4"></path></svg></span>
-<span><b>Já está na agenda</b><br><span style="color: #4A5568">Quinta, 16h · com endereço</span></span>
+<span><b>{{t.toast1t}}</b><br><span style="color: #4A5568">{{t.toast1s}}</span></span>
 </div>
 </sc-if>
 <sc-if value="{{toast2}}" hint-placeholder-val="{{ false }}">
 <div class="toast pop" style="right: -12px; top: 230px; background: #F2F5F7; color: #07090D; padding: 12px 14px; border-radius: 14px; box-shadow: 0 16px 40px rgba(0,0,0,0.45); font-size: 14px; display: flex; gap: 10px; align-items: center">
 <span style="width: 28px; height: 28px; border-radius: 8px; background: #E3EBFF; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2F5BD8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"></path><path d="M9 8h6M9 12h6"></path></svg></span>
-<span><b>Gasto lançado</b><br><span style="color: #4A5568">45,90 GBP · HomB · recibo salvo</span></span>
+<span><b>{{t.toast2t}}</b><br><span style="color: #4A5568">{{x.toast2s}}</span></span>
 </div>
 </sc-if>
 <sc-if value="{{toast3}}" hint-placeholder-val="{{ false }}">
 <div class="toast pop" style="left: 0px; bottom: 90px; background: #3DDC97; color: #07090D; padding: 12px 14px; border-radius: 14px; box-shadow: 0 16px 40px rgba(0,0,0,0.45); font-size: 14px; display: flex; gap: 10px; align-items: center">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#07090D" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
-<span><b>Rascunho pronto</b> · você aprova</span>
+<span><b>{{t.toast3t}}</b>{{t.toast3s}}</span>
 </div>
 </sc-if>
-<div class="float" aria-label="Demonstração de conversa com o Fidus" role="img" style="width: 100%; max-width: 330px; background: #F4F6F9; border-radius: 42px; padding: 12px; border: 7px solid #1A1F28; box-shadow: 0 40px 100px rgba(0,0,0,0.6)">
+<div class="float" aria-label="{{t.phoneAria}}" role="img" style="width: 100%; max-width: 330px; background: #F4F6F9; border-radius: 42px; padding: 12px; border: 7px solid #1A1F28; box-shadow: 0 40px 100px rgba(0,0,0,0.6)">
 <div style="display: flex; align-items: center; gap: 10px; padding: 8px 8px 12px; border-bottom: 1px solid #E3E8F0">
 <span style="width: 32px; height: 32px; border-radius: 10px; background: #07090D; color: #3DDC97; display: flex; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800">F</span>
 <div style="display: flex; flex-direction: column">
@@ -130,11 +130,11 @@ Acesso antecipado aberto · Android
 </sc-if>
 <sc-if value="{{m.card}}" hint-placeholder-val="{{ false }}">
 <div class="msg" style="align-self: flex-start; width: 88%; background: #FFFFFF; border: 1.5px solid #3DDC97; border-radius: 14px; padding: 10px 12px; font-size: 13px; color: #07090D; box-sizing: border-box">
-<div style="font-size: 11px; color: #4E5D78; margin-bottom: 4px">Rascunho de e-mail · aguardando você</div>
+<div style="font-size: 11px; color: #4E5D78; margin-bottom: 4px">{{t.draftLabel}}</div>
 <div style="font-weight: 700">{{m.text}}</div>
 <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px">
-<span style="padding: 6px 10px; border: 1px solid #C5CCD8; border-radius: 8px">Cancelar</span>
-<span style="padding: 6px 12px; background: #07090D; color: #FFFFFF; border-radius: 8px; font-weight: 600">Enviar</span>
+<span style="padding: 6px 10px; border: 1px solid #C5CCD8; border-radius: 8px">{{t.cancel}}</span>
+<span style="padding: 6px 12px; background: #07090D; color: #FFFFFF; border-radius: 8px; font-weight: 600">{{t.send}}</span>
 </div>
 </div>
 </sc-if>
@@ -144,7 +144,7 @@ Acesso antecipado aberto · Android
 </sc-if>
 </div>
 <div style="display: flex; align-items: center; gap: 10px; padding: 10px 4px 4px">
-<div style="flex: 1; background: #FFFFFF; border-radius: 12px; padding: 12px; font-size: 13px; color: #6B7890">Escreva ou toque no microfone…</div>
+<div style="flex: 1; background: #FFFFFF; border-radius: 12px; padding: 12px; font-size: 13px; color: #6B7890">{{t.composer}}</div>
 <span style="width: 44px; height: 44px; border-radius: 22px; background: #07090D; display: flex; align-items: center; justify-content: center">
 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3DDC97" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg>
 </span>
@@ -155,7 +155,7 @@ Acesso antecipado aberto · Android
 </header>
 
 <!-- Marquee de pedidos -->
-<section aria-label="Exemplos de pedidos" style="padding: 28px 0 72px; display: flex; flex-direction: column; gap: 12px">
+<section aria-label="{{t.marqueeAria}}" style="padding: 28px 0 72px; display: flex; flex-direction: column; gap: 12px">
 <div class="marquee"><div class="track">
 <sc-for list="{{row1}}" as="c" hint-placeholder-count="8">
 <span style="flex: none; padding: 14px 20px; border-radius: 999px; background: #11151C; border: 1px solid #222A35; font-size: 16px; color: #E2E7ED; white-space: nowrap">“{{c}}”</span>
@@ -171,9 +171,9 @@ Acesso antecipado aberto · Android
 <!-- Um dia com o Fidus -->
 <section id="dia" style="background: #F4F6F8; color: #07090D">
 <div style="max-width: 1200px; margin: 0 auto; padding: 96px 24px">
-<p style="margin: 0; font-size: 14px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #14804F">Um dia com o Fidus</p>
-<h2 style="margin: 10px 0 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 4.6vw, 58px); line-height: 1.02; letter-spacing: -0.03em; max-width: 18ch">Enquanto você trabalha, ele cuida do resto.</h2>
-<div role="tablist" aria-label="Horários do dia" style="margin-top: 44px; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px">
+<p style="margin: 0; font-size: 14px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #14804F">{{t.navDay}}</p>
+<h2 style="margin: 10px 0 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 4.6vw, 58px); line-height: 1.02; letter-spacing: -0.03em; max-width: 18ch">{{t.dayH}}</h2>
+<div role="tablist" aria-label="{{t.dayTabs}}" style="margin-top: 44px; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px">
 <sc-for list="{{day}}" as="d" hint-placeholder-count="6">
 <button type="button" role="tab" aria-selected="{{d.selected}}" onClick="{{d.pick}}" style="text-align: left; border: 0; cursor: pointer; font: inherit; padding: 16px; border-radius: 16px; background: {{d.bg}}; color: {{d.fg}}">
 <span style="display: block; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 26px">{{d.time}}</span>
@@ -198,8 +198,8 @@ Acesso antecipado aberto · Android
 
 <!-- Funções -->
 <section id="funcoes" style="max-width: 1200px; margin: 0 auto; padding: 96px 24px 72px">
-<p style="margin: 0; font-size: 14px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #3DDC97">Funções</p>
-<h2 style="margin: 10px 0 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 4.6vw, 58px); line-height: 1.02; letter-spacing: -0.03em">Um assistente. A rotina inteira.</h2>
+<p style="margin: 0; font-size: 14px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #3DDC97">{{t.navFeat}}</p>
+<h2 style="margin: 10px 0 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 4.6vw, 58px); line-height: 1.02; letter-spacing: -0.03em">{{t.featH}}</h2>
 <div style="margin-top: 44px; display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 16px">
 <sc-for list="{{features}}" as="f" hint-placeholder-count="6">
 <div style="background: #0E1218; border: 1px solid #1E2530; border-radius: 22px; padding: 26px; display: flex; flex-direction: column; gap: 12px">
@@ -216,14 +216,14 @@ Acesso antecipado aberto · Android
 <section style="background: #F4F6F8; color: #07090D">
 <div style="max-width: 1200px; margin: 0 auto; padding: 96px 24px; display: flex; flex-wrap: wrap; gap: 48px; align-items: center">
 <div style="flex: 1 1 380px; min-width: 0">
-<p style="margin: 0; font-size: 14px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #14804F">Seu dinheiro, organizado</p>
-<h2 style="margin: 10px 0 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 4.6vw, 58px); line-height: 1.02; letter-spacing: -0.03em">Cada libra no lugar certo.</h2>
-<p style="margin: 18px 0 0; font-size: 18px; line-height: 1.6; color: #3E4A5C; max-width: 44ch">Fale o gasto ou fotografe o recibo. O Fidus separa por empresa, categoria e moeda, avisa quando algo sai do normal e entrega o pacote pronto para o contador.</p>
+<p style="margin: 0; font-size: 14px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #14804F">{{t.moneyKicker}}</p>
+<h2 style="margin: 10px 0 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 4.6vw, 58px); line-height: 1.02; letter-spacing: -0.03em">{{t.moneyH}}</h2>
+<p style="margin: 18px 0 0; font-size: 18px; line-height: 1.6; color: #3E4A5C; max-width: 44ch">{{t.moneyP}}</p>
 </div>
-<div aria-label="Exemplo de painel de gastos" role="img" style="flex: 1 1 440px; min-width: 0; background: #FFFFFF; border-radius: 26px; padding: 26px; box-shadow: 0 30px 70px rgba(7,9,13,0.12); display: flex; flex-direction: column; gap: 18px">
+<div aria-label="{{t.panelAria}}" role="img" style="flex: 1 1 440px; min-width: 0; background: #FFFFFF; border-radius: 26px; padding: 26px; box-shadow: 0 30px 70px rgba(7,9,13,0.12); display: flex; flex-direction: column; gap: 18px">
 <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap">
-<span style="font-weight: 800; font-size: 18px">Setembro · HomB</span>
-<span style="font-size: 13px; color: #5B6678; background: #EEF1F5; padding: 5px 10px; border-radius: 999px">exemplo</span>
+<span style="font-weight: 800; font-size: 18px">{{t.panelTitle}}</span>
+<span style="font-size: 13px; color: #5B6678; background: #EEF1F5; padding: 5px 10px; border-radius: 999px">{{t.example}}</span>
 </div>
 <sc-for list="{{bars}}" as="b" hint-placeholder-count="5">
 <div style="display: flex; flex-direction: column; gap: 6px">
@@ -232,8 +232,8 @@ Acesso antecipado aberto · Android
 </div>
 </sc-for>
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 4px">
-<div style="background: #FFF4E5; border-radius: 14px; padding: 12px 14px; font-size: 14px"><b>Atenção:</b> cobrança repetida na Screwfix, 3 dias de diferença.</div>
-<div style="background: #E3F7EE; border-radius: 14px; padding: 12px 14px; font-size: 14px"><b>Pronto:</b> pacote do contador do 3º trimestre, com 41 recibos.</div>
+<div style="background: #FFF4E5; border-radius: 14px; padding: 12px 14px; font-size: 14px"><b>{{t.warn}}</b> {{t.warnT}}</div>
+<div style="background: #E3F7EE; border-radius: 14px; padding: 12px 14px; font-size: 14px"><b>{{t.ok}}</b> {{t.okT}}</div>
 </div>
 </div>
 </div>
@@ -243,22 +243,22 @@ Acesso antecipado aberto · Android
 <section style="max-width: 1200px; margin: 0 auto; padding: 96px 24px 72px">
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 40px; align-items: start">
 <div>
-<p style="margin: 0; font-size: 14px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #3DDC97">Você no controle</p>
-<h2 style="margin: 10px 0 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 4.6vw, 58px); line-height: 1.02; letter-spacing: -0.03em">Um assistente que pede licença.</h2>
-<p style="margin: 18px 0 0; font-size: 18px; color: #9FAAB8; line-height: 1.6; max-width: 44ch">Faz a rotina sozinho. Para antes de qualquer coisa que fale por você.</p>
+<p style="margin: 0; font-size: 14px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #3DDC97">{{t.ctrlKicker}}</p>
+<h2 style="margin: 10px 0 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 4.6vw, 58px); line-height: 1.02; letter-spacing: -0.03em">{{t.ctrlH}}</h2>
+<p style="margin: 18px 0 0; font-size: 18px; color: #9FAAB8; line-height: 1.6; max-width: 44ch">{{t.ctrlP}}</p>
 </div>
 <div style="display: flex; flex-direction: column; gap: 12px">
 <div style="background: #0E1218; border: 1px solid #1E2530; border-radius: 18px; padding: 20px 22px; display: flex; gap: 14px">
 <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3DDC97" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M4 6h16v12H4z"></path><path d="M4 7l8 6 8-6"></path></svg>
-<div><h3 style="margin: 0 0 4px; font-size: 18px">Nada sai sem o seu toque</h3><p style="margin: 0; color: #9FAAB8; line-height: 1.5">E-mails, atas e convites ficam em rascunho até você tocar em Enviar.</p></div>
+<div><h3 style="margin: 0 0 4px; font-size: 18px">{{t.ctrl1h}}</h3><p style="margin: 0; color: #9FAAB8; line-height: 1.5">{{t.ctrl1p}}</p></div>
 </div>
 <div style="background: #0E1218; border: 1px solid #1E2530; border-radius: 18px; padding: 20px 22px; display: flex; gap: 14px">
 <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3DDC97" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M9 14L4 9l5-5"></path><path d="M4 9h10a6 6 0 0 1 0 12h-3"></path></svg>
-<div><h3 style="margin: 0 0 4px; font-size: 18px">Tudo pode ser desfeito</h3><p style="margin: 0; color: #9FAAB8; line-height: 1.5">A aba Atividade mostra cada coisa que o Fidus fez, com botão para desfazer.</p></div>
+<div><h3 style="margin: 0 0 4px; font-size: 18px">{{t.ctrl2h}}</h3><p style="margin: 0; color: #9FAAB8; line-height: 1.5">{{t.ctrl2p}}</p></div>
 </div>
 <div style="background: #0E1218; border: 1px solid #1E2530; border-radius: 18px; padding: 20px 22px; display: flex; gap: 14px">
 <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3DDC97" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
-<div><h3 style="margin: 0 0 4px; font-size: 18px">Seus dados são seus</h3><p style="margin: 0; color: #9FAAB8; line-height: 1.5">O áudio vira texto e é apagado. [Confirmar a política de privacidade antes de publicar.]</p></div>
+<div><h3 style="margin: 0 0 4px; font-size: 18px">{{t.ctrl3h}}</h3><p style="margin: 0; color: #9FAAB8; line-height: 1.5">{{t.ctrl3p}}</p></div>
 </div>
 </div>
 </div>
@@ -269,46 +269,46 @@ Acesso antecipado aberto · Android
 <div style="max-width: 1200px; margin: 0 auto; padding: 96px 24px">
 <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; justify-content: space-between">
 <div>
-<p style="margin: 0; font-size: 14px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #14804F">Planos</p>
-<h2 style="margin: 10px 0 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 4.6vw, 58px); line-height: 1.02; letter-spacing: -0.03em">Sem limite de pedidos.<br>Em nenhum plano.</h2>
+<p style="margin: 0; font-size: 14px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #14804F">{{t.navPlans}}</p>
+<h2 style="margin: 10px 0 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 4.6vw, 58px); line-height: 1.02; letter-spacing: -0.03em">{{t.plansH1}}<br>{{t.plansH2}}</h2>
 </div>
-<div role="group" aria-label="Forma de cobrança" style="display: flex; background: #E3E7EC; border-radius: 999px; padding: 5px">
-<button type="button" aria-pressed="{{monthlyOn}}" onClick="{{setMonthly}}" style="border: 0; cursor: pointer; font: inherit; font-weight: 700; padding: 10px 18px; border-radius: 999px; background: {{mBg}}; color: {{mFg}}">Mensal</button>
-<button type="button" aria-pressed="{{yearlyOn}}" onClick="{{setYearly}}" style="border: 0; cursor: pointer; font: inherit; font-weight: 700; padding: 10px 18px; border-radius: 999px; background: {{yBg}}; color: {{yFg}}">Anual · 2 meses grátis</button>
+<div role="group" aria-label="{{t.billingAria}}" style="display: flex; background: #E3E7EC; border-radius: 999px; padding: 5px">
+<button type="button" aria-pressed="{{monthlyOn}}" onClick="{{setMonthly}}" style="border: 0; cursor: pointer; font: inherit; font-weight: 700; padding: 10px 18px; border-radius: 999px; background: {{mBg}}; color: {{mFg}}">{{t.monthly}}</button>
+<button type="button" aria-pressed="{{yearlyOn}}" onClick="{{setYearly}}" style="border: 0; cursor: pointer; font: inherit; font-weight: 700; padding: 10px 18px; border-radius: 999px; background: {{yBg}}; color: {{yFg}}">{{t.yearly}}</button>
 </div>
 </div>
 <div style="margin-top: 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; align-items: stretch">
 <sc-for list="{{plans}}" as="p" hint-placeholder-count="3">
 <div style="position: relative; border-radius: 26px; padding: 30px 26px; display: flex; flex-direction: column; gap: 14px; background: {{p.bg}}; color: {{p.fg}}; border: {{p.border}}">
 <sc-if value="{{p.featured}}" hint-placeholder-val="{{ false }}">
-<span style="position: absolute; top: -13px; left: 26px; background: #3DDC97; color: #07090D; font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; padding: 6px 12px; border-radius: 999px">Recomendado</span>
+<span style="position: absolute; top: -13px; left: 26px; background: #3DDC97; color: #07090D; font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; padding: 6px 12px; border-radius: 999px">{{t.recommended}}</span>
 </sc-if>
 <h3 style="margin: 0; font-size: 22px; font-weight: 800">{{p.name}}</h3>
 <p style="margin: 0; font-size: 15px; opacity: 0.8">{{p.who}}</p>
 <div style="display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap">
 <span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 48px; letter-spacing: -0.03em">{{p.price}}</span>
-<span style="font-size: 15px; opacity: 0.8">/mês</span>
+<span style="font-size: 15px; opacity: 0.8">{{t.perMonth}}</span>
 </div>
 <p style="margin: -8px 0 0; font-size: 14px; opacity: 0.75; min-height: 20px">{{p.note}}</p>
-<a href="#acesso" style="text-align: center; text-decoration: none; font-weight: 800; padding: 15px; border-radius: 14px; background: {{p.btnBg}}; color: {{p.btnFg}}">Começar com o {{p.name}}</a>
+<a href="#acesso" style="text-align: center; text-decoration: none; font-weight: 800; padding: 15px; border-radius: 14px; background: {{p.btnBg}}; color: {{p.btnFg}}">{{p.start}}</a>
 <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 6px">
 <sc-for list="{{p.items}}" as="i" hint-placeholder-count="6">
 <div style="display: flex; gap: 10px; align-items: flex-start; font-size: 15px; line-height: 1.4">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3DDC97" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; margin-top: 1px"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
-<span>{{i.t}}<sc-if value="{{i.soon}}" hint-placeholder-val="{{ false }}"><span style="margin-left: 6px; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: #2A3341; color: #E2E7ED">EM BREVE</span></sc-if></span>
+<span>{{i.t}}<sc-if value="{{i.soon}}" hint-placeholder-val="{{ false }}"><span style="margin-left: 6px; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: #2A3341; color: #E2E7ED">{{t.soon}}</span></sc-if></span>
 </div>
 </sc-for>
 </div>
 </div>
 </sc-for>
 </div>
-<p style="margin: 22px 0 0; font-size: 14px; color: #5B6678">Preços em euros, com impostos [confirmar]. Cancele quando quiser, direto no app.</p>
+<p style="margin: 22px 0 0; font-size: 14px; color: #5B6678">{{x.priceNote}}</p>
 </div>
 </section>
 
 <!-- Perguntas -->
 <section id="perguntas" style="max-width: 860px; margin: 0 auto; padding: 96px 24px">
-<h2 style="margin: 0 0 28px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 4.6vw, 52px); letter-spacing: -0.03em">Perguntas</h2>
+<h2 style="margin: 0 0 28px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 4.6vw, 52px); letter-spacing: -0.03em">{{t.faqH}}</h2>
 <div style="display: flex; flex-direction: column; gap: 10px">
 <sc-for list="{{faqs}}" as="f" hint-placeholder-count="5">
 <div style="background: #0E1218; border: 1px solid #1E2530; border-radius: 16px">
@@ -326,8 +326,8 @@ Acesso antecipado aberto · Android
 <!-- Chamada final -->
 <section style="padding: 0 24px 96px">
 <div style="max-width: 1200px; margin: 0 auto; background: #3DDC97; color: #07090D; border-radius: 32px; padding: clamp(32px, 6vw, 72px); display: flex; flex-wrap: wrap; gap: 28px; align-items: center; justify-content: space-between">
-<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 5vw, 64px); line-height: 1; letter-spacing: -0.035em; max-width: 14ch">Pare de anotar. Comece a falar.</h2>
-<a href="#acesso" style="background: #07090D; color: #F2F5F7; text-decoration: none; font-weight: 800; font-size: 18px; padding: 18px 28px; border-radius: 16px">Quero acesso antecipado →</a>
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 5vw, 64px); line-height: 1; letter-spacing: -0.035em; max-width: 14ch">{{t.finalH}}</h2>
+<a href="#acesso" style="background: #07090D; color: #F2F5F7; text-decoration: none; font-weight: 800; font-size: 18px; padding: 18px 28px; border-radius: 16px">{{t.finalCta}}</a>
 </div>
 </section>
 
@@ -337,143 +337,540 @@ Acesso antecipado aberto · Android
 <div style="display: flex; align-items: center; gap: 10px">
 <span style="width: 26px; height: 26px; border-radius: 8px; background: #3DDC97; color: #07090D; display: flex; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800">F</span>
 <span style="color: #F2F5F7; font-weight: 700">Fidus</span>
-<span>· [EMPRESA LTD], Reino Unido</span>
+<span>{{t.company}}</span>
 </div>
 <div style="display: flex; flex-wrap: wrap; gap: 20px">
-<a href="#perguntas" style="color: #8D98A8">Privacidade</a>
-<a href="#perguntas" style="color: #8D98A8">Termos</a>
-<a href="mailto:[CONTATO]" style="color: #8D98A8">Contato</a>
+<a href="#perguntas" style="color: #8D98A8">{{t.privacy}}</a>
+<a href="#perguntas" style="color: #8D98A8">{{t.terms}}</a>
+<a href="mailto:[CONTATO]" style="color: #8D98A8">{{t.contact}}</a>
+</div>
+</div>
+<div style="max-width: 1200px; margin: 0 auto; padding: 0 24px 32px; display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; font-size: 13px; color: #8D98A8">
+<div role="group" aria-label="{{t.langLabel}}" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+<span style="margin-right: 4px">{{t.langLabel}}</span>
+<sc-for list="{{langs}}" as="l" hint-placeholder-count="7">
+<button type="button" aria-pressed="{{l.on}}" onClick="{{l.pick}}" style="border: 1px solid #222A35; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; min-width: 44px; min-height: 36px; padding: 6px 10px; border-radius: 999px; background: {{l.bg}}; color: {{l.fg}}">{{l.label}}</button>
+</sc-for>
+</div>
+<div role="group" aria-label="{{t.curLabel}}" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+<span style="margin-right: 4px">{{t.curLabel}}</span>
+<sc-for list="{{curs}}" as="k" hint-placeholder-count="3">
+<button type="button" aria-pressed="{{k.on}}" onClick="{{k.pick}}" style="border: 1px solid #222A35; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; min-width: 44px; min-height: 36px; padding: 6px 10px; border-radius: 999px; background: {{k.bg}}; color: {{k.fg}}">{{k.label}}</button>
+</sc-for>
 </div>
 </div>
 </footer>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":7200}}'>
-var CHAT = [
-  { who: "user", voice: true, text: "Marca visita técnica quinta às 4 da tarde na Norauto de Coimbra" },
-  { who: "bot", text: "Marcado: quinta, 16h–17h, na Norauto Coimbra com o endereço completo. O lembrete abre direto no Maps." },
-  { who: "user", photo: true, text: "Recibo enviado" },
-  { who: "bot", text: "Lançado: 45,90 GBP · combustível · HomB. Recibo guardado." },
-  { who: "user", voice: true, text: "Responde o Carlos aceitando o orçamento" },
-  { who: "card", text: "Re: Orçamento cozinha · para Carlos" },
-  { who: "user", voice: true, text: "Quanto gastei de gasolina este mês?" },
-  { who: "bot", text: "186,40 GBP em 4 abastecimentos.\nNo mesmo ponto do mês passado: 212,10 GBP." }
-];
+// ---------- Idiomas e moedas ----------
+// Idioma: o do navegador (pt, en, es, fr, de, it, ms; outros veem em inglês). O visitante pode trocar no rodapé.
+// Moeda: Reino Unido = libra, Europa = euro, resto do mundo = dólar (pelo fuso do aparelho). A cobrança segue o país do cartão.
+var PRICES = { EUR: { essencial: 29.90, negocio: 49.90, premium: 69.90 }, GBP: { essencial: 24.90, negocio: 42.90, premium: 59.90 },
+               USD: { essencial: 32.90, negocio: 54.90, premium: 74.90 } };
+var SYM = { EUR: "€", GBP: "£", USD: "$" };
+var LANGS = [["pt", "PT"], ["en", "EN"], ["es", "ES"], ["fr", "FR"], ["de", "DE"], ["it", "IT"], ["ms", "MS"]];
+var EU_TZ_EXTRA = ["Atlantic/Azores", "Atlantic/Madeira", "Atlantic/Canary", "Atlantic/Faroe", "Atlantic/Reykjavik", "Arctic/Longyearbyen"];
+var UK_TZ = ["Europe/London", "Europe/Belfast", "Europe/Guernsey", "Europe/Jersey", "Europe/Isle_of_Man", "GB"];
+var EU_CC = "AD AL AT AX BA BE BG BY CH CY CZ DE DK EE ES FI FO FR GG GI GR HR HU IE IM IS IT JE LI LT LU LV MC MD ME MK MT NL NO PL PT RO RS SE SI SJ SK SM UA VA XK".split(" ");
 
-var CMDS1 = ["Marca almoço com o contador sexta à uma", "Quanto gastei de gasolina esse mês?", "Me lembra de pagar o IVA dia 5",
-  "Responde o Carlos aceitando o orçamento", "O que eu tenho amanhã?", "Acha o seguro do carro", "Aluguel de 1.200 libras todo dia 10",
-  "Cria a tarefa de revisar o contrato até sexta"];
-var CMDS2 = ["Bom dia! Como está meu dia?", "Reunião toda terça às 9h com link do Meet", "Gera o pacote do contador do trimestre",
-  "Quais assinaturas eu pago?", "Me manda meu link de agendamento", "Paguei 45 euros de almoço, empresa Portugal",
-  "Aniversário da minha mãe dia 27, avisa 3 dias antes", "Como foi minha semana?"];
+function detectLang() {
+  var list = [];
+  try { list = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]) || []; } catch (e) {}
+  for (var i = 0; i < list.length; i++) {
+    var b = String(list[i] || "").toLowerCase().split("-")[0];
+    if (b === "nb" || b === "no") b = "en";
+    if (L[b]) return b;
+  }
+  return "en";
+}
+function detectCurrency() {
+  var tz = "";
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) {}
+  if (UK_TZ.indexOf(tz) >= 0) return "GBP";
+  if (tz.indexOf("Europe/") === 0 || EU_TZ_EXTRA.indexOf(tz) >= 0) return "EUR";
+  if (tz) return "USD";
+  var region = "";
+  try { region = String(navigator.language || "").split("-")[1] || ""; } catch (e) {}
+  region = region.toUpperCase();
+  if (region === "GB") return "GBP";
+  return EU_CC.indexOf(region) >= 0 ? "EUR" : "USD";
+}
+function localeFor(lang) {
+  try { var nav = navigator.language || ""; if (nav.toLowerCase().split("-")[0] === lang) return nav; } catch (e) {}
+  return { pt: "pt-BR", en: "en-GB", es: "es-ES", fr: "fr-FR", de: "de-DE", it: "it-IT", ms: "ms-MY" }[lang] || "en-GB";
+}
+function fmtMoney(n, cur, loc) {
+  try { return new Intl.NumberFormat(loc, { style: "currency", currency: cur, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n); }
+  catch (e) { return SYM[cur] + n.toFixed(2); }
+}
+// "{m45.90}" no texto vira o valor na moeda do visitante
+function fill(s, cur, loc) { return String(s).replace(/\{m([\d.]+)\}/g, function (_, v) { return fmtMoney(parseFloat(v), cur, loc); }); }
 
-var DAY = [
-  { time: "08:00", label: "Bom dia", title: "O dia inteiro numa mensagem.", body: "Agenda, tarefas que vencem hoje, contas dos próximos dias e e-mails importantes, antes do primeiro café.",
-    ask: "Bom dia! O que eu tenho hoje?", answer: "3 compromissos, o primeiro às 9h30.\n1 tarefa atrasada: mandar orçamento.\nSeguro do carro vence em 12 dias." },
-  { time: "09:30", label: "No carro", title: "Agenda com endereço, por voz.", body: "Você fala com o celular no suporte. O evento entra no Google Agenda com o endereço completo e o lembrete abre no Maps.",
-    ask: "Marca visita técnica quinta às 4 na Rua Rodney, Wembley", answer: "Marcado: quinta, 16h, com o endereço completo de Wembley." },
-  { time: "12:40", label: "Almoço", title: "Recibo virou lançamento.", body: "Uma foto e pronto: valor, IVA, categoria e empresa, com o recibo guardado para o contador.",
-    ask: "[foto do recibo]", answer: "Lançado: 23,80 GBP · alimentação · HomB.\nIVA: 3,97 GBP. Recibo guardado." },
-  { time: "15:00", label: "Reunião", title: "A ata se escreve sozinha.", body: "Grave a reunião no app. O Fidus resume as decisões, cria as suas tarefas e prepara o e-mail para você aprovar.",
-    ask: "Encerrar e gerar a ata", answer: "Ata pronta: Obra Wembley.\n2 decisões · 3 próximos passos.\nColoquei 2 tarefas suas na aba Tarefas." },
-  { time: "17:30", label: "E-mails", title: "Respostas prontas, você só aprova.", body: "Ele lê, resume e rascunha no seu tom. Nada sai sem o seu toque em Enviar.",
-    ask: "Responde o Carlos aceitando, pagamento em 30 dias", answer: "Rascunho pronto para revisar.\n[Enviar]  [Cancelar]" },
-  { time: "20:00", label: "Fim do dia", title: "Nada esquecido.", body: "Lembretes que tocam na hora certa e contas que avisam antes de vencer, todo mês.",
-    ask: "Me lembra de ligar pro fornecedor amanhã às 9", answer: "Combinado. Amanhã às 9h o seu celular avisa." }
-];
+var L = {
+pt: {
+  t: { navDay: "Um dia com o Fidus", navFeat: "Funções", navPlans: "Planos", navFaq: "Perguntas", navCta: "Começar agora →",
+    badge: "Acesso antecipado aberto · Android", h1a: "Fale.", h1b: "O Fidus", r0: "agenda.", r1: "lança.", r2: "responde.", r3: "lembra.", r4: "guarda.",
+    lead: "O assistente pessoal que cuida da agenda, dos e-mails, dos gastos e dos documentos de quem toca a vida e o negócio entre países. Por voz, no seu idioma.",
+    emailLabel: "Seu e-mail", emailPh: "seu@email.com", join: "Quero acesso →", joined: "Pronto. Você entra na próxima turma de testes.",
+    c1: "✓ Funciona com Google Agenda, Gmail e Meet", c2: "✓ Várias empresas e moedas", c3: "✓ Cancele no app",
+    toast1t: "Já está na agenda", toast1s: "Quinta, 16h · com endereço", toast2t: "Gasto lançado", toast2s: "{m45.90} · HomB · recibo salvo",
+    toast3t: "Rascunho pronto", toast3s: " · você aprova", phoneAria: "Demonstração de conversa com o Fidus", online: "online", typing: "digitando…",
+    draftLabel: "E-mail · aguardando você", cancel: "Cancelar", send: "Enviar", composer: "Escreva ou toque no microfone…", marqueeAria: "Exemplos de pedidos",
+    dayH: "Enquanto você trabalha, ele cuida do resto.", dayTabs: "Horários do dia", featH: "Um assistente. A rotina inteira.",
+    moneyKicker: "Seu dinheiro, organizado", moneyH: "Cada centavo no lugar certo.",
+    moneyP: "Fale o gasto ou fotografe o recibo. O Fidus separa por empresa, categoria e moeda, avisa quando algo sai do normal e entrega o pacote pronto para o contador.",
+    panelAria: "Exemplo de painel de gastos", panelTitle: "Setembro · HomB", example: "exemplo", warn: "Atenção:", warnT: "cobrança repetida na Screwfix, 3 dias de diferença.",
+    ok: "Pronto:", okT: "pacote do contador do 3º trimestre, com 41 recibos.",
+    ctrlKicker: "Você no controle", ctrlH: "Um assistente que pede licença.", ctrlP: "Faz a rotina sozinho. Para antes de qualquer coisa que fale por você.",
+    ctrl1h: "Nada sai sem você mandar", ctrl1p: "E-mails, atas e convites ficam em rascunho até você tocar em Enviar ou dizer “envia”.",
+    ctrl2h: "Tudo pode ser desfeito", ctrl2p: "A aba Atividade mostra cada coisa que o Fidus fez, com botão para desfazer.",
+    ctrl3h: "Seus dados são seus", ctrl3p: "O áudio vira texto e é apagado. [Confirmar a política de privacidade antes de publicar.]",
+    plansH1: "Sem limite de pedidos.", plansH2: "Em nenhum plano.", billingAria: "Forma de cobrança", monthly: "Mensal", yearly: "Anual · 2 meses grátis",
+    recommended: "Recomendado", perMonth: "/mês", yearNote: "{p} por ano, cobrado uma vez", monthNote: "cobrado todo mês", startWith: "Começar com o {n}", soon: "EM BREVE",
+    priceNote: "Preços em {c}, com impostos [confirmar]. Cancele quando quiser, direto no app.", faqH: "Perguntas",
+    finalH: "Pare de anotar. Comece a falar.", finalCta: "Quero acesso antecipado →", company: "· [EMPRESA LTD], Reino Unido",
+    privacy: "Privacidade", terms: "Termos", contact: "Contato", langLabel: "Idioma", curLabel: "Moeda", navAria: "Principal",
+    cur: { GBP: "libras", EUR: "euros", USD: "dólares" } },
+  plans: { essencial: ["Essencial", "Para organizar a vida e começar no próprio negócio.", ["Voz e texto sem limite", "Agenda, lembretes e bom dia às 8h", "E-mail: resumo e rascunhos com aprovação", "Gastos e recibos de 1 carteira", "Documentos com aviso de validade", "Tarefas e aba Atividade"]],
+    negocio: ["Negócio", "Para quem toca uma ou mais empresas.", ["Tudo do Essencial", "Empresas e moedas ilimitadas", "Link de agendamento para clientes", "Ata de reunião automática", "Pacote do contador com recibos", "Alerta de assinaturas e resumo da semana"]],
+    premium: ["Premium", "O back-office completo, no bolso.", ["Tudo do Negócio", "*Banco conectado: gastos entram sozinhos", "*Cobrança e fatura para clientes", "*Mais 1 pessoa na conta + acesso do contador", "Atas sem limite e suporte prioritário"]] },
+  chat: ["Marca visita técnica quinta às 4 da tarde na Norauto de Coimbra", "Marcado: quinta, 16h–17h, na Norauto Coimbra com o endereço completo. O lembrete abre direto no Maps.",
+    "Recibo enviado", "Lançado: {m45.90} · combustível · HomB. Recibo guardado.", "Responde o Carlos aceitando o orçamento", "Re: Orçamento cozinha · para Carlos",
+    "Quanto gastei de gasolina este mês?", "{m186.40} em 4 abastecimentos.\nNo mesmo ponto do mês passado: {m212.10}."],
+  cmd1: ["Marca almoço com o contador sexta à uma", "Quanto gastei de gasolina esse mês?", "Me lembra de pagar o IVA dia 5", "Responde o Carlos aceitando o orçamento",
+    "O que eu tenho amanhã?", "Acha o seguro do carro", "Aluguel de 1.200 todo dia 10", "Cria a tarefa de revisar o contrato até sexta"],
+  cmd2: ["Bom dia! Como está meu dia?", "Reunião toda terça às 9h com link do Meet", "Gera o pacote do contador do trimestre", "Quais assinaturas eu pago?",
+    "Me manda meu link de agendamento", "Paguei 45 de almoço, empresa Portugal", "Aniversário da minha mãe dia 27, avisa 3 dias antes", "Como foi minha semana?"],
+  day: [["Bom dia", "O dia inteiro numa mensagem.", "Agenda, tarefas que vencem hoje, contas dos próximos dias e e-mails importantes, antes do primeiro café.", "Bom dia! O que eu tenho hoje?", "3 compromissos, o primeiro às 9h30.\n1 tarefa atrasada: mandar orçamento.\nSeguro do carro vence em 12 dias."],
+    ["No carro", "Agenda com endereço, por voz.", "Você fala com o celular no suporte. O evento entra no Google Agenda com o endereço completo e o lembrete abre no Maps.", "Marca visita técnica quinta às 4 na Rua Rodney, Wembley", "Marcado: quinta, 16h, com o endereço completo de Wembley."],
+    ["Almoço", "Recibo virou lançamento.", "Uma foto e pronto: valor, IVA, categoria e empresa, com o recibo guardado para o contador.", "[foto do recibo]", "Lançado: {m23.80} · alimentação · HomB.\nIVA: {m3.97}. Recibo guardado."],
+    ["Reunião", "A ata se escreve sozinha.", "Grave a reunião no app. O Fidus resume as decisões, cria as suas tarefas e prepara o e-mail para você aprovar.", "Encerrar e gerar a ata", "Ata pronta: Obra Wembley.\n2 decisões · 3 próximos passos.\nColoquei 2 tarefas suas na lista."],
+    ["E-mails", "Respostas prontas, você só aprova.", "Ele lê, resume e rascunha no seu tom. Nada sai até você tocar em Enviar ou dizer “envia”.", "Responde o Carlos aceitando, pagamento em 30 dias", "Rascunho pronto. Toque em Enviar ou diga “envia”."],
+    ["Fim do dia", "Nada esquecido.", "Lembretes que tocam na hora certa e contas que avisam antes de vencer, todo mês.", "Me lembra de ligar pro fornecedor amanhã às 9", "Combinado. Amanhã às 9h o seu celular avisa."]],
+  feat: [["Agenda", "Agenda e lembretes", "Compromissos com endereço, eventos recorrentes, link do Meet e lembretes que tocam no celular.", "Reunião semanal toda terça às 9h"],
+    ["E-mail", "E-mail com aprovação", "Resumo do que importa e rascunhos no seu tom. Você revisa e decide.", "O que chegou de importante hoje?"],
+    ["Gastos", "Gastos e recibos", "Por empresa, categoria e moeda. Alerta de duplicado, de gasto acima da média e de assinatura mais cara.", "Quanto a HomB gastou de material?"],
+    ["Documentos", "Documentos com validade", "Foto ou PDF guardado com descrição. Aviso antes de vencer, busca por assunto.", "Acha o contrato do aluguel"],
+    ["Reuniões", "Ata de reunião", "Grava, transcreve, resume e cria as tarefas de cada um. O e-mail da ata espera sua aprovação.", "O que ficou decidido ontem?"],
+    ["Clientes", "Link de agendamento", "Seus clientes escolhem um horário livre. O evento cai na sua agenda com o endereço da visita.", "Me manda meu link de agendamento"]],
+  bars: ["Materiais", "Combustível", "Ferramentas", "Alimentação", "Software"],
+  faqs: [["Preciso usar o WhatsApp?", "Não. O Fidus é um app próprio. Suas conversas pessoais e de trabalho continuam separadas."],
+    ["Ele envia e-mails sozinho?", "Nunca. Respostas, atas e convites ficam em rascunho até você tocar em Enviar ou dizer “envia”."],
+    ["Funciona no meu idioma?", "Sim. Você fala ou escreve no seu idioma e o Fidus responde no mesmo idioma. Pode até misturar."],
+    ["Posso mudar de plano depois?", "Sim, a qualquer momento. Se você pedir algo de um plano acima, o próprio Fidus mostra o que ele liberaria."],
+    ["Funciona no iPhone?", "O acesso antecipado começa pelo Android. O iPhone vem em seguida. [Confirmar data.]"],
+    ["Como cancelo?", "Direto no app, a qualquer momento, sem ligação e sem multa."]]
+},
+en: {
+  t: { navDay: "A day with Fidus", navFeat: "Features", navPlans: "Pricing", navFaq: "FAQ", navCta: "Get started →",
+    badge: "Early access open · Android", h1a: "Speak.", h1b: "Fidus", r0: "books it.", r1: "logs it.", r2: "replies.", r3: "reminds.", r4: "files it.",
+    lead: "The personal assistant that handles the diary, emails, expenses and documents for people running a life and a business across countries. By voice, in your language.",
+    emailLabel: "Your email", emailPh: "you@email.com", join: "Get access →", joined: "Done. You're in the next test group.",
+    c1: "✓ Works with Google Calendar, Gmail and Meet", c2: "✓ Several businesses and currencies", c3: "✓ Cancel in the app",
+    toast1t: "In your diary", toast1s: "Thursday, 4pm · with address", toast2t: "Expense logged", toast2s: "{m45.90} · HomB · receipt saved",
+    toast3t: "Draft ready", toast3s: " · you approve", phoneAria: "Demo conversation with Fidus", online: "online", typing: "typing…",
+    draftLabel: "Email · waiting for you", cancel: "Cancel", send: "Send", composer: "Type or tap the mic…", marqueeAria: "Example requests",
+    dayH: "While you work, it handles the rest.", dayTabs: "Times of day", featH: "One assistant. Your whole routine.",
+    moneyKicker: "Your money, organised", moneyH: "Every penny in the right place.",
+    moneyP: "Say the expense or snap the receipt. Fidus sorts it by business, category and currency, flags anything unusual and hands your accountant a ready-made pack.",
+    panelAria: "Example expenses dashboard", panelTitle: "September · HomB", example: "example", warn: "Heads up:", warnT: "duplicate charge at Screwfix, 3 days apart.",
+    ok: "Ready:", okT: "Q3 accountant pack, with 41 receipts.",
+    ctrlKicker: "You're in control", ctrlH: "An assistant that asks first.", ctrlP: "It runs the routine on its own. It stops before anything that speaks for you.",
+    ctrl1h: "Nothing goes out without your word", ctrl1p: "Emails, minutes and invites stay as drafts until you tap Send or say “send it”.",
+    ctrl2h: "Everything can be undone", ctrl2p: "The Activity tab shows everything Fidus did, with an undo button.",
+    ctrl3h: "Your data is yours", ctrl3p: "Audio becomes text and is deleted. [Confirm the privacy policy before publishing.]",
+    plansH1: "No limit on requests.", plansH2: "On any plan.", billingAria: "Billing period", monthly: "Monthly", yearly: "Yearly · 2 months free",
+    recommended: "Recommended", perMonth: "/month", yearNote: "{p} per year, billed once", monthNote: "billed monthly", startWith: "Start with {n}", soon: "SOON",
+    priceNote: "Prices in {c}, taxes included [confirm]. Cancel any time, right in the app.", faqH: "Questions",
+    finalH: "Stop taking notes. Start talking.", finalCta: "Get early access →", company: "· [COMPANY LTD], United Kingdom",
+    privacy: "Privacy", terms: "Terms", contact: "Contact", langLabel: "Language", curLabel: "Currency", navAria: "Main",
+    cur: { GBP: "pounds", EUR: "euros", USD: "US dollars" } },
+  plans: { essencial: ["Essential", "To organise your life and get started in your own business.", ["Unlimited voice and text", "Diary, reminders and an 8am briefing", "Email: summaries and drafts you approve", "Expenses and receipts for 1 wallet", "Documents with expiry alerts", "Tasks and Activity tab"]],
+    negocio: ["Business", "For people running one or more companies.", ["Everything in Essential", "Unlimited businesses and currencies", "Booking link for clients", "Automatic meeting minutes", "Accountant pack with receipts", "Subscription alerts and weekly review"]],
+    premium: ["Premium", "The whole back office, in your pocket.", ["Everything in Business", "*Connected bank: expenses log themselves", "*Client billing and invoices", "*1 more person on the account + accountant access", "Unlimited minutes and priority support"]] },
+  chat: ["Book a site visit Thursday at 4pm at Norauto Coimbra", "Booked: Thursday, 4–5pm, at Norauto Coimbra with the full address. The reminder opens straight in Maps.",
+    "Receipt sent", "Logged: {m45.90} · fuel · HomB. Receipt saved.", "Reply to Carlos accepting the quote", "Re: Kitchen quote · to Carlos",
+    "How much did I spend on fuel this month?", "{m186.40} across 4 fill-ups.\nSame point last month: {m212.10}."],
+  cmd1: ["Lunch with the accountant Friday at 1", "How much did I spend on fuel this month?", "Remind me to pay VAT on the 5th", "Reply to Carlos accepting the quote",
+    "What have I got tomorrow?", "Find the car insurance", "Rent of 1,200 every 10th", "Add a task to review the contract by Friday"],
+  cmd2: ["Morning! How's my day?", "Meeting every Tuesday at 9 with a Meet link", "Make the quarterly accountant pack", "Which subscriptions do I pay?",
+    "Send me my booking link", "Paid 45 for lunch, Portugal company", "Mum's birthday on the 27th, warn me 3 days before", "How was my week?"],
+  day: [["Morning", "Your whole day in one message.", "Diary, tasks due today, bills coming up and important emails, before your first coffee.", "Morning! What have I got today?", "3 appointments, the first at 9:30.\n1 overdue task: send the quote.\nCar insurance expires in 12 days."],
+    ["In the car", "Diary with address, by voice.", "You talk to the phone in its holder. The event goes into Google Calendar with the full address and the reminder opens in Maps.", "Book a site visit Thursday at 4 on Rodney Road, Wembley", "Booked: Thursday, 4pm, with the full Wembley address."],
+    ["Lunch", "A receipt became an entry.", "One photo and done: amount, VAT, category and business, with the receipt kept for your accountant.", "[receipt photo]", "Logged: {m23.80} · food · HomB.\nVAT: {m3.97}. Receipt saved."],
+    ["Meeting", "The minutes write themselves.", "Record the meeting in the app. Fidus sums up the decisions, creates your tasks and drafts the email for you to approve.", "Stop and make the minutes", "Minutes ready: Wembley job.\n2 decisions · 3 next steps.\nAdded 2 tasks for you."],
+    ["Emails", "Replies ready, you just approve.", "It reads, summarises and drafts in your tone. Nothing goes out until you tap Send or say “send it”.", "Reply to Carlos accepting, payment in 30 days", "Draft ready. Tap Send or say “send it”."],
+    ["Evening", "Nothing forgotten.", "Reminders that ring at the right time and bills that warn you before they're due, every month.", "Remind me to call the supplier tomorrow at 9", "Done. Tomorrow at 9 your phone will remind you."]],
+  feat: [["Diary", "Diary and reminders", "Appointments with addresses, recurring events, Meet links and reminders that ring on your phone.", "Weekly meeting every Tuesday at 9"],
+    ["Email", "Email you approve", "A summary of what matters and drafts in your tone. You review and decide.", "Anything important in my inbox today?"],
+    ["Expenses", "Expenses and receipts", "By business, category and currency. Alerts for duplicates, above-average spend and pricier subscriptions.", "How much has HomB spent on materials?"],
+    ["Documents", "Documents with expiry dates", "Photo or PDF saved with a description. Alerts before expiry, search by topic.", "Find the rental contract"],
+    ["Meetings", "Meeting minutes", "Records, transcribes, summarises and creates everyone's tasks. The minutes email waits for your approval.", "What did we decide yesterday?"],
+    ["Clients", "Booking link", "Your clients pick a free slot. The event lands in your diary with the visit address.", "Send me my booking link"]],
+  bars: ["Materials", "Fuel", "Tools", "Food", "Software"],
+  faqs: [["Do I need WhatsApp?", "No. Fidus is its own app. Your personal and work chats stay separate."],
+    ["Does it send emails on its own?", "Never. Replies, minutes and invites stay as drafts until you tap Send or say “send it”."],
+    ["Does it work in my language?", "Yes. You speak or type in your language and Fidus answers in the same one. You can even mix languages."],
+    ["Can I change plans later?", "Yes, any time. If you ask for something from a higher plan, Fidus shows you what it would unlock."],
+    ["Does it work on iPhone?", "Early access starts on Android. iPhone comes next. [Confirm date.]"],
+    ["How do I cancel?", "Right in the app, any time, no phone call and no fee."]]
+},
+es: {
+  t: { navDay: "Un día con Fidus", navFeat: "Funciones", navPlans: "Planes", navFaq: "Preguntas", navCta: "Empezar ahora →",
+    badge: "Acceso anticipado abierto · Android", h1a: "Habla.", h1b: "Fidus", r0: "agenda.", r1: "anota.", r2: "responde.", r3: "recuerda.", r4: "guarda.",
+    lead: "El asistente personal que se encarga de la agenda, los correos, los gastos y los documentos de quien lleva su vida y su negocio entre países. Por voz, en tu idioma.",
+    emailLabel: "Tu correo", emailPh: "tu@correo.com", join: "Quiero acceso →", joined: "Listo. Entras en el próximo grupo de pruebas.",
+    c1: "✓ Funciona con Google Calendar, Gmail y Meet", c2: "✓ Varias empresas y monedas", c3: "✓ Cancela en la app",
+    toast1t: "Ya está en la agenda", toast1s: "Jueves, 16:00 · con dirección", toast2t: "Gasto anotado", toast2s: "{m45.90} · HomB · recibo guardado",
+    toast3t: "Borrador listo", toast3s: " · tú apruebas", phoneAria: "Demostración de conversación con Fidus", online: "en línea", typing: "escribiendo…",
+    draftLabel: "Correo · esperándote", cancel: "Cancelar", send: "Enviar", composer: "Escribe o toca el micrófono…", marqueeAria: "Ejemplos de pedidos",
+    dayH: "Mientras trabajas, él se ocupa del resto.", dayTabs: "Momentos del día", featH: "Un asistente. Toda tu rutina.",
+    moneyKicker: "Tu dinero, en orden", moneyH: "Cada céntimo en su sitio.",
+    moneyP: "Di el gasto o fotografía el recibo. Fidus lo separa por empresa, categoría y moneda, avisa cuando algo se sale de lo normal y entrega el paquete listo para tu contable.",
+    panelAria: "Ejemplo de panel de gastos", panelTitle: "Septiembre · HomB", example: "ejemplo", warn: "Atención:", warnT: "cargo repetido en Screwfix, con 3 días de diferencia.",
+    ok: "Listo:", okT: "paquete del contable del 3.er trimestre, con 41 recibos.",
+    ctrlKicker: "Tú tienes el control", ctrlH: "Un asistente que pide permiso.", ctrlP: "Hace la rutina solo. Se detiene antes de cualquier cosa que hable por ti.",
+    ctrl1h: "Nada sale sin tu orden", ctrl1p: "Correos, actas e invitaciones quedan en borrador hasta que tocas Enviar o dices “envía”.",
+    ctrl2h: "Todo se puede deshacer", ctrl2p: "La pestaña Actividad muestra cada cosa que hizo Fidus, con botón para deshacer.",
+    ctrl3h: "Tus datos son tuyos", ctrl3p: "El audio se convierte en texto y se borra. [Confirmar la política de privacidad antes de publicar.]",
+    plansH1: "Sin límite de pedidos.", plansH2: "En ningún plan.", billingAria: "Forma de pago", monthly: "Mensual", yearly: "Anual · 2 meses gratis",
+    recommended: "Recomendado", perMonth: "/mes", yearNote: "{p} al año, en un solo pago", monthNote: "se cobra cada mes", startWith: "Empezar con {n}", soon: "PRONTO",
+    priceNote: "Precios en {c}, impuestos incluidos [confirmar]. Cancela cuando quieras, desde la app.", faqH: "Preguntas",
+    finalH: "Deja de anotar. Empieza a hablar.", finalCta: "Quiero acceso anticipado →", company: "· [EMPRESA LTD], Reino Unido",
+    privacy: "Privacidad", terms: "Términos", contact: "Contacto", langLabel: "Idioma", curLabel: "Moneda", navAria: "Principal",
+    cur: { GBP: "libras", EUR: "euros", USD: "dólares" } },
+  plans: { essencial: ["Esencial", "Para organizar tu vida y empezar en tu propio negocio.", ["Voz y texto sin límite", "Agenda, recordatorios y resumen a las 8", "Correo: resúmenes y borradores que tú apruebas", "Gastos y recibos de 1 cartera", "Documentos con aviso de vencimiento", "Tareas y pestaña Actividad"]],
+    negocio: ["Negocio", "Para quien lleva una o más empresas.", ["Todo lo de Esencial", "Empresas y monedas ilimitadas", "Enlace de reservas para clientes", "Acta de reunión automática", "Paquete del contable con recibos", "Alerta de suscripciones y resumen semanal"]],
+    premium: ["Premium", "Todo el back-office, en tu bolsillo.", ["Todo lo de Negocio", "*Banco conectado: los gastos entran solos", "*Cobros y facturas a clientes", "*1 persona más en la cuenta + acceso del contable", "Actas sin límite y soporte prioritario"]] },
+  chat: ["Agenda visita técnica el jueves a las 4 de la tarde en Norauto Coimbra", "Agendado: jueves, 16:00–17:00, en Norauto Coimbra con la dirección completa. El recordatorio abre directo en Maps.",
+    "Recibo enviado", "Anotado: {m45.90} · combustible · HomB. Recibo guardado.", "Responde a Carlos aceptando el presupuesto", "Re: Presupuesto cocina · para Carlos",
+    "¿Cuánto gasté en gasolina este mes?", "{m186.40} en 4 repostajes.\nA estas alturas el mes pasado: {m212.10}."],
+  cmd1: ["Comida con el contable el viernes a la una", "¿Cuánto gasté en gasolina este mes?", "Recuérdame pagar el IVA el día 5", "Responde a Carlos aceptando el presupuesto",
+    "¿Qué tengo mañana?", "Busca el seguro del coche", "Alquiler de 1.200 cada día 10", "Crea la tarea de revisar el contrato antes del viernes"],
+  cmd2: ["¡Buenos días! ¿Cómo está mi día?", "Reunión todos los martes a las 9 con enlace de Meet", "Prepara el paquete del contable del trimestre", "¿Qué suscripciones pago?",
+    "Mándame mi enlace de reservas", "Pagué 45 de comida, empresa Portugal", "Cumpleaños de mi madre el 27, avísame 3 días antes", "¿Qué tal fue mi semana?"],
+  day: [["Buenos días", "Todo el día en un mensaje.", "Agenda, tareas que vencen hoy, pagos de los próximos días y correos importantes, antes del primer café.", "¡Buenos días! ¿Qué tengo hoy?", "3 citas, la primera a las 9:30.\n1 tarea atrasada: enviar presupuesto.\nEl seguro del coche vence en 12 días."],
+    ["En el coche", "Agenda con dirección, por voz.", "Hablas con el móvil en el soporte. El evento entra en Google Calendar con la dirección completa y el recordatorio abre en Maps.", "Agenda visita técnica el jueves a las 4 en Rodney Road, Wembley", "Agendado: jueves, 16:00, con la dirección completa de Wembley."],
+    ["Comida", "El recibo ya es un gasto anotado.", "Una foto y listo: importe, IVA, categoría y empresa, con el recibo guardado para el contable.", "[foto del recibo]", "Anotado: {m23.80} · comida · HomB.\nIVA: {m3.97}. Recibo guardado."],
+    ["Reunión", "El acta se escribe sola.", "Graba la reunión en la app. Fidus resume las decisiones, crea tus tareas y prepara el correo para que lo apruebes.", "Terminar y generar el acta", "Acta lista: Obra Wembley.\n2 decisiones · 3 próximos pasos.\nAñadí 2 tareas tuyas."],
+    ["Correos", "Respuestas listas, tú solo apruebas.", "Lee, resume y redacta con tu tono. Nada sale hasta que tocas Enviar o dices “envía”.", "Responde a Carlos aceptando, pago a 30 días", "Borrador listo. Toca Enviar o di “envía”."],
+    ["Fin del día", "Nada olvidado.", "Recordatorios que suenan a la hora justa y pagos que avisan antes de vencer, cada mes.", "Recuérdame llamar al proveedor mañana a las 9", "Hecho. Mañana a las 9 tu móvil te avisa."]],
+  feat: [["Agenda", "Agenda y recordatorios", "Citas con dirección, eventos recurrentes, enlace de Meet y recordatorios que suenan en el móvil.", "Reunión semanal todos los martes a las 9"],
+    ["Correo", "Correo con aprobación", "Resumen de lo importante y borradores con tu tono. Tú revisas y decides.", "¿Qué ha llegado de importante hoy?"],
+    ["Gastos", "Gastos y recibos", "Por empresa, categoría y moneda. Aviso de duplicados, de gastos por encima de la media y de suscripciones más caras.", "¿Cuánto ha gastado HomB en material?"],
+    ["Documentos", "Documentos con vencimiento", "Foto o PDF guardado con descripción. Aviso antes de vencer, búsqueda por tema.", "Busca el contrato del alquiler"],
+    ["Reuniones", "Acta de reunión", "Graba, transcribe, resume y crea las tareas de cada uno. El correo del acta espera tu aprobación.", "¿Qué se decidió ayer?"],
+    ["Clientes", "Enlace de reservas", "Tus clientes eligen un hueco libre. El evento cae en tu agenda con la dirección de la visita.", "Mándame mi enlace de reservas"]],
+  bars: ["Materiales", "Combustible", "Herramientas", "Comida", "Software"],
+  faqs: [["¿Necesito WhatsApp?", "No. Fidus es una app propia. Tus chats personales y de trabajo siguen separados."],
+    ["¿Envía correos solo?", "Nunca. Respuestas, actas e invitaciones quedan en borrador hasta que tocas Enviar o dices “envía”."],
+    ["¿Funciona en mi idioma?", "Sí. Hablas o escribes en tu idioma y Fidus responde en el mismo. Puedes incluso mezclar."],
+    ["¿Puedo cambiar de plan después?", "Sí, cuando quieras. Si pides algo de un plan superior, Fidus te muestra lo que desbloquearía."],
+    ["¿Funciona en iPhone?", "El acceso anticipado empieza en Android. iPhone viene después. [Confirmar fecha.]"],
+    ["¿Cómo cancelo?", "Desde la app, cuando quieras, sin llamadas ni penalización."]]
+},
+fr: {
+  t: { navDay: "Une journée avec Fidus", navFeat: "Fonctions", navPlans: "Tarifs", navFaq: "Questions", navCta: "Commencer →",
+    badge: "Accès anticipé ouvert · Android", h1a: "Parlez.", h1b: "Fidus", r0: "planifie.", r1: "enregistre.", r2: "répond.", r3: "rappelle.", r4: "classe.",
+    lead: "L’assistant personnel qui gère l’agenda, les e-mails, les dépenses et les documents de ceux qui mènent leur vie et leur entreprise entre plusieurs pays. À la voix, dans votre langue.",
+    emailLabel: "Votre e-mail", emailPh: "vous@email.com", join: "Je veux l’accès →", joined: "C’est fait. Vous serez dans le prochain groupe de test.",
+    c1: "✓ Compatible Google Agenda, Gmail et Meet", c2: "✓ Plusieurs entreprises et devises", c3: "✓ Résiliation dans l’app",
+    toast1t: "C’est dans l’agenda", toast1s: "Jeudi, 16 h · avec adresse", toast2t: "Dépense enregistrée", toast2s: "{m45.90} · HomB · reçu sauvegardé",
+    toast3t: "Brouillon prêt", toast3s: " · vous validez", phoneAria: "Démonstration d’une conversation avec Fidus", online: "en ligne", typing: "écrit…",
+    draftLabel: "E-mail · en attente", cancel: "Annuler", send: "Envoyer", composer: "Écrivez ou touchez le micro…", marqueeAria: "Exemples de demandes",
+    dayH: "Pendant que vous travaillez, il s’occupe du reste.", dayTabs: "Moments de la journée", featH: "Un assistant. Toute votre routine.",
+    moneyKicker: "Votre argent, organisé", moneyH: "Chaque centime à sa place.",
+    moneyP: "Dites la dépense ou photographiez le reçu. Fidus trie par entreprise, catégorie et devise, signale ce qui sort de l’ordinaire et prépare le dossier pour votre comptable.",
+    panelAria: "Exemple de tableau des dépenses", panelTitle: "Septembre · HomB", example: "exemple", warn: "Attention :", warnT: "prélèvement en double chez Screwfix, à 3 jours d’écart.",
+    ok: "Prêt :", okT: "dossier comptable du 3e trimestre, avec 41 reçus.",
+    ctrlKicker: "Vous gardez la main", ctrlH: "Un assistant qui demande d’abord.", ctrlP: "Il gère la routine seul. Il s’arrête avant tout ce qui parle en votre nom.",
+    ctrl1h: "Rien ne part sans votre accord", ctrl1p: "E-mails, comptes rendus et invitations restent en brouillon jusqu’à ce que vous touchiez Envoyer ou disiez « envoie ».",
+    ctrl2h: "Tout peut être annulé", ctrl2p: "L’onglet Activité montre tout ce que Fidus a fait, avec un bouton pour annuler.",
+    ctrl3h: "Vos données vous appartiennent", ctrl3p: "L’audio devient du texte puis est supprimé. [Confirmer la politique de confidentialité avant publication.]",
+    plansH1: "Demandes illimitées.", plansH2: "Dans toutes les formules.", billingAria: "Facturation", monthly: "Mensuel", yearly: "Annuel · 2 mois offerts",
+    recommended: "Recommandé", perMonth: "/mois", yearNote: "{p} par an, payé en une fois", monthNote: "facturé chaque mois", startWith: "Commencer avec {n}", soon: "BIENTÔT",
+    priceNote: "Prix en {c}, taxes comprises [à confirmer]. Résiliez quand vous voulez, dans l’app.", faqH: "Questions",
+    finalH: "Arrêtez de noter. Commencez à parler.", finalCta: "Je veux l’accès anticipé →", company: "· [SOCIÉTÉ LTD], Royaume-Uni",
+    privacy: "Confidentialité", terms: "Conditions", contact: "Contact", langLabel: "Langue", curLabel: "Devise", navAria: "Principal",
+    cur: { GBP: "livres sterling", EUR: "euros", USD: "dollars US" } },
+  plans: { essencial: ["Essentiel", "Pour organiser votre vie et démarrer votre activité.", ["Voix et texte illimités", "Agenda, rappels et point du matin à 8 h", "E-mail : résumés et brouillons que vous validez", "Dépenses et reçus pour 1 portefeuille", "Documents avec alerte d’échéance", "Tâches et onglet Activité"]],
+    negocio: ["Business", "Pour ceux qui gèrent une ou plusieurs entreprises.", ["Tout l’Essentiel", "Entreprises et devises illimitées", "Lien de réservation pour vos clients", "Compte rendu de réunion automatique", "Dossier comptable avec reçus", "Alerte abonnements et bilan de la semaine"]],
+    premium: ["Premium", "Tout le back-office, dans votre poche.", ["Tout Business", "*Banque connectée : les dépenses arrivent seules", "*Facturation et encaissement clients", "*1 personne de plus sur le compte + accès comptable", "Comptes rendus illimités et support prioritaire"]] },
+  chat: ["Planifie une visite technique jeudi à 16 h chez Norauto Coimbra", "C’est noté : jeudi, 16 h–17 h, chez Norauto Coimbra avec l’adresse complète. Le rappel s’ouvre dans Maps.",
+    "Reçu envoyé", "Enregistré : {m45.90} · carburant · HomB. Reçu sauvegardé.", "Réponds à Carlos que j’accepte le devis", "Re : Devis cuisine · pour Carlos",
+    "Combien j’ai dépensé en carburant ce mois-ci ?", "{m186.40} en 4 pleins.\nAu même moment le mois dernier : {m212.10}."],
+  cmd1: ["Déjeuner avec le comptable vendredi à 13 h", "Combien j’ai dépensé en carburant ce mois-ci ?", "Rappelle-moi de payer la TVA le 5", "Réponds à Carlos que j’accepte le devis",
+    "Qu’est-ce que j’ai demain ?", "Trouve l’assurance de la voiture", "Loyer de 1 200 tous les 10 du mois", "Crée la tâche de relire le contrat avant vendredi"],
+  cmd2: ["Bonjour ! Comment se présente ma journée ?", "Réunion chaque mardi à 9 h avec un lien Meet", "Prépare le dossier comptable du trimestre", "Quels abonnements je paie ?",
+    "Envoie-moi mon lien de réservation", "J’ai payé 45 de déjeuner, société Portugal", "Anniversaire de ma mère le 27, préviens-moi 3 jours avant", "Comment s’est passée ma semaine ?"],
+  day: [["Matin", "Toute votre journée en un message.", "Agenda, tâches du jour, factures à venir et e-mails importants, avant le premier café.", "Bonjour ! Qu’est-ce que j’ai aujourd’hui ?", "3 rendez-vous, le premier à 9 h 30.\n1 tâche en retard : envoyer le devis.\nL’assurance auto expire dans 12 jours."],
+    ["En voiture", "L’agenda avec l’adresse, à la voix.", "Vous parlez au téléphone sur son support. L’événement entre dans Google Agenda avec l’adresse complète et le rappel s’ouvre dans Maps.", "Planifie une visite jeudi à 16 h sur Rodney Road, Wembley", "C’est noté : jeudi, 16 h, avec l’adresse complète à Wembley."],
+    ["Déjeuner", "Le reçu devient une dépense.", "Une photo et c’est fait : montant, TVA, catégorie et entreprise, avec le reçu gardé pour le comptable.", "[photo du reçu]", "Enregistré : {m23.80} · repas · HomB.\nTVA : {m3.97}. Reçu sauvegardé."],
+    ["Réunion", "Le compte rendu s’écrit tout seul.", "Enregistrez la réunion dans l’app. Fidus résume les décisions, crée vos tâches et prépare l’e-mail à valider.", "Terminer et faire le compte rendu", "Compte rendu prêt : chantier Wembley.\n2 décisions · 3 prochaines étapes.\nJ’ai ajouté 2 tâches pour vous."],
+    ["E-mails", "Réponses prêtes, vous validez.", "Il lit, résume et rédige dans votre ton. Rien ne part avant que vous touchiez Envoyer ou disiez « envoie ».", "Réponds à Carlos que j’accepte, paiement à 30 jours", "Brouillon prêt. Touchez Envoyer ou dites « envoie »."],
+    ["Fin de journée", "Rien d’oublié.", "Des rappels qui sonnent au bon moment et des factures qui préviennent avant l’échéance, chaque mois.", "Rappelle-moi d’appeler le fournisseur demain à 9 h", "C’est noté. Demain à 9 h, votre téléphone vous préviendra."]],
+  feat: [["Agenda", "Agenda et rappels", "Rendez-vous avec adresse, événements récurrents, lien Meet et rappels qui sonnent sur le téléphone.", "Réunion chaque mardi à 9 h"],
+    ["E-mail", "E-mail avec validation", "Le résumé de l’essentiel et des brouillons dans votre ton. Vous relisez et décidez.", "Quoi d’important dans mes e-mails aujourd’hui ?"],
+    ["Dépenses", "Dépenses et reçus", "Par entreprise, catégorie et devise. Alertes doublon, dépense au-dessus de la moyenne et abonnement plus cher.", "Combien HomB a dépensé en matériel ?"],
+    ["Documents", "Documents avec échéance", "Photo ou PDF classé avec description. Alerte avant expiration, recherche par sujet.", "Trouve le bail de location"],
+    ["Réunions", "Compte rendu de réunion", "Enregistre, transcrit, résume et crée les tâches de chacun. L’e-mail du compte rendu attend votre accord.", "Qu’avons-nous décidé hier ?"],
+    ["Clients", "Lien de réservation", "Vos clients choisissent un créneau libre. L’événement arrive dans votre agenda avec l’adresse de la visite.", "Envoie-moi mon lien de réservation"]],
+  bars: ["Matériaux", "Carburant", "Outils", "Repas", "Logiciels"],
+  faqs: [["Faut-il utiliser WhatsApp ?", "Non. Fidus est une application à part. Vos conversations personnelles et professionnelles restent séparées."],
+    ["Envoie-t-il des e-mails tout seul ?", "Jamais. Réponses, comptes rendus et invitations restent en brouillon jusqu’à ce que vous touchiez Envoyer ou disiez « envoie »."],
+    ["Fonctionne-t-il dans ma langue ?", "Oui. Vous parlez ou écrivez dans votre langue et Fidus répond dans la même. Vous pouvez même mélanger."],
+    ["Puis-je changer de formule ensuite ?", "Oui, à tout moment. Si vous demandez une fonction d’une formule supérieure, Fidus vous montre ce qu’elle débloquerait."],
+    ["Fonctionne-t-il sur iPhone ?", "L’accès anticipé commence sur Android. L’iPhone suivra. [Confirmer la date.]"],
+    ["Comment résilier ?", "Directement dans l’app, à tout moment, sans appel ni frais."]]
+},
+de: {
+  t: { navDay: "Ein Tag mit Fidus", navFeat: "Funktionen", navPlans: "Preise", navFaq: "Fragen", navCta: "Jetzt starten →",
+    badge: "Früher Zugang offen · Android", h1a: "Sprich.", h1b: "Fidus", r0: "plant.", r1: "bucht.", r2: "antwortet.", r3: "erinnert.", r4: "archiviert.",
+    lead: "Der persönliche Assistent für Kalender, E-Mails, Ausgaben und Dokumente – für alle, die Leben und Geschäft über Ländergrenzen hinweg führen. Per Sprache, in deiner Sprache.",
+    emailLabel: "Deine E-Mail", emailPh: "du@email.com", join: "Zugang sichern →", joined: "Erledigt. Du bist in der nächsten Testgruppe.",
+    c1: "✓ Funktioniert mit Google Kalender, Gmail und Meet", c2: "✓ Mehrere Firmen und Währungen", c3: "✓ Kündigung in der App",
+    toast1t: "Steht im Kalender", toast1s: "Donnerstag, 16 Uhr · mit Adresse", toast2t: "Ausgabe gebucht", toast2s: "{m45.90} · HomB · Beleg gespeichert",
+    toast3t: "Entwurf fertig", toast3s: " · du gibst frei", phoneAria: "Beispielgespräch mit Fidus", online: "online", typing: "schreibt…",
+    draftLabel: "E-Mail · wartet auf dich", cancel: "Abbrechen", send: "Senden", composer: "Schreiben oder Mikrofon antippen…", marqueeAria: "Beispielanfragen",
+    dayH: "Während du arbeitest, kümmert er sich um den Rest.", dayTabs: "Tageszeiten", featH: "Ein Assistent. Dein ganzer Alltag.",
+    moneyKicker: "Dein Geld, geordnet", moneyH: "Jeder Cent am richtigen Platz.",
+    moneyP: "Sag die Ausgabe oder fotografiere den Beleg. Fidus sortiert nach Firma, Kategorie und Währung, warnt bei Auffälligkeiten und liefert das fertige Paket für deinen Steuerberater.",
+    panelAria: "Beispiel einer Ausgabenübersicht", panelTitle: "September · HomB", example: "Beispiel", warn: "Achtung:", warnT: "doppelte Abbuchung bei Screwfix, 3 Tage auseinander.",
+    ok: "Fertig:", okT: "Paket für den Steuerberater, 3. Quartal, mit 41 Belegen.",
+    ctrlKicker: "Du hast die Kontrolle", ctrlH: "Ein Assistent, der vorher fragt.", ctrlP: "Er erledigt die Routine allein. Er stoppt vor allem, was in deinem Namen spricht.",
+    ctrl1h: "Nichts geht ohne dein Okay raus", ctrl1p: "E-Mails, Protokolle und Einladungen bleiben Entwürfe, bis du auf Senden tippst oder „senden“ sagst.",
+    ctrl2h: "Alles lässt sich rückgängig machen", ctrl2p: "Der Tab Aktivität zeigt alles, was Fidus getan hat – mit Rückgängig-Knopf.",
+    ctrl3h: "Deine Daten gehören dir", ctrl3p: "Audio wird zu Text und danach gelöscht. [Datenschutzerklärung vor Veröffentlichung bestätigen.]",
+    plansH1: "Unbegrenzte Anfragen.", plansH2: "In jedem Tarif.", billingAria: "Abrechnung", monthly: "Monatlich", yearly: "Jährlich · 2 Monate gratis",
+    recommended: "Empfohlen", perMonth: "/Monat", yearNote: "{p} pro Jahr, einmal abgerechnet", monthNote: "monatlich abgerechnet", startWith: "Mit {n} starten", soon: "BALD",
+    priceNote: "Preise in {c}, inkl. Steuern [bestätigen]. Jederzeit in der App kündbar.", faqH: "Fragen",
+    finalH: "Hör auf zu notieren. Fang an zu sprechen.", finalCta: "Früher Zugang →", company: "· [FIRMA LTD], Vereinigtes Königreich",
+    privacy: "Datenschutz", terms: "AGB", contact: "Kontakt", langLabel: "Sprache", curLabel: "Währung", navAria: "Hauptmenü",
+    cur: { GBP: "Pfund", EUR: "Euro", USD: "US-Dollar" } },
+  plans: { essencial: ["Essenziell", "Um dein Leben zu organisieren und im eigenen Geschäft zu starten.", ["Sprache und Text unbegrenzt", "Kalender, Erinnerungen und Morgenbriefing um 8", "E-Mail: Zusammenfassungen und Entwürfe zur Freigabe", "Ausgaben und Belege für 1 Konto", "Dokumente mit Ablaufwarnung", "Aufgaben und Tab Aktivität"]],
+    negocio: ["Business", "Für alle, die eine oder mehrere Firmen führen.", ["Alles aus Essenziell", "Unbegrenzt Firmen und Währungen", "Buchungslink für Kunden", "Automatisches Meeting-Protokoll", "Steuerberater-Paket mit Belegen", "Abo-Warnung und Wochenrückblick"]],
+    premium: ["Premium", "Das ganze Backoffice in der Tasche.", ["Alles aus Business", "*Verbundenes Bankkonto: Ausgaben kommen von selbst", "*Rechnungen und Zahlungen für Kunden", "*1 weitere Person im Konto + Zugang für Steuerberater", "Unbegrenzte Protokolle und Priority-Support"]] },
+  chat: ["Trag einen Technikertermin Donnerstag um 16 Uhr bei Norauto Coimbra ein", "Eingetragen: Donnerstag, 16–17 Uhr, bei Norauto Coimbra mit voller Adresse. Die Erinnerung öffnet direkt Maps.",
+    "Beleg gesendet", "Gebucht: {m45.90} · Kraftstoff · HomB. Beleg gespeichert.", "Antworte Carlos, dass ich das Angebot annehme", "Re: Angebot Küche · an Carlos",
+    "Wie viel habe ich diesen Monat getankt?", "{m186.40} bei 4 Tankstopps.\nZum gleichen Zeitpunkt letzten Monat: {m212.10}."],
+  cmd1: ["Mittagessen mit dem Steuerberater Freitag um 13 Uhr", "Wie viel habe ich diesen Monat getankt?", "Erinnere mich am 5. an die Umsatzsteuer", "Antworte Carlos, dass ich das Angebot annehme",
+    "Was habe ich morgen?", "Finde die Autoversicherung", "Miete 1.200 an jedem 10.", "Aufgabe: Vertrag bis Freitag prüfen"],
+  cmd2: ["Guten Morgen! Wie sieht mein Tag aus?", "Meeting jeden Dienstag um 9 mit Meet-Link", "Erstell das Quartalspaket für den Steuerberater", "Welche Abos zahle ich?",
+    "Schick mir meinen Buchungslink", "45 fürs Mittagessen bezahlt, Firma Portugal", "Geburtstag meiner Mutter am 27., erinnere mich 3 Tage vorher", "Wie war meine Woche?"],
+  day: [["Morgen", "Dein ganzer Tag in einer Nachricht.", "Kalender, heute fällige Aufgaben, anstehende Rechnungen und wichtige E-Mails – vor dem ersten Kaffee.", "Guten Morgen! Was habe ich heute?", "3 Termine, der erste um 9:30.\n1 überfällige Aufgabe: Angebot senden.\nAutoversicherung läuft in 12 Tagen ab."],
+    ["Im Auto", "Termine mit Adresse, per Sprache.", "Du sprichst mit dem Handy in der Halterung. Der Termin landet mit voller Adresse im Google Kalender, die Erinnerung öffnet Maps.", "Technikertermin Donnerstag um 16 Uhr, Rodney Road, Wembley", "Eingetragen: Donnerstag, 16 Uhr, mit voller Adresse in Wembley."],
+    ["Mittag", "Aus dem Beleg wird eine Buchung.", "Ein Foto und fertig: Betrag, MwSt., Kategorie und Firma – der Beleg bleibt für den Steuerberater gespeichert.", "[Foto vom Beleg]", "Gebucht: {m23.80} · Essen · HomB.\nMwSt.: {m3.97}. Beleg gespeichert."],
+    ["Meeting", "Das Protokoll schreibt sich selbst.", "Nimm das Meeting in der App auf. Fidus fasst die Entscheidungen zusammen, legt deine Aufgaben an und bereitet die E-Mail zur Freigabe vor.", "Beenden und Protokoll erstellen", "Protokoll fertig: Baustelle Wembley.\n2 Entscheidungen · 3 nächste Schritte.\n2 Aufgaben für dich angelegt."],
+    ["E-Mails", "Antworten fertig, du gibst nur frei.", "Er liest, fasst zusammen und schreibt in deinem Ton. Nichts geht raus, bis du auf Senden tippst oder „senden“ sagst.", "Antworte Carlos: angenommen, Zahlung in 30 Tagen", "Entwurf fertig. Tippe auf Senden oder sag „senden“."],
+    ["Feierabend", "Nichts vergessen.", "Erinnerungen genau zur richtigen Zeit und Rechnungen, die vor Fälligkeit warnen – jeden Monat.", "Erinnere mich, morgen um 9 den Lieferanten anzurufen", "Erledigt. Morgen um 9 erinnert dich dein Handy."]],
+  feat: [["Kalender", "Kalender und Erinnerungen", "Termine mit Adresse, Serientermine, Meet-Link und Erinnerungen, die auf dem Handy klingeln.", "Wöchentliches Meeting jeden Dienstag um 9"],
+    ["E-Mail", "E-Mail mit Freigabe", "Zusammenfassung des Wichtigen und Entwürfe in deinem Ton. Du prüfst und entscheidest.", "Was Wichtiges ist heute reingekommen?"],
+    ["Ausgaben", "Ausgaben und Belege", "Nach Firma, Kategorie und Währung. Warnung bei Doppelbuchung, überdurchschnittlichen Ausgaben und teureren Abos.", "Wie viel hat HomB für Material ausgegeben?"],
+    ["Dokumente", "Dokumente mit Ablaufdatum", "Foto oder PDF mit Beschreibung gespeichert. Warnung vor Ablauf, Suche nach Thema.", "Finde den Mietvertrag"],
+    ["Meetings", "Meeting-Protokoll", "Nimmt auf, transkribiert, fasst zusammen und legt Aufgaben für alle an. Die Protokoll-Mail wartet auf deine Freigabe.", "Was haben wir gestern entschieden?"],
+    ["Kunden", "Buchungslink", "Deine Kunden wählen einen freien Termin. Er landet mit der Besuchsadresse in deinem Kalender.", "Schick mir meinen Buchungslink"]],
+  bars: ["Material", "Kraftstoff", "Werkzeug", "Essen", "Software"],
+  faqs: [["Brauche ich WhatsApp?", "Nein. Fidus ist eine eigene App. Private und berufliche Chats bleiben getrennt."],
+    ["Verschickt er E-Mails allein?", "Nie. Antworten, Protokolle und Einladungen bleiben Entwürfe, bis du auf Senden tippst oder „senden“ sagst."],
+    ["Funktioniert er in meiner Sprache?", "Ja. Du sprichst oder schreibst in deiner Sprache, und Fidus antwortet in derselben. Du kannst sogar mischen."],
+    ["Kann ich den Tarif später wechseln?", "Ja, jederzeit. Fragst du nach etwas aus einem höheren Tarif, zeigt Fidus dir, was er freischalten würde."],
+    ["Funktioniert er auf dem iPhone?", "Der frühe Zugang startet auf Android. Das iPhone folgt. [Datum bestätigen.]"],
+    ["Wie kündige ich?", "Direkt in der App, jederzeit, ohne Anruf und ohne Gebühr."]]
+},
+it: {
+  t: { navDay: "Una giornata con Fidus", navFeat: "Funzioni", navPlans: "Piani", navFaq: "Domande", navCta: "Inizia ora →",
+    badge: "Accesso anticipato aperto · Android", h1a: "Parla.", h1b: "Fidus", r0: "pianifica.", r1: "registra.", r2: "risponde.", r3: "ricorda.", r4: "archivia.",
+    lead: "L’assistente personale che gestisce agenda, e-mail, spese e documenti di chi porta avanti vita e lavoro tra più paesi. A voce, nella tua lingua.",
+    emailLabel: "La tua e-mail", emailPh: "tu@email.com", join: "Voglio l’accesso →", joined: "Fatto. Sei nel prossimo gruppo di test.",
+    c1: "✓ Funziona con Google Calendar, Gmail e Meet", c2: "✓ Più aziende e valute", c3: "✓ Disdici dall’app",
+    toast1t: "È in agenda", toast1s: "Giovedì, 16:00 · con indirizzo", toast2t: "Spesa registrata", toast2s: "{m45.90} · HomB · ricevuta salvata",
+    toast3t: "Bozza pronta", toast3s: " · approvi tu", phoneAria: "Esempio di conversazione con Fidus", online: "online", typing: "sta scrivendo…",
+    draftLabel: "E-mail · in attesa", cancel: "Annulla", send: "Invia", composer: "Scrivi o tocca il microfono…", marqueeAria: "Esempi di richieste",
+    dayH: "Mentre lavori, lui pensa al resto.", dayTabs: "Momenti della giornata", featH: "Un assistente. Tutta la tua routine.",
+    moneyKicker: "I tuoi soldi, in ordine", moneyH: "Ogni centesimo al suo posto.",
+    moneyP: "Di’ la spesa o fotografa la ricevuta. Fidus la divide per azienda, categoria e valuta, avvisa quando qualcosa esce dalla norma e consegna il pacchetto pronto per il commercialista.",
+    panelAria: "Esempio di pannello spese", panelTitle: "Settembre · HomB", example: "esempio", warn: "Attenzione:", warnT: "addebito doppio da Screwfix, a 3 giorni di distanza.",
+    ok: "Pronto:", okT: "pacchetto del commercialista del 3° trimestre, con 41 ricevute.",
+    ctrlKicker: "Il controllo è tuo", ctrlH: "Un assistente che chiede prima.", ctrlP: "Gestisce la routine da solo. Si ferma prima di qualsiasi cosa parli a nome tuo.",
+    ctrl1h: "Niente parte senza il tuo ok", ctrl1p: "E-mail, verbali e inviti restano in bozza finché non tocchi Invia o dici “invia”.",
+    ctrl2h: "Tutto si può annullare", ctrl2p: "La scheda Attività mostra tutto ciò che Fidus ha fatto, con il pulsante per annullare.",
+    ctrl3h: "I tuoi dati sono tuoi", ctrl3p: "L’audio diventa testo e viene cancellato. [Confermare l’informativa privacy prima di pubblicare.]",
+    plansH1: "Richieste illimitate.", plansH2: "In ogni piano.", billingAria: "Fatturazione", monthly: "Mensile", yearly: "Annuale · 2 mesi gratis",
+    recommended: "Consigliato", perMonth: "/mese", yearNote: "{p} all’anno, addebitati una volta", monthNote: "addebitato ogni mese", startWith: "Inizia con {n}", soon: "PRESTO",
+    priceNote: "Prezzi in {c}, tasse incluse [da confermare]. Disdici quando vuoi, dall’app.", faqH: "Domande",
+    finalH: "Smetti di prendere appunti. Inizia a parlare.", finalCta: "Voglio l’accesso anticipato →", company: "· [AZIENDA LTD], Regno Unito",
+    privacy: "Privacy", terms: "Termini", contact: "Contatti", langLabel: "Lingua", curLabel: "Valuta", navAria: "Principale",
+    cur: { GBP: "sterline", EUR: "euro", USD: "dollari USA" } },
+  plans: { essencial: ["Essenziale", "Per organizzare la vita e partire con la tua attività.", ["Voce e testo illimitati", "Agenda, promemoria e buongiorno alle 8", "E-mail: riassunti e bozze da approvare", "Spese e ricevute di 1 portafoglio", "Documenti con avviso di scadenza", "Attività e scheda Attività"]],
+    negocio: ["Business", "Per chi gestisce una o più aziende.", ["Tutto dell’Essenziale", "Aziende e valute illimitate", "Link di prenotazione per i clienti", "Verbale di riunione automatico", "Pacchetto commercialista con ricevute", "Avviso abbonamenti e riepilogo settimanale"]],
+    premium: ["Premium", "Tutto il back-office, in tasca.", ["Tutto del Business", "*Banca collegata: le spese entrano da sole", "*Fatture e incassi dai clienti", "*1 persona in più sull’account + accesso commercialista", "Verbali illimitati e supporto prioritario"]] },
+  chat: ["Fissa un sopralluogo giovedì alle 16 da Norauto Coimbra", "Fatto: giovedì, 16–17, da Norauto Coimbra con l’indirizzo completo. Il promemoria apre direttamente Maps.",
+    "Ricevuta inviata", "Registrato: {m45.90} · carburante · HomB. Ricevuta salvata.", "Rispondi a Carlos che accetto il preventivo", "Re: Preventivo cucina · a Carlos",
+    "Quanto ho speso di benzina questo mese?", "{m186.40} in 4 rifornimenti.\nNello stesso punto del mese scorso: {m212.10}."],
+  cmd1: ["Pranzo con il commercialista venerdì all’una", "Quanto ho speso di benzina questo mese?", "Ricordami di pagare l’IVA il 5", "Rispondi a Carlos che accetto il preventivo",
+    "Cosa ho domani?", "Trova l’assicurazione dell’auto", "Affitto di 1.200 ogni 10 del mese", "Crea l’attività di rivedere il contratto entro venerdì"],
+  cmd2: ["Buongiorno! Com’è la mia giornata?", "Riunione ogni martedì alle 9 con link Meet", "Prepara il pacchetto del commercialista del trimestre", "Quali abbonamenti pago?",
+    "Mandami il mio link di prenotazione", "Pagato 45 di pranzo, azienda Portogallo", "Compleanno di mia madre il 27, avvisami 3 giorni prima", "Com’è andata la mia settimana?"],
+  day: [["Buongiorno", "Tutta la giornata in un messaggio.", "Agenda, attività in scadenza oggi, conti dei prossimi giorni ed e-mail importanti, prima del primo caffè.", "Buongiorno! Cosa ho oggi?", "3 appuntamenti, il primo alle 9:30.\n1 attività in ritardo: mandare il preventivo.\nL’assicurazione auto scade tra 12 giorni."],
+    ["In macchina", "Agenda con indirizzo, a voce.", "Parli al telefono nel supporto. L’evento entra in Google Calendar con l’indirizzo completo e il promemoria apre Maps.", "Fissa un sopralluogo giovedì alle 16 in Rodney Road, Wembley", "Fatto: giovedì, 16:00, con l’indirizzo completo di Wembley."],
+    ["Pranzo", "La ricevuta è già registrata.", "Una foto ed è fatta: importo, IVA, categoria e azienda, con la ricevuta salvata per il commercialista.", "[foto della ricevuta]", "Registrato: {m23.80} · pasti · HomB.\nIVA: {m3.97}. Ricevuta salvata."],
+    ["Riunione", "Il verbale si scrive da solo.", "Registra la riunione nell’app. Fidus riassume le decisioni, crea le tue attività e prepara l’e-mail da approvare.", "Termina e crea il verbale", "Verbale pronto: cantiere Wembley.\n2 decisioni · 3 prossimi passi.\nHo aggiunto 2 attività per te."],
+    ["E-mail", "Risposte pronte, tu approvi.", "Legge, riassume e scrive col tuo tono. Niente parte finché non tocchi Invia o dici “invia”.", "Rispondi a Carlos che accetto, pagamento a 30 giorni", "Bozza pronta. Tocca Invia o di’ “invia”."],
+    ["Fine giornata", "Niente dimenticato.", "Promemoria che suonano al momento giusto e conti che avvisano prima della scadenza, ogni mese.", "Ricordami di chiamare il fornitore domani alle 9", "Fatto. Domani alle 9 il telefono ti avvisa."]],
+  feat: [["Agenda", "Agenda e promemoria", "Appuntamenti con indirizzo, eventi ricorrenti, link Meet e promemoria che suonano sul telefono.", "Riunione ogni martedì alle 9"],
+    ["E-mail", "E-mail con approvazione", "Il riassunto di ciò che conta e bozze col tuo tono. Rivedi e decidi tu.", "Cosa è arrivato di importante oggi?"],
+    ["Spese", "Spese e ricevute", "Per azienda, categoria e valuta. Avvisi di doppioni, spese sopra la media e abbonamenti più cari.", "Quanto ha speso HomB in materiali?"],
+    ["Documenti", "Documenti con scadenza", "Foto o PDF salvati con descrizione. Avviso prima della scadenza, ricerca per argomento.", "Trova il contratto d’affitto"],
+    ["Riunioni", "Verbale di riunione", "Registra, trascrive, riassume e crea le attività di ciascuno. L’e-mail del verbale aspetta la tua approvazione.", "Cosa abbiamo deciso ieri?"],
+    ["Clienti", "Link di prenotazione", "I tuoi clienti scelgono un orario libero. L’evento arriva in agenda con l’indirizzo della visita.", "Mandami il mio link di prenotazione"]],
+  bars: ["Materiali", "Carburante", "Attrezzi", "Pasti", "Software"],
+  faqs: [["Devo usare WhatsApp?", "No. Fidus è un’app a sé. Le tue chat personali e di lavoro restano separate."],
+    ["Manda e-mail da solo?", "Mai. Risposte, verbali e inviti restano in bozza finché non tocchi Invia o dici “invia”."],
+    ["Funziona nella mia lingua?", "Sì. Parli o scrivi nella tua lingua e Fidus risponde nella stessa. Puoi anche mescolare."],
+    ["Posso cambiare piano dopo?", "Sì, quando vuoi. Se chiedi qualcosa di un piano superiore, Fidus ti mostra cosa sbloccherebbe."],
+    ["Funziona su iPhone?", "L’accesso anticipato parte su Android. iPhone arriverà dopo. [Confermare la data.]"],
+    ["Come disdico?", "Dall’app, quando vuoi, senza telefonate e senza penali."]]
+},
+ms: {
+  t: { navDay: "Sehari bersama Fidus", navFeat: "Ciri-ciri", navPlans: "Pelan", navFaq: "Soalan", navCta: "Mula sekarang →",
+    badge: "Akses awal dibuka · Android", h1a: "Cakap.", h1b: "Fidus", r0: "jadualkan.", r1: "rekodkan.", r2: "balas.", r3: "ingatkan.", r4: "simpan.",
+    lead: "Pembantu peribadi yang menguruskan jadual, e-mel, perbelanjaan dan dokumen untuk mereka yang menguruskan hidup dan perniagaan merentas negara. Dengan suara, dalam bahasa anda.",
+    emailLabel: "E-mel anda", emailPh: "anda@email.com", join: "Saya mahu akses →", joined: "Selesai. Anda dalam kumpulan ujian seterusnya.",
+    c1: "✓ Berfungsi dengan Google Calendar, Gmail dan Meet", c2: "✓ Beberapa syarikat dan mata wang", c3: "✓ Batal dalam aplikasi",
+    toast1t: "Sudah dalam jadual", toast1s: "Khamis, 4 ptg · dengan alamat", toast2t: "Perbelanjaan direkod", toast2s: "{m45.90} · HomB · resit disimpan",
+    toast3t: "Draf sedia", toast3s: " · anda luluskan", phoneAria: "Contoh perbualan dengan Fidus", online: "dalam talian", typing: "sedang menaip…",
+    draftLabel: "E-mel · menunggu anda", cancel: "Batal", send: "Hantar", composer: "Taip atau sentuh mikrofon…", marqueeAria: "Contoh permintaan",
+    dayH: "Semasa anda bekerja, dia uruskan yang lain.", dayTabs: "Waktu dalam sehari", featH: "Satu pembantu. Seluruh rutin anda.",
+    moneyKicker: "Wang anda, tersusun", moneyH: "Setiap sen di tempat yang betul.",
+    moneyP: "Sebut perbelanjaan atau ambil gambar resit. Fidus mengasingkan mengikut syarikat, kategori dan mata wang, memberi amaran jika ada yang luar biasa dan menyediakan pakej untuk akauntan anda.",
+    panelAria: "Contoh papan pemuka perbelanjaan", panelTitle: "September · HomB", example: "contoh", warn: "Perhatian:", warnT: "caj berulang di Screwfix, selang 3 hari.",
+    ok: "Sedia:", okT: "pakej akauntan suku ke-3, dengan 41 resit.",
+    ctrlKicker: "Anda yang mengawal", ctrlH: "Pembantu yang minta izin dahulu.", ctrlP: "Dia uruskan rutin sendiri. Dia berhenti sebelum apa-apa yang bercakap bagi pihak anda.",
+    ctrl1h: "Tiada apa dihantar tanpa arahan anda", ctrl1p: "E-mel, minit dan jemputan kekal sebagai draf sehingga anda sentuh Hantar atau sebut “hantar”.",
+    ctrl2h: "Semuanya boleh dibatalkan", ctrl2p: "Tab Aktiviti menunjukkan semua yang Fidus lakukan, dengan butang untuk membatalkan.",
+    ctrl3h: "Data anda milik anda", ctrl3p: "Audio ditukar kepada teks dan dipadam. [Sahkan dasar privasi sebelum diterbitkan.]",
+    plansH1: "Permintaan tanpa had.", plansH2: "Dalam semua pelan.", billingAria: "Kitaran bil", monthly: "Bulanan", yearly: "Tahunan · 2 bulan percuma",
+    recommended: "Disyorkan", perMonth: "/bulan", yearNote: "{p} setahun, dibayar sekali", monthNote: "dibil setiap bulan", startWith: "Mula dengan {n}", soon: "AKAN DATANG",
+    priceNote: "Harga dalam {c}, termasuk cukai [sahkan]. Batal bila-bila masa, terus dalam aplikasi.", faqH: "Soalan",
+    finalH: "Berhenti mencatat. Mula bercakap.", finalCta: "Saya mahu akses awal →", company: "· [SYARIKAT LTD], United Kingdom",
+    privacy: "Privasi", terms: "Terma", contact: "Hubungi", langLabel: "Bahasa", curLabel: "Mata wang", navAria: "Utama",
+    cur: { GBP: "paun", EUR: "euro", USD: "dolar AS" } },
+  plans: { essencial: ["Asas", "Untuk menyusun hidup dan memulakan perniagaan sendiri.", ["Suara dan teks tanpa had", "Jadual, peringatan dan ringkasan pagi pukul 8", "E-mel: ringkasan dan draf untuk diluluskan", "Perbelanjaan dan resit untuk 1 dompet", "Dokumen dengan amaran tamat tempoh", "Tugasan dan tab Aktiviti"]],
+    negocio: ["Perniagaan", "Untuk mereka yang menguruskan satu atau lebih syarikat.", ["Semua dalam Asas", "Syarikat dan mata wang tanpa had", "Pautan tempahan untuk pelanggan", "Minit mesyuarat automatik", "Pakej akauntan dengan resit", "Amaran langganan dan ringkasan mingguan"]],
+    premium: ["Premium", "Seluruh back-office, dalam poket anda.", ["Semua dalam Perniagaan", "*Bank bersambung: perbelanjaan masuk sendiri", "*Bil dan invois untuk pelanggan", "*1 orang lagi dalam akaun + akses akauntan", "Minit tanpa had dan sokongan keutamaan"]] },
+  chat: ["Jadualkan lawatan teknikal hari Khamis pukul 4 petang di Norauto Coimbra", "Sudah dijadualkan: Khamis, 4–5 ptg, di Norauto Coimbra dengan alamat penuh. Peringatan terus buka Maps.",
+    "Resit dihantar", "Direkod: {m45.90} · bahan api · HomB. Resit disimpan.", "Balas Carlos, saya terima sebut harga", "Re: Sebut harga dapur · kepada Carlos",
+    "Berapa saya belanja untuk minyak bulan ini?", "{m186.40} untuk 4 kali isi minyak.\nPada masa yang sama bulan lepas: {m212.10}."],
+  cmd1: ["Makan tengah hari dengan akauntan hari Jumaat pukul 1", "Berapa saya belanja untuk minyak bulan ini?", "Ingatkan saya bayar cukai pada 5 hb", "Balas Carlos, saya terima sebut harga",
+    "Apa jadual saya esok?", "Cari insurans kereta", "Sewa 1,200 setiap 10 hb", "Buat tugasan semak kontrak sebelum Jumaat"],
+  cmd2: ["Selamat pagi! Bagaimana hari saya?", "Mesyuarat setiap Selasa pukul 9 dengan pautan Meet", "Sediakan pakej akauntan suku tahun ini", "Langganan apa yang saya bayar?",
+    "Hantar pautan tempahan saya", "Bayar 45 untuk makan tengah hari, syarikat Portugal", "Hari jadi ibu saya pada 27 hb, ingatkan 3 hari sebelum", "Bagaimana minggu saya?"],
+  day: [["Pagi", "Seluruh hari anda dalam satu mesej.", "Jadual, tugasan yang perlu siap hari ini, bil akan datang dan e-mel penting, sebelum kopi pertama.", "Selamat pagi! Apa jadual saya hari ini?", "3 temu janji, yang pertama pukul 9:30.\n1 tugasan lewat: hantar sebut harga.\nInsurans kereta tamat dalam 12 hari."],
+    ["Dalam kereta", "Jadual dengan alamat, melalui suara.", "Anda bercakap dengan telefon di pemegangnya. Acara masuk ke Google Calendar dengan alamat penuh dan peringatan buka Maps.", "Jadualkan lawatan Khamis pukul 4 di Rodney Road, Wembley", "Sudah dijadualkan: Khamis, 4 ptg, dengan alamat penuh di Wembley."],
+    ["Tengah hari", "Resit terus jadi rekod.", "Satu gambar, selesai: jumlah, cukai, kategori dan syarikat, dengan resit disimpan untuk akauntan.", "[gambar resit]", "Direkod: {m23.80} · makanan · HomB.\nCukai: {m3.97}. Resit disimpan."],
+    ["Mesyuarat", "Minit ditulis sendiri.", "Rakam mesyuarat dalam aplikasi. Fidus meringkaskan keputusan, mencipta tugasan anda dan menyediakan e-mel untuk anda luluskan.", "Tamatkan dan buat minit", "Minit sedia: projek Wembley.\n2 keputusan · 3 langkah seterusnya.\n2 tugasan anda telah ditambah."],
+    ["E-mel", "Balasan sedia, anda hanya luluskan.", "Dia baca, ringkaskan dan tulis draf mengikut gaya anda. Tiada apa dihantar sehingga anda sentuh Hantar atau sebut “hantar”.", "Balas Carlos, setuju, bayaran dalam 30 hari", "Draf sedia. Sentuh Hantar atau sebut “hantar”."],
+    ["Petang", "Tiada yang terlupa.", "Peringatan yang berbunyi tepat pada masanya dan bil yang memberi amaran sebelum tarikh akhir, setiap bulan.", "Ingatkan saya telefon pembekal esok pukul 9", "Baik. Esok pukul 9 telefon anda akan mengingatkan."]],
+  feat: [["Jadual", "Jadual dan peringatan", "Temu janji dengan alamat, acara berulang, pautan Meet dan peringatan yang berbunyi di telefon.", "Mesyuarat mingguan setiap Selasa pukul 9"],
+    ["E-mel", "E-mel dengan kelulusan", "Ringkasan perkara penting dan draf mengikut gaya anda. Anda semak dan putuskan.", "Ada e-mel penting hari ini?"],
+    ["Belanja", "Perbelanjaan dan resit", "Mengikut syarikat, kategori dan mata wang. Amaran caj berganda, belanja melebihi purata dan langganan yang naik harga.", "Berapa HomB belanja untuk bahan?"],
+    ["Dokumen", "Dokumen dengan tarikh luput", "Gambar atau PDF disimpan dengan keterangan. Amaran sebelum luput, carian mengikut topik.", "Cari perjanjian sewa"],
+    ["Mesyuarat", "Minit mesyuarat", "Merakam, menyalin, meringkaskan dan mencipta tugasan setiap orang. E-mel minit menunggu kelulusan anda.", "Apa yang kita putuskan semalam?"],
+    ["Pelanggan", "Pautan tempahan", "Pelanggan anda pilih slot yang kosong. Acara masuk ke jadual anda dengan alamat lawatan.", "Hantar pautan tempahan saya"]],
+  bars: ["Bahan", "Bahan api", "Peralatan", "Makanan", "Perisian"],
+  faqs: [["Perlukah saya guna WhatsApp?", "Tidak. Fidus ialah aplikasi tersendiri. Sembang peribadi dan kerja anda kekal berasingan."],
+    ["Adakah ia hantar e-mel sendiri?", "Tidak sama sekali. Balasan, minit dan jemputan kekal sebagai draf sehingga anda sentuh Hantar atau sebut “hantar”."],
+    ["Adakah ia berfungsi dalam bahasa saya?", "Ya. Anda bercakap atau menaip dalam bahasa anda dan Fidus membalas dalam bahasa yang sama. Boleh juga campur."],
+    ["Bolehkah saya tukar pelan kemudian?", "Ya, bila-bila masa. Jika anda minta sesuatu daripada pelan lebih tinggi, Fidus tunjukkan apa yang akan dibuka."],
+    ["Adakah ia berfungsi di iPhone?", "Akses awal bermula di Android. iPhone akan menyusul. [Sahkan tarikh.]"],
+    ["Bagaimana untuk batal?", "Terus dalam aplikasi, bila-bila masa, tanpa panggilan dan tanpa caj."]]
+}
+};
 
-var FEATURES = [
-  { tag: "Agenda", tone: "mint", title: "Agenda e lembretes", body: "Compromissos com endereço, eventos recorrentes, link do Meet e lembretes que tocam no celular.", ask: "Reunião semanal toda terça às 9h" },
-  { tag: "E-mail", tone: "blue", title: "E-mail com aprovação", body: "Resumo do que importa e rascunhos no seu tom. Você revisa e decide.", ask: "O que chegou de importante hoje?" },
-  { tag: "Gastos", tone: "amber", title: "Gastos e recibos", body: "Por empresa, categoria e moeda. Alerta de duplicado, de gasto acima da média e de assinatura mais cara.", ask: "Quanto a HomB gastou de material?" },
-  { tag: "Documentos", tone: "violet", title: "Documentos com validade", body: "Foto ou PDF guardado com descrição. Aviso antes de vencer, busca por assunto.", ask: "Acha o contrato do aluguel" },
-  { tag: "Reuniões", tone: "mint", title: "Ata de reunião", body: "Grava, transcreve, resume e cria as tarefas de cada um. O e-mail da ata espera sua aprovação.", ask: "O que ficou decidido ontem?" },
-  { tag: "Clientes", tone: "blue", title: "Link de agendamento", body: "Seus clientes escolhem um horário livre. O evento cai na sua agenda com o endereço da visita.", ask: "Me manda meu link de agendamento" }
-];
 var TONES = { mint: ["#123326", "#7CF0BE"], blue: ["#16244A", "#9DB8FF"], amber: ["#3A2A10", "#FFCF7A"], violet: ["#2A1D44", "#CDB6FF"] };
-
-var BARS = [
-  { label: "Materiais", v: 1240, color: "#14804F" }, { label: "Combustível", v: 412.6, color: "#2F5BD8" },
-  { label: "Ferramentas", v: 318, color: "#C27A00" }, { label: "Alimentação", v: 186.4, color: "#7A4FD8" },
-  { label: "Software", v: 74.97, color: "#5B6678" }
-];
-
-var PLANS = [
-  { id: "essencial", name: "Essencial", month: 29.90, who: "Para organizar a vida e começar no próprio negócio.",
-    items: [["Voz e texto sem limite"], ["Agenda, lembretes e bom dia às 8h"], ["E-mail: resumo e rascunhos com aprovação"], ["Gastos e recibos de 1 carteira"], ["Documentos com aviso de validade"], ["Tarefas e aba Atividade"]] },
-  { id: "negocio", name: "Negócio", month: 49.90, featured: true, who: "Para quem toca uma ou mais empresas.",
-    items: [["Tudo do Essencial"], ["Empresas e moedas ilimitadas"], ["Link de agendamento para clientes"], ["Ata de reunião automática"], ["Pacote do contador com recibos"], ["Alerta de assinaturas e resumo da semana"]] },
-  { id: "premium", name: "Premium", month: 69.90, who: "O back-office completo, no bolso.",
-    items: [["Tudo do Negócio"], ["Banco conectado: gastos entram sozinhos", 1], ["Cobrança e fatura para clientes", 1], ["Mais 1 pessoa na conta + acesso do contador", 1], ["Atas sem limite e suporte prioritário"]] }
-];
-
-var FAQS = [
-  { q: "Preciso usar o WhatsApp?", a: "Não. O Fidus é um app próprio. Suas conversas pessoais e de trabalho continuam separadas." },
-  { q: "Ele envia e-mails sozinho?", a: "Nunca. Respostas, atas e convites ficam em rascunho até você tocar em Enviar." },
-  { q: "Funciona em inglês?", a: "Sim. Você pode falar em português ou em inglês, e misturar os dois." },
-  { q: "Posso mudar de plano depois?", a: "Sim, a qualquer momento. Se você pedir algo de um plano acima, o próprio Fidus mostra o que ele liberaria." },
-  { q: "Funciona no iPhone?", a: "O acesso antecipado começa pelo Android. O iPhone vem em seguida. [Confirmar data.]" },
-  { q: "Como cancelo?", a: "Direto no app, a qualquer momento, sem ligação e sem multa." }
-];
-
-function money(n) { return "€" + n.toFixed(2).replace(".", ","); }
-function gbp(n) { return n.toFixed(2).replace(".", ",") + " GBP"; }
+var FEAT_TONES = ["mint", "blue", "amber", "violet", "mint", "blue"];
+var DAY_TIMES = ["08:00", "09:30", "12:40", "15:00", "17:30", "20:00"];
+var CHAT_KIND = [{ who: "user", voice: true }, { who: "bot" }, { who: "user", photo: true }, { who: "bot" },
+  { who: "user", voice: true }, { who: "card" }, { who: "user", voice: true }, { who: "bot" }];
+var BAR_V = [1240, 412.6, 318, 186.4, 74.97];
+var BAR_C = ["#14804F", "#2F5BD8", "#C27A00", "#7A4FD8", "#5B6678"];
+var PLAN_IDS = ["essencial", "negocio", "premium"];
+var CURS = [["GBP", "£ GBP"], ["EUR", "€ EUR"], ["USD", "$ USD"]];
 
 class Component extends DCLogic {
   constructor(props) {
     super(props);
-    this.state = { tick: 0, dayPick: -1, open: 0, joined: false, yearly: false };
+    this.state = { tick: 0, dayPick: -1, open: 0, joined: false, yearly: false, lang: detectLang(), cur: detectCurrency() };
   }
   componentDidMount() {
     var self = this;
     this.timer = setInterval(function () { self.setState({ tick: self.state.tick + 1 }); }, 1700);
+    try { document.documentElement.lang = this.state.lang; } catch (e) {}
   }
   componentWillUnmount() { clearInterval(this.timer); }
   renderVals() {
     var self = this;
-    var cycle = CHAT.length + 3;
+    var lang = this.state.lang, cur = this.state.cur;
+    var D = L[lang] || L.en, T = D.t, loc = localeFor(lang);
+    var f = function (s) { return fill(s, cur, loc); };
+    var m = function (n) { return fmtMoney(n, cur, loc); };
+    var cycle = CHAT_KIND.length + 3;
     var raw = this.state.tick % cycle;
-    var step = Math.min(raw, CHAT.length);
-    var shown = CHAT.slice(0, step).map(function (m) {
-      return { text: m.text, user: m.who === "user", bot: m.who === "bot", card: m.who === "card", voice: !!m.voice, photo: !!m.photo };
+    var step = Math.min(raw, CHAT_KIND.length);
+    var shown = CHAT_KIND.slice(0, step).map(function (k, i) {
+      return { text: f(D.chat[i]), user: k.who === "user", bot: k.who === "bot", card: k.who === "card", voice: !!k.voice, photo: !!k.photo };
     });
-    var next = CHAT[step];
+    var next = CHAT_KIND[step];
     var typing = !!next && next.who !== "user";
-    var dayIdx = this.state.dayPick >= 0 ? this.state.dayPick : Math.floor(this.state.tick / 3) % DAY.length;
-    var maxBar = BARS[0].v;
+    var dayIdx = this.state.dayPick >= 0 ? this.state.dayPick : Math.floor(this.state.tick / 3) % D.day.length;
+    var dc = D.day[dayIdx];
     var yearly = this.state.yearly;
+    var prices = PRICES[cur];
     return {
-      shown: shown, typing: typing, status: typing ? "digitando…" : "online",
+      t: T,
+      x: { toast2s: f(T.toast2s), priceNote: T.priceNote.replace("{c}", T.cur[cur]) },
+      shown: shown, typing: typing, status: typing ? T.typing : T.online,
       toast1: step >= 2, toast2: step >= 4, toast3: step >= 6,
-      row1: CMDS1.concat(CMDS1), row2: CMDS2.concat(CMDS2),
-      day: DAY.map(function (d, i) {
+      row1: D.cmd1.concat(D.cmd1), row2: D.cmd2.concat(D.cmd2),
+      day: D.day.map(function (d, i) {
         var on = i === dayIdx;
-        return { time: d.time, label: d.label, selected: on ? "true" : "false",
+        return { time: DAY_TIMES[i], label: d[0], selected: on ? "true" : "false",
                  bg: on ? "#07090D" : "#FFFFFF", fg: on ? "#F2F5F7" : "#07090D",
                  line: i < dayIdx ? "#14804F" : on ? "#3DDC97" : "#DDE2E8",
                  pick: function () { self.setState({ dayPick: i }); } };
       }),
-      dayCur: DAY[dayIdx],
-      features: FEATURES.map(function (f) { var t = TONES[f.tone]; return { tag: f.tag, title: f.title, body: f.body, ask: f.ask, tagBg: t[0], tagFg: t[1] }; }),
-      bars: BARS.map(function (b) { return { label: b.label, value: gbp(b.v), color: b.color, w: Math.round(b.v / maxBar * 100) + "%" }; }),
+      dayCur: { time: DAY_TIMES[dayIdx], label: dc[0], title: dc[1], body: dc[2], ask: f(dc[3]), answer: f(dc[4]) },
+      features: D.feat.map(function (x, i) { var tone = TONES[FEAT_TONES[i]]; return { tag: x[0], title: x[1], body: x[2], ask: x[3], tagBg: tone[0], tagFg: tone[1] }; }),
+      bars: BAR_V.map(function (v, i) { return { label: D.bars[i], value: m(v), color: BAR_C[i], w: Math.round(v / BAR_V[0] * 100) + "%" }; }),
       monthlyOn: yearly ? "false" : "true", yearlyOn: yearly ? "true" : "false",
       mBg: yearly ? "transparent" : "#07090D", mFg: yearly ? "#07090D" : "#F2F5F7",
       yBg: yearly ? "#07090D" : "transparent", yFg: yearly ? "#F2F5F7" : "#07090D",
       setMonthly: function () { self.setState({ yearly: false }); },
       setYearly: function () { self.setState({ yearly: true }); },
-      plans: PLANS.map(function (p) {
-        var f = !!p.featured;
-        return { name: p.name, who: p.who, featured: f,
-                 price: yearly ? money(Math.round(p.month * 10 / 12 * 100) / 100) : money(p.month),
-                 note: yearly ? money(p.month * 10) + " por ano, cobrado uma vez" : "cobrado todo mês",
-                 bg: f ? "#07090D" : "#FFFFFF", fg: f ? "#F2F5F7" : "#07090D",
-                 border: f ? "2px solid #3DDC97" : "1px solid #DDE2E8",
-                 btnBg: f ? "#3DDC97" : "#07090D", btnFg: f ? "#07090D" : "#F2F5F7",
-                 items: p.items.map(function (i) { return { t: i[0], soon: !!i[1] }; }) };
+      plans: PLAN_IDS.map(function (id) {
+        var p = D.plans[id], month = prices[id], featured = id === "negocio";
+        return { name: p[0], who: p[1], featured: featured, start: T.startWith.replace("{n}", p[0]),
+                 price: yearly ? m(Math.round(month * 10 / 12 * 100) / 100) : m(month),
+                 note: yearly ? T.yearNote.replace("{p}", m(month * 10)) : T.monthNote,
+                 bg: featured ? "#07090D" : "#FFFFFF", fg: featured ? "#F2F5F7" : "#07090D",
+                 border: featured ? "2px solid #3DDC97" : "1px solid #DDE2E8",
+                 btnBg: featured ? "#3DDC97" : "#07090D", btnFg: featured ? "#07090D" : "#F2F5F7",
+                 items: p[2].map(function (s) { var soon = s.charAt(0) === "*"; return { t: soon ? s.slice(1) : s, soon: soon }; }) };
       }),
-      faqs: FAQS.map(function (f, i) {
+      faqs: D.faqs.map(function (q, i) {
         var open = self.state.open === i;
-        return { q: f.q, a: f.a, open: open, sign: open ? "−" : "+", toggle: function () { self.setState({ open: open ? -1 : i }); } };
+        return { q: q[0], a: q[1], open: open, sign: open ? "−" : "+", toggle: function () { self.setState({ open: open ? -1 : i }); } };
+      }),
+      langs: LANGS.map(function (l) {
+        var on = l[0] === lang;
+        return { label: l[1], on: on ? "true" : "false", bg: on ? "#3DDC97" : "transparent", fg: on ? "#07090D" : "#B7C0CC",
+                 pick: function () { self.setState({ lang: l[0] }); try { document.documentElement.lang = l[0]; } catch (e) {} } };
+      }),
+      curs: CURS.map(function (k) {
+        var on = k[0] === cur;
+        return { label: k[1], on: on ? "true" : "false", bg: on ? "#3DDC97" : "transparent", fg: on ? "#07090D" : "#B7C0CC",
+                 pick: function () { self.setState({ cur: k[0] }); } };
       }),
       joined: this.state.joined,
       join: function (e) { if (e && e.preventDefault) e.preventDefault(); self.setState({ joined: true }); }
