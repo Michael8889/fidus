@@ -9,9 +9,13 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [ ] **Claude**: corrigir o que aparecer no uso real
 
 ## Fase 1 — Empresa e contas (em paralelo)
-- [ ] **Você**: abrir a Ltd no Reino Unido (Companies House) e a conta bancária da empresa
+- [ ] **Você**: conta bancária da empresa
 - [ ] **Você**: registro no ICO (proteção de dados, taxa anual pequena)
-- [ ] **Você**: confirmar o nome (busca de marca no UKIPO/EUIPO) e comprar o domínio definitivo
+- [x] **Você**: busca de marca no Reino Unido (08/10): nenhuma "FIDUS" viva em software (classes 9/42); atenção a
+      "FEEDUS" (classes 35/42, parecida no som)
+- [ ] **Você**: busca na União Europeia (TMview), pedir registro da marca FIDUS (UK, classes 9 e 42) e comprar o domínio
+- [ ] **Você**: abrir a empresa com nome aceito (ex. "Fidus Labs Ltd" ou nome neutro; "FIDUS LIMITED" foi recusado
+      por já existir "FIDUS UK LTD")
 - [ ] **Você**: conta Google Play Console no nome da empresa (US$ 25)
 - [ ] **Você**: conta Resend + verificar o domínio → liga os e-mails e a entrada por e-mail (`.env`)
 - [ ] **Você**: conta RevenueCat + assinaturas na Play (passo a passo no README › Assinaturas)
