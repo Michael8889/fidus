@@ -4,7 +4,8 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 
 ## Fase 0 — Agora (esta semana)
 - [x] **Você**: instalar a versão nova (servidor: `deploy-hetzner.ps1`; app: `update-app.ps1`)
-- [ ] **Você**: instalar a v0.9.5 (servidor + `update-app.ps1`) e gerar/instalar o APK novo (`build-apk.ps1`) para a voz
+- [ ] **Você**: instalar a v0.9.6 (servidor + `update-app.ps1`) e gerar/instalar o APK novo (`build-apk.ps1`)
+- [ ] **Você**: Google Cloud: ativar a Cloud Text-to-Speech API, criar chave restrita e pôr `FIDUS_GOOGLE_TTS_KEY` no `server\.env`
 - [ ] **Você**: cadastrar o endereço `/health` do servidor num monitor grátis (UptimeRobot) para alerta se cair
 - [ ] **Você**: convidar sua esposa (menu › Clientes) e usar os dois por 1–2 semanas, anotando o que der errado
 - [ ] **Claude**: corrigir o que aparecer no uso real
@@ -48,6 +49,7 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [ ] Lançamento aberto e anúncios
 
 ## Já feito
+- [x] v0.9.6: transcrição no celular (modo conversa mais rápido) e voz natural do Google (feminina/masculina)
 - [x] v0.9.5: carteiras nos gastos (moeda própria, filtro, exportar por carteira), áudio respondido em voz alta,
       voz mais rápida, letras maiores, menu traduzido por inteiro, Enter não envia, botão parar
 - [x] App Android com voz, agenda, e-mail com aprovação, gastos e recibos, documentos, tarefas, atas, link de

@@ -27,6 +27,10 @@ const PurchasesMod: any = hasNativePurchases ? opt(() => require("react-native-p
 const Purchases: any = PurchasesMod ? (PurchasesMod.default || PurchasesMod) : null;
 // trava com digital/rosto (APK com expo-local-authentication)
 const LocalAuth: any = opt(() => require("expo-local-authentication"));
+// transcrição no próprio celular enquanto a pessoa fala (APK com expo-speech-recognition): bem mais rápido
+const SpeechRec: any = opt(() => require("expo-speech-recognition").ExpoSpeechRecognitionModule);
+// tocar a voz natural (MP3 que vem do servidor)
+const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
 
@@ -469,6 +473,10 @@ function FidusApp() {
   const [vReply, setVReply] = useState("");
   const voiceActive = useRef(false);
   const vad = useRef({ t0: 0, floor: -60, samples: [] as number[], speechAt: 0, lastLoud: 0, timer: null as any });
+  const sr = useRef({ on: false, text: "", empty: 0, failed: false });  // transcrição no celular
+  const srHandlers = useRef<any>({});
+  const clip = useRef<any>(null);       // voz natural tocando agora
+  const phraseAudio = useRef<Record<string, string>>({});  // frases fixas já em voz natural
   const pulse = useRef(new Animated.Value(1)).current;
   const [meeting, setMeeting] = useState(false);
   const [meetSecs, setMeetSecs] = useState(0);
@@ -913,22 +921,70 @@ function FidusApp() {
     return () => loop.stop();
   }, [voiceOpen, vState]);
 
+  // ---------- Voz natural (Google) e frases fixas ----------
+  // (lista para a tradução: estas frases são faladas pelo nome, não aparecem em t("...") literal em outro lugar)
+  const _PHRASE_KEYS = () => [t("Um instante."), t("Deixa eu ver."), t("Já vejo isso."), t("Feito.")];
+  const PHRASES = ["Pode falar.", "Um instante.", "Deixa eu ver.", "Já vejo isso.", "Até mais!", "Não entendi. Pode repetir?",
+    "Perdi a conexão com o servidor. Tente de novo em instantes.", "Feito."];
+
+  async function preloadPhrases() {
+    if (!me?.natural_voice || !createPlayer) return;
+    for (const p of PHRASES) {
+      if (phraseAudio.current[`${LANG}|${p}`]) continue;
+      try { const r = await post("/v1/tts", { phrase: p }, 15000); if (r.audio) phraseAudio.current[`${LANG}|${p}`] = r.audio; } catch { return; }
+    }
+  }
+
+  function stopClip() {
+    try { clip.current?.pause(); } catch {}
+    try { clip.current?.remove(); } catch {}
+    clip.current = null;
+  }
+
+  // toca o MP3 (base64); devolve false se não deu (aí quem chamou usa a voz do celular)
+  function playClip(b64: string, onDone?: () => void): boolean {
+    if (!createPlayer || !b64) return false;
+    try {
+      stopClip();
+      const f = new File(Paths.cache, `fidus-voz-${Date.now()}.mp3`);
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      f.create(); f.write(bytes);
+      const pl = createPlayer({ uri: f.uri });
+      clip.current = pl;
+      let done = false;
+      const finish = () => { if (done) return; done = true; try { f.delete(); } catch {} ; if (clip.current === pl) stopClip(); onDone?.(); };
+      pl.addListener("playbackStatusUpdate", (st: any) => { if (st?.didJustFinish) finish(); });
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {}).finally(() => pl.play());
+      return true;
+    } catch { return false; }
+  }
+
+  useEffect(() => { if (me?.natural_voice) preloadPhrases(); }, [me?.natural_voice, LANG]);
+
   async function openVoice() {
     if (busy || recording || meeting) return;
     const perm = await AudioModule.requestRecordingPermissionsAsync();
     if (!perm.granted) return fail(t("permissão do microfone negada."));
+    if (SpeechRec && !sr.current.failed) {
+      try { const p2 = await SpeechRec.requestPermissionsAsync(); if (!p2?.granted) sr.current.failed = true; } catch { sr.current.failed = true; }
+    }
     voiceActive.current = true;
-    setVHeard(""); setVReply(Speech ? t("Pode falar. Eu escuto e respondo em voz alta.") :
+    setVHeard(""); setVReply(Speech || me?.natural_voice ? t("Pode falar. Eu escuto e respondo em voz alta.") :
       t("Pode falar. (Para ouvir as respostas em voz alta, instale o APK novo.)"));
     setVoiceOpen(true);
     try { await KeepAwake?.activateKeepAwakeAsync("voice"); } catch {}
-    speak(t("Pode falar."));
+    speak(t("Pode falar."), undefined, "Pode falar.");
+    preloadPhrases();
   }
 
   async function closeVoice() {
     voiceActive.current = false;
     clearInterval(vad.current.timer);
     try { Speech?.stop(); } catch {}
+    stopClip();
+    if (sr.current.on) { try { SpeechRec.abort(); } catch {} ; sr.current.on = false; }
     try { await voiceRec.stop(); } catch {}
     try { KeepAwake?.deactivateKeepAwake("voice"); } catch {}
     setVoiceOpen(false); setVState("idle");
@@ -939,11 +995,18 @@ function FidusApp() {
     return dev.split("-")[0].toLowerCase() === LANG ? dev : (TTS_LOCALE[LANG] || LANG);
   }
 
-  function speak(text: string) {
+  // fala e depois volta a ouvir: voz natural se veio o áudio (ou a frase fixa já carregada), senão a do celular
+  function speak(text: string, audio?: string | null, phrase?: string) {
     if (!voiceActive.current) return;
-    if (!Speech) { setTimeout(listen, 1200); return; }
+    const mp3 = audio || (phrase ? phraseAudio.current[`${LANG}|${phrase}`] : null);
+    try { Speech?.stop(); } catch {}
+    if (mp3) {
+      setVState("speaking");
+      if (playClip(mp3, () => { if (voiceActive.current) listen(); })) return;
+    }
+    // frase fixa ainda sem a voz natural: não mistura com a voz robótica, só volta a ouvir
+    if (!Speech || (phrase && me?.natural_voice && createPlayer)) { setTimeout(listen, phrase ? 150 : 1200); return; }
     setVState("speaking");
-    try { Speech.stop(); } catch {}
     Speech.speak(text, {
       language: ttsLanguage(), rate: 1.02,
       onDone: () => { if (voiceActive.current) listen(); },
@@ -951,8 +1014,53 @@ function FidusApp() {
     });
   }
 
+  // transcrição no celular: o texto aparece enquanto a pessoa fala e sai pronto quando ela para
+  srHandlers.current = {
+    result: (e: any) => {
+      const txt = (e?.results?.[0]?.transcript || "").trim();
+      if (txt) { sr.current.text = txt; setVHeard(txt); }
+    },
+    end: () => {
+      if (!sr.current.on) return;
+      sr.current.on = false;
+      if (!voiceActive.current) return;
+      const txt = sr.current.text.trim();
+      if (txt) { sr.current.empty = 0; submitVoiceText(txt); return; }
+      sr.current.empty += 1;  // ninguém falou: volta a ouvir (e para de insistir depois de um tempo)
+      if (sr.current.empty <= 6) setTimeout(listen, 250);
+      else { setVState("idle"); setVReply(t("Toque no círculo quando quiser falar.")); }
+    },
+    error: (e: any) => {
+      const code = e?.error || "";
+      if (code === "no-speech" || code === "speech-timeout" || code === "aborted") return;  // o "end" cuida
+      // o reconhecimento do celular não funcionou: usa a gravação pelo servidor (como antes)
+      sr.current.failed = true; sr.current.on = false;
+      if (voiceActive.current) setTimeout(listen, 250);
+    },
+  };
+  useEffect(() => {
+    if (!SpeechRec?.addListener) return;
+    const subs = ["result", "end", "error"].map((ev) =>
+      opt(() => SpeechRec.addListener(ev, (e: any) => srHandlers.current[ev]?.(e))));
+    return () => subs.forEach((x: any) => { try { x?.remove(); } catch {} });
+  }, []);
+
   async function listen() {
     if (!voiceActive.current) return;
+    if (SpeechRec && !sr.current.failed) {
+      try {
+        if (!SpeechRec.isRecognitionAvailable || SpeechRec.isRecognitionAvailable()) {
+          sr.current.text = ""; sr.current.on = true;
+          SpeechRec.start({
+            lang: ttsLanguage(), interimResults: true, continuous: false, addsPunctuation: true,
+            androidIntentOptions: { EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 1200 },
+          });
+          setVState("listening");
+          return;
+        }
+        sr.current.failed = true;
+      } catch { sr.current.failed = true; sr.current.on = false; }
+    }
     try {
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await voiceRec.prepareToRecordAsync();
@@ -971,47 +1079,83 @@ function FidusApp() {
       if (v.samples.length) { v.floor = v.samples.reduce((a, b) => a + b, 0) / v.samples.length; v.samples = []; }
       const loud = db > Math.max(v.floor + 10, -52);
       if (loud) { if (!v.speechAt) v.speechAt = now; v.lastLoud = now; }
-      if (v.speechAt && now - v.lastLoud > 1300 && now - v.speechAt > 400) return finishUtterance();
+      if (v.speechAt && now - v.lastLoud > 1000 && now - v.speechAt > 400) return finishUtterance();
       if (v.speechAt && now - v.speechAt > 30000) return finishUtterance();
       if (!v.speechAt && now - v.t0 > 20000) { clearInterval(v.timer); voiceRec.stop().catch(() => {}).then(() => listen()); }
     }, 120);
   }
 
+  // se a resposta demorar, avisa que está vendo (para a pessoa não achar que o Fidus travou)
+  function startFiller() {
+    return setTimeout(() => {
+      if (!voiceActive.current) return;
+      const keys = ["Um instante.", "Deixa eu ver.", "Já vejo isso."];
+      const k = keys[Math.floor(Math.random() * keys.length)];
+      const mp3 = phraseAudio.current[`${LANG}|${k}`];
+      if (mp3 && playClip(mp3)) return;
+      if (Speech && !me?.natural_voice) { try { Speech.speak(t(k), { language: ttsLanguage(), rate: 1.05 }); } catch {} }
+    }, 2500);
+  }
+
+  async function handleVoiceReply(r: any, heard: string) {
+    if (!voiceActive.current) return;
+    if (!heard) { speak(t("Não entendi. Pode repetir?"), null, "Não entendi. Pode repetir?"); return; }
+    setVHeard(heard);
+    if (EXIT_RE.test(heard)) { setVReply(t("Até mais!")); speak(t("Até mais!"), null, "Até mais!"); setTimeout(closeVoice, 1600); return; }
+    if (r.cancelled) return;
+    showResult(r);  // vai também para a conversa, com cartões de rascunho, documentos etc.
+    setVReply(r.reply || "");
+    speak(r.speech || r.reply || t("Feito."), r.speech_audio);
+  }
+
+  // texto já transcrito no celular: vai direto para o Fidus (sem mandar áudio)
+  async function submitVoiceText(text: string) {
+    if (!voiceActive.current) return;
+    setVState("thinking"); setVHeard(text);
+    if (EXIT_RE.test(text)) { setVReply(t("Até mais!")); speak(t("Até mais!"), null, "Até mais!"); setTimeout(closeVoice, 1600); return; }
+    push({ id: uid(), type: "user", text });
+    const filler = startFiller();
+    try {
+      const r = await post("/v1/message", { text, mode: "voice", drafts: visibleDrafts(), request_id: uid() });
+      clearTimeout(filler);
+      if (!voiceActive.current) return;
+      if (r.cancelled) return;
+      showResult(r, false);
+      setVReply(r.reply || "");
+      speak(r.speech || r.reply || t("Feito."), r.speech_audio);
+    } catch (e: any) {
+      clearTimeout(filler);
+      setVReply(`${t("Falha de conexão")}: ${e?.message ?? e}`);
+      speak(t("Perdi a conexão com o servidor. Tente de novo em instantes."), null, "Perdi a conexão com o servidor. Tente de novo em instantes.");
+    }
+  }
+
   async function finishUtterance() {
     clearInterval(vad.current.timer);
     if (!voiceActive.current) return;
+    if (sr.current.on) { try { SpeechRec.stop(); } catch {} ; return; }  // o "end" manda o texto
     setVState("thinking");
     try { await voiceRec.stop(); } catch {}
     const uri = voiceRec.uri;
     if (!uri) return listen();
-    // se a resposta demorar, avisa que está vendo (para a pessoa não achar que o Fidus travou)
-    const fillers = [t("Um instante."), t("Deixa eu ver."), t("Já vejo isso.")];
-    const filler = setTimeout(() => {
-      if (!voiceActive.current || !Speech) return;
-      try { Speech.speak(fillers[Math.floor(Math.random() * fillers.length)], { language: ttsLanguage(), rate: 1.05 }); } catch {}
-    }, 2500);
+    const filler = startFiller();
     try {
       const audio_b64 = await new File(uri).base64();
       const ext = (uri.match(/\.[a-z0-9]+$/i)?.[0] || ".m4a").toLowerCase();
       const r = await post("/v1/voice_b64", { audio_b64, ext, mode: "voice", drafts: visibleDrafts() });
       clearTimeout(filler);
-      if (!voiceActive.current) return;
-      if (!r.transcript) { speak(t("Não entendi. Pode repetir?")); return; }
-      setVHeard(r.transcript);
-      if (EXIT_RE.test(r.transcript)) { setVReply(t("Até mais!")); speak(t("Até mais!")); setTimeout(closeVoice, 1600); return; }
-      showResult(r);  // vai também para a conversa, com cartões de rascunho, documentos etc.
-      setVReply(r.reply || "");
-      speak(r.speech || r.reply || t("Feito."));
+      await handleVoiceReply(r, r.transcript || "");
     } catch (e: any) {
       clearTimeout(filler);
       setVReply(`${t("Falha de conexão")}: ${e?.message ?? e}`);
-      speak(t("Perdi a conexão com o servidor. Tente de novo em instantes."));
+      speak(t("Perdi a conexão com o servidor. Tente de novo em instantes."), null, "Perdi a conexão com o servidor. Tente de novo em instantes.");
     }
   }
 
   function tapVoiceCircle() {
-    if (vState === "speaking") { try { Speech?.stop(); } catch {} ; listen(); }
+    if (vState === "speaking") { try { Speech?.stop(); } catch {} ; stopClip(); listen(); }
     else if (vState === "listening") finishUtterance();
+    else if (vState === "idle" && voiceActive.current) { sr.current.empty = 0; listen(); }
   }
 
   // ---------- Tarefas ----------
@@ -1125,17 +1269,21 @@ function FidusApp() {
   }
 
   async function toggleSpeakAudio() {
-    if (!Speech) return Alert.alert(t("Responder áudios em voz alta"), t("Instale o APK novo para o Fidus falar."));
+    if (!canSpeak) return Alert.alert(t("Responder áudios em voz alta"), t("Instale o APK novo para o Fidus falar."));
     const on = !speakAudio;
     try { await SecureStore.setItemAsync("speakAudio", on ? "1" : "0"); } catch {}
     setSpeakAudio(on); if (!on) { try { Speech.stop(); } catch {} }
     flash(on ? t("O Fidus vai responder seus áudios falando") : t("Respostas aos áudios só por escrito"));
   }
 
+  // o Fidus consegue falar: voz do celular (expo-speech) ou voz natural do servidor (precisa tocar MP3)
+  const canSpeak = !!Speech || (!!me?.natural_voice && !!createPlayer);
+
   function sayReply(r: any) {  // resposta a um áudio gravado (fora do modo conversa)
-    if (!Speech || !speakAudio || voiceActive.current) return;
+    if (!speakAudio || voiceActive.current) return;
+    if (r?.speech_audio && playClip(r.speech_audio)) return;
     const text = r?.speech || r?.reply;
-    if (!text) return;
+    if (!text || !Speech) return;
     try { Speech.stop(); Speech.speak(text, { language: ttsLanguage(), rate: 1.02 }); } catch {}
   }
 
@@ -1299,6 +1447,7 @@ function FidusApp() {
     if (busy) return;
     if (recording) return stopRec();
     try { Speech?.stop(); } catch {}
+    stopClip();
     try {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
       if (!perm.granted) return fail(t("permissão do microfone negada. Libere nas configurações do celular."));
@@ -1322,7 +1471,7 @@ function FidusApp() {
     try {
       const audio_b64 = await new File(uri).base64();
       const ext = (uri.match(/\.[a-z0-9]+$/i)?.[0] || ".m4a").toLowerCase();
-      const r = await post("/v1/voice_b64", { audio_b64, ext, drafts: visibleDrafts(), speak: !!Speech && speakAudio, request_id: rid });
+      const r = await post("/v1/voice_b64", { audio_b64, ext, drafts: visibleDrafts(), speak: canSpeak && speakAudio, request_id: rid });
       if (cancelledReqs.current.has(rid)) return;
       showResult(r);
       sayReply(r);
@@ -1391,6 +1540,7 @@ function FidusApp() {
     if (!text) return;
     if (busy) return;
     try { Speech?.stop(); } catch {}
+    stopClip();
     if (!preset) setTyped("");
     setBusy(true);
     push({ id: uid(), type: "user", text });  // aparece na hora
@@ -2117,10 +2267,19 @@ function FidusApp() {
             <Text style={{ color: c.sub }}>›</Text></Card>
           <Card c={c} onPress={restorePurchases}><Text style={{ color: c.text, flex: 1, fontSize: 15 }}>{t("Restaurar compras")}</Text></Card>
         </>)}
+        {!!me?.natural_voice && (
+          <Card c={c} onPress={async () => {
+            const g = me.voice_gender === "male" ? "female" : "male";
+            try { await post("/v1/profile", { voice_gender: g }); setMe({ ...me, voice_gender: g }); phraseAudio.current = {}; preloadPhrases();
+              flash(g === "male" ? t("Voz masculina") : t("Voz feminina")); } catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
+          }}>
+            <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Voz do Fidus")}</Text>
+              <Text style={{ color: c.sub, fontSize: 14 }}>{t("Toque para trocar")}</Text></View>
+            <Text style={{ color: c.text, fontWeight: "700" }}>{me.voice_gender === "male" ? t("Masculina") : t("Feminina")}</Text></Card>)}
         <Card c={c} onPress={toggleSpeakAudio}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Responder áudios em voz alta")}</Text>
-            <Text style={{ color: c.sub, fontSize: 14 }}>{!Speech ? t("Disponível no app atualizado") : speakAudio ? t("Ligado: quando você manda áudio, o Fidus responde falando") : t("Desligado: respostas só por escrito")}</Text></View>
-          <Text style={{ color: speakAudio && Speech ? GREEN : c.sub, fontWeight: "700" }}>{speakAudio && Speech ? t("Ligado") : t("Ligar")}</Text></Card>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{!canSpeak ? t("Disponível no app atualizado") : speakAudio ? t("Ligado: quando você manda áudio, o Fidus responde falando") : t("Desligado: respostas só por escrito")}</Text></View>
+          <Text style={{ color: speakAudio && canSpeak ? GREEN : c.sub, fontWeight: "700" }}>{speakAudio && canSpeak ? t("Ligado") : t("Ligar")}</Text></Card>
         <Card c={c} onPress={toggleLock}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Trava com digital ou rosto")}</Text>
             <Text style={{ color: c.sub, fontSize: 14 }}>{lockAvail ? (lockOn ? t("Ligada: o Fidus pede sua digital ao abrir") : t("Desligada")) : t("Disponível no app atualizado, com digital ou rosto cadastrados")}</Text></View>
@@ -2623,16 +2782,18 @@ const I18N_KEYS: string[] = [
   "Ata pronta 🎙",
   "Sua reunião",
   "na ata",
-  "Pode falar. Eu escuto e respondo em voz alta.",
-  "Pode falar. (Para ouvir as respostas em voz alta, instale o APK novo.)",
-  "Pode falar.",
-  "Não consegui abrir o microfone",
+  "...",
   "Um instante.",
   "Deixa eu ver.",
   "Já vejo isso.",
+  "Feito.",
+  "Pode falar. Eu escuto e respondo em voz alta.",
+  "Pode falar. (Para ouvir as respostas em voz alta, instale o APK novo.)",
+  "Pode falar.",
+  "Toque no círculo quando quiser falar.",
+  "Não consegui abrir o microfone",
   "Não entendi. Pode repetir?",
   "Até mais!",
-  "Feito.",
   "Falha de conexão",
   "Perdi a conexão com o servidor. Tente de novo em instantes.",
   "Apagar tarefa?",
@@ -2832,6 +2993,12 @@ const I18N_KEYS: string[] = [
   "Gerenciar assinatura",
   "Trocar forma de pagamento ou cancelar, direto na loja",
   "Restaurar compras",
+  "Voz masculina",
+  "Voz feminina",
+  "Voz do Fidus",
+  "Toque para trocar",
+  "Masculina",
+  "Feminina",
   "Disponível no app atualizado",
   "Ligado: quando você manda áudio, o Fidus responde falando",
   "Desligado: respostas só por escrito",
@@ -2891,7 +3058,6 @@ const I18N_KEYS: string[] = [
   "Use sua digital ou rosto para abrir.",
   "Desbloquear",
   "Você vai precisar entrar de novo com o Google ou o e-mail.",
-  "...",
 ];
 // @i18n-keys-end
 

@@ -349,7 +349,12 @@ def me():
             "google_connected": google_client.is_connected(), "profile": store.profile(),
             "language": store.user_lang(), "currency": plans.user_currency(),
             "staff_role": admin.role_for({**u, "email": u.get("email")}),
-            "nps_due": _nps_due(u)}
+            "nps_due": _nps_due(u), "natural_voice": _tts_on(), "voice_gender": store.profile().get("voice_gender") or "female"}
+
+
+def _tts_on() -> bool:
+    from . import tts
+    return tts.enabled()
 
 
 def _nps_due(u: dict) -> bool:
@@ -394,6 +399,7 @@ class ProfileIn(BaseModel):
     language: str | None = None
     country: str | None = None
     timezone: str | None = None
+    voice_gender: str | None = None  # voz do Fidus: "female" ou "male"
     only_if_empty: bool = False  # o app manda o idioma/país do celular; não sobrescreve o que o usuário escolheu
 
 
@@ -419,6 +425,10 @@ def profile_update(body: ProfileIn):
         except Exception:
             raise HTTPException(400, "fuso inválido")
         ch["timezone"] = body.timezone
+    if body.voice_gender is not None:
+        if body.voice_gender not in ("female", "male"):
+            raise HTTPException(400, "voz inválida")
+        ch["voice_gender"] = body.voice_gender
     if body.name is not None and body.name.strip():
         ch["name"] = body.name.strip()[:60]
     if body.only_if_empty:
@@ -537,6 +547,28 @@ def message(body: TextIn):
         metrics.record_task(store.current()["id"], "envio", bool(sent.get("sent_actions")))
         return {"transcript": body.text, **sent}
     return {"transcript": body.text, **agent.handle(body.text, voice=body.mode == "voice", request_id=body.request_id)}
+
+
+# frases fixas que o app fala (modo conversa); só estas podem ser pedidas avulsas, para ninguém gerar áudio à toa
+TTS_PHRASES = {"Pode falar.", "Um instante.", "Deixa eu ver.", "Já vejo isso.", "Até mais!", "Não entendi. Pode repetir?",
+               "Perdi a conexão com o servidor. Tente de novo em instantes.", "Feito."}
+
+
+class TtsIn(BaseModel):
+    phrase: str
+
+
+@app.post("/v1/tts", dependencies=[Depends(auth)])
+def tts_phrase(body: TtsIn):
+    """Áudio de uma frase fixa no idioma e na voz do cliente (guardado: gera uma vez só)."""
+    from . import tts
+    if body.phrase not in TTS_PHRASES:
+        raise HTTPException(400, "frase desconhecida")
+    if not tts.enabled():
+        return {"audio": None}
+    lang = store.user_lang()
+    text = body.phrase if lang == "pt" else (i18n.translate(lang, [body.phrase]).get(body.phrase) or body.phrase)
+    return {"audio": tts.synthesize(text, lang, cache=True)}
 
 
 class CancelIn(BaseModel):

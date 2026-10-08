@@ -58,6 +58,9 @@ UPGRADE_URL = env("FIDUS_UPGRADE_URL", "")  # página de planos/checkout; vazio 
 WHISPER_MODEL = env("FIDUS_WHISPER_MODEL", "small")
 
 # Google OAuth
+# Voz natural (Google Text-to-Speech). Sem a chave, o app usa a voz do celular.
+GOOGLE_TTS_KEY = env("FIDUS_GOOGLE_TTS_KEY", "")
+TTS_TIER = env("FIDUS_TTS_TIER", "wavenet")  # wavenet (mais barata) | neural2 | chirp3 (mais natural)
 GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET")
 PUBLIC_BASE_URL = env("FIDUS_PUBLIC_BASE_URL", "http://localhost:8000")

@@ -131,6 +131,17 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
 - Enter na caixa de texto só pula linha; envia pelo botão. Enquanto o Fidus pensa, o botão vira "parar"
   (`POST /v1/cancel`): ele não executa mais nada daquele pedido; o que já fez fica na Atividade com Desfazer.
 
+## Voz natural e transcrição no celular (v0.9.6)
+- Modo conversa: a fala é transcrita no próprio celular enquanto a pessoa fala (expo-speech-recognition, precisa do
+  APK novo). Sem o módulo ou se falhar, volta para a gravação + Whisper no servidor.
+- Resposta falada na voz natural do Google Text-to-Speech, que vem junto da resposta (`speech_audio`, MP3). Frases fixas
+  ("Pode falar.", "Um instante."...) em `POST /v1/tts`, guardadas em `/data/tts-cache`. Sem chave: voz do celular.
+- Ligar: no Google Cloud (mesmo projeto) ativar a "Cloud Text-to-Speech API" (precisa de faturamento ativo no projeto),
+  criar uma chave de API restrita a essa API e colocar em `FIDUS_GOOGLE_TTS_KEY` no `server/.env`.
+  `FIDUS_TTS_TIER`: wavenet (padrão; 4 milhões de letras grátis/mês, depois US$ 4/milhão), neural2 (US$ 16) ou
+  chirp3 (a mais natural, US$ 30; 1 milhão grátis). O custo entra no uso de cada cliente (painel e uso justo).
+- Configurações › Voz do Fidus: feminina ou masculina.
+
 ## Idiomas e moedas
 - O app abre no idioma do celular (dá para trocar em Configurações). O servidor traduz os textos uma vez por idioma
   e guarda em `/data/i18n/<idioma>.json`; o app guarda uma cópia. O Fidus responde no idioma em que a pessoa fala.

@@ -7,7 +7,7 @@ Copy-Item (Join-Path $PSScriptRoot "App.tsx") $dest -Force
 Set-Location $dest
 # modulos que o App.tsx usa: precisam existir aqui para o pacote ser montado
 # (num celular com APK antigo, as funcoes que dependem deles so ficam desligadas)
-npx expo install expo-updates expo-notifications expo-keep-awake expo-document-picker expo-speech expo-clipboard react-native-purchases expo-local-authentication
+npx expo install expo-updates expo-notifications expo-keep-awake expo-document-picker expo-speech expo-clipboard react-native-purchases expo-local-authentication expo-speech-recognition
 npx --yes eas-cli@latest update --branch preview --environment preview --message "atualizacao $(Get-Date -Format 'dd/MM HH:mm')" --platform android
 if ($LASTEXITCODE -ne 0) {
     Write-Host "A atualizacao FALHOU. Copie as mensagens acima e mande para o Claude." -ForegroundColor Red

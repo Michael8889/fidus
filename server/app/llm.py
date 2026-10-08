@@ -30,7 +30,10 @@ def chat(system, messages: list[dict], tools: list[dict], web_search: bool = Tru
 
 # Preço por milhão de tokens: (entrada, saída, gravar cache 5 min, ler cache). Fonte: tabela de preços da Anthropic
 # (out/2026). Modelos fora da lista usam FIDUS_PRICE_* ou o preço do Sonnet.
-PRICES = {"claude-sonnet-5-5": (2.0, 10.0, 2.5, 0.2), "claude-haiku-4-5": (1.0, 5.0, 1.25, 0.1)}
+PRICES = {"claude-sonnet-5-5": (2.0, 10.0, 2.5, 0.2), "claude-haiku-4-5": (1.0, 5.0, 1.25, 0.1),
+          # voz do Google: preço por milhão de letras (fica em "input"); o plano grátis mensal não é descontado aqui
+          "tts-google-wavenet": (4.0, 0, 0, 0), "tts-google-standard": (4.0, 0, 0, 0),
+          "tts-google-neural2": (16.0, 0, 0, 0), "tts-google-chirp3": (30.0, 0, 0, 0)}
 SEARCH_PRICE = 10.0 / 1000  # busca na web: US$ 10 por mil
 
 

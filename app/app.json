@@ -54,6 +54,14 @@
         {
           "faceIDPermission": "O Fidus usa o Face ID para proteger sua conta."
         }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "O Fidus usa o microfone para ouvir seus pedidos.",
+          "speechRecognitionPermission": "O Fidus transcreve sua fala no próprio celular para responder mais rápido.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox", "com.google.android.as"]
+        }
       ]
     ],
     "icon": "./assets/icon.png",

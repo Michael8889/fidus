@@ -410,7 +410,7 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
                 extra = " ".join(_actions.readback(a, lang) for a in pend if a and a["status"] == "pending")
                 speech = (speechify(reply, store.user_lang()) + (" " + extra if extra else "")).strip()
             return {"_meta": {"tools": len(actions), "tool_errors": sum("(erro" in a for a in actions)},
-                    "reply": reply, "speech": speech,
+                    "reply": reply, "speech": speech, "speech_audio": _voice(speech),
                     "pending_actions": pend, "events": events,
                     "documents": [{**d, "url": features.sign(d["document_id"])} for d in docs.values()],
                     "upsell": upsell}
@@ -459,6 +459,17 @@ _SPEECH = {
                       "octubre", "noviembre", "diciembre"], "date": "{d} de {m}", "link": "el enlace está en la app",
            "money": {"GBP": "libras", "EUR": "euros", "BRL": "reales", "USD": "dólares"}},
 }
+
+
+def _voice(speech: str | None) -> str | None:
+    """MP3 (base64) da resposta falada na voz natural do Google; None = o app usa a voz do celular."""
+    if not speech:
+        return None
+    try:
+        from . import tts
+        return tts.synthesize(speech)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def speechify(text: str, lang: str = "pt") -> str:
