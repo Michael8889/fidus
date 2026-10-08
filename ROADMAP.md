@@ -12,8 +12,8 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 
 ## Anotado para a próxima versão (juntar e rodar uma vez só)
 - Áudio gravado (botão do microfone) também responde em voz alta, com opção de ligar/desligar em Configurações
-- Letras maiores como no app do Claude (mensagens 17, entre linhas 26; caixa de texto e cartões maiores) + opção
-  "Tamanho do texto" (Normal / Grande / Muito grande) em Configurações
+- Letras maiores como no app do Claude (mensagens 17, entre linhas 26; caixa de texto e cartões maiores); segue o tamanho de letra do
+  celular (sem opção própria no app)
 - Voz mais rápida: falar um "deixa eu ver..." enquanto pensa e usar o modelo leve nos pedidos simples
 
 ## Fase 1 — Empresa e contas (em paralelo)
