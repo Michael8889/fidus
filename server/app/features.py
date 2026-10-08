@@ -615,8 +615,12 @@ def export_for_accountant(date_from, date_to, business=None):
         return {"error": "datas precisam ser AAAA-MM-DD"}
     if business:
         b = store.match_business(business)
-        if not b:
-            return {"error": f"empresa desconhecida: {business}. Empresas: {', '.join(store.businesses())}"}
+        if not b:  # carteira removida da lista, mas com gastos antigos guardados: também exporta
+            old = store.select("SELECT business FROM expenses WHERE deleted=0 AND lower(business)=lower(?) LIMIT 1",
+                               (business.strip(),))
+            if not old:
+                return {"error": f"carteira desconhecida: {business}. Carteiras: {', '.join(store.businesses())}"}
+            b = old[0]["business"]
         business = b
     date_from, date_to = df.isoformat(), dt.isoformat()
     rows = sorted(store.query_expenses(date_from, date_to, business=business, limit=10000), key=lambda r: (r["date"], r["id"]))

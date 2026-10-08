@@ -9,6 +9,7 @@ import contextlib
 import contextvars
 import json
 import os
+import re
 import sqlite3
 import threading
 import uuid
@@ -379,6 +380,56 @@ def match_business(name: str | None) -> str | None:
         if b.strip().lower() == name.strip().lower():
             return b
     return None
+
+
+# ---------- Carteiras (empresas/contas, cada uma com a sua moeda) ----------
+def _valid_currency(cur: str | None) -> str | None:
+    c = (cur or "").strip().upper()
+    return c if re.fullmatch(r"[A-Z]{3}", c) else None
+
+
+def wallet_currency(name: str | None) -> str | None:
+    b = match_business(name)
+    return (profile().get("wallet_currency") or {}).get(b) if b else None
+
+
+def wallets() -> list[dict]:
+    cur = profile().get("wallet_currency") or {}
+    return [{"name": b, "currency": cur.get(b)} for b in businesses()]
+
+
+def add_wallet(name: str, currency: str | None = None) -> dict:
+    """Cria a carteira (ou só muda a moeda dela, se já existe). Devolve a carteira."""
+    name = re.sub(r"\s+", " ", (name or "").strip())[:40]
+    if not name:
+        raise ValueError("nome da carteira vazio")
+    cur = _valid_currency(currency)
+    if currency and not cur:
+        raise ValueError("moeda inválida (use o código de 3 letras, ex. GBP, EUR, BRL)")
+    p = profile()
+    known = match_business(name)
+    biz = p["businesses"] or ["Pessoal"]
+    if not known:
+        biz = biz + [name]
+        known = name
+    wc = dict(p.get("wallet_currency") or {})
+    if cur:
+        wc[known] = cur
+    save_profile(businesses=biz, wallet_currency=wc)
+    return {"name": known, "currency": wc.get(known)}
+
+
+def remove_wallet(name: str) -> dict | None:
+    """Tira a carteira da lista (os gastos já lançados nela continuam guardados). Nunca deixa a lista vazia."""
+    b = match_business(name)
+    p = profile()
+    if not b or len(p["businesses"] or []) <= 1:
+        return None
+    wc = dict(p.get("wallet_currency") or {})
+    old = {"name": b, "currency": wc.pop(b, None)}
+    kv_set("profile", json.dumps({**p, "businesses": [x for x in p["businesses"] if x != b], "wallet_currency": wc},
+                                 ensure_ascii=False))
+    return old
 
 
 # ---------- Custo de IA por cliente ----------

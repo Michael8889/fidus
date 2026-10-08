@@ -34,6 +34,7 @@ def _allowed() -> set:
     except (OSError, ValueError):
         return set()
 MAX_PER_REQUEST = 500
+CHUNK = 25
 _locks: dict = {}
 _guard = threading.Lock()
 
@@ -100,13 +101,22 @@ def translate(lang: str, strings: list[str]) -> dict:
             cache = _load(lang)
             missing = [s for s in want if s not in cache][: MAX_PER_LANG - len(cache)]
             from concurrent.futures import ThreadPoolExecutor
-            chunks = [missing[i:i + 80] for i in range(0, len(missing), 80)]
+            # blocos pequenos: bloco grande demais estoura a resposta da IA e volta sem nada (o menu ficava misturado)
+            chunks = [missing[i:i + CHUNK] for i in range(0, len(missing), CHUNK)]
 
-            def safe(chunk):
+            def safe(chunk, depth=0):
                 try:
-                    return _ask(lang, chunk)
+                    got = _ask(lang, chunk)
                 except Exception:  # noqa: BLE001 - sem tradução, o app mostra o português
-                    return {}
+                    got = {}
+                left = [x for x in chunk if x not in got]
+                if left and depth < 2 and len(left) > 1:  # o que faltou: tenta de novo em pedaços menores
+                    half = (len(left) + 1) // 2
+                    for part in (left[:half], left[half:]):
+                        got.update(safe(part, depth + 1))
+                elif left and depth < 2:
+                    got.update(safe(left, depth + 1))
+                return got
             with ThreadPoolExecutor(max_workers=4) as pool:
                 for part in pool.map(safe, chunks):
                     cache.update(part)

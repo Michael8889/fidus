@@ -1,5 +1,6 @@
 """API do Fidus."""
 import html
+import json
 import os
 import shutil
 import tempfile
@@ -73,6 +74,7 @@ class TextIn(BaseModel):
     text: str
     mode: str = ""  # "voice" = modo conversa (resposta curta para ouvir)
     drafts: list[str] | None = None  # rascunhos na tela do app (e não em edição): só esses podem sair por "envia"
+    request_id: str = ""  # para o botão parar
 
 
 class EditIn(BaseModel):
@@ -534,17 +536,30 @@ def message(body: TextIn):
     if sent:
         metrics.record_task(store.current()["id"], "envio", bool(sent.get("sent_actions")))
         return {"transcript": body.text, **sent}
-    return {"transcript": body.text, **agent.handle(body.text, voice=body.mode == "voice")}
+    return {"transcript": body.text, **agent.handle(body.text, voice=body.mode == "voice", request_id=body.request_id)}
 
 
-def _after_transcript(text: str, voice: bool = False, drafts: list[str] | None = None, kind: str = "voz") -> dict:
+class CancelIn(BaseModel):
+    request_id: str
+
+
+@app.post("/v1/cancel", dependencies=[Depends(auth)])
+def cancel_request(body: CancelIn):
+    """Botão parar do app: o Fidus para antes do próximo passo e não executa mais nada desse pedido."""
+    agent.cancel(body.request_id)
+    return {"ok": True}
+
+
+def _after_transcript(text: str, voice: bool = False, drafts: list[str] | None = None, kind: str = "voz",
+                      speak: bool = False, request_id: str | None = None) -> dict:
     if not text:
         return {"transcript": "", "reply": i18n.msg("no_audio"), "pending_actions": [], "events": []}
     sent = actions.handle_command(text, drafts)
     if sent:
         metrics.record_task(store.current()["id"], "envio", bool(sent.get("sent_actions")))
         return {"transcript": text, **sent}
-    return {"transcript": text, **agent.handle(text, voice=voice, kind="conversa" if voice else kind)}
+    return {"transcript": text, **agent.handle(text, voice=voice, kind="conversa" if voice else kind, speak=speak,
+                                               request_id=request_id)}
 
 
 @app.post("/v1/voice", dependencies=[Depends(auth)])
@@ -568,6 +583,8 @@ class VoiceB64In(BaseModel):
     ext: str = ".m4a"
     mode: str = ""
     drafts: list[str] | None = None
+    speak: bool = False  # áudio gravado com "responder em voz alta" ligado: devolve também o texto para falar
+    request_id: str = ""  # para o botão parar
 
 
 @app.post("/v1/voice_b64", dependencies=[Depends(auth)])
@@ -583,10 +600,15 @@ def voice_b64(body: VoiceB64In):
         path = f.name
     from .transcribe import prompt_for
     try:
-        text = transcribe(path, prompt_for(store.user_lang()))
+        # modo conversa: transcrição mais rápida (busca simples); áudio gravado: busca mais cuidadosa
+        text = transcribe(path, prompt_for(store.user_lang()), beam_size=1 if body.mode == "voice" else 5)
     finally:
         os.unlink(path)
-    return _after_transcript(text, voice=body.mode == "voice", drafts=body.drafts)
+    if agent._cancelled(body.request_id):
+        return {"transcript": text, "reply": agent.CANCELLED_MSG["pt" if store.user_lang() == "pt" else "en"],
+                "cancelled": True, "pending_actions": [], "events": []}
+    return _after_transcript(text, voice=body.mode == "voice", drafts=body.drafts, speak=body.speak,
+                             request_id=body.request_id)
 
 
 class PhotoIn(BaseModel):
@@ -715,7 +737,18 @@ UNDO = {
     "bill_added": lambda ref: features.delete_bill(int(ref)),
     "export_created": lambda ref: features.delete_document(int(ref)),
     "sheet_changed": lambda ref: web_tools.undo_sheet(ref),
+    "wallet_added": lambda ref: _undo_wallet(ref),
+    "wallet_removed": lambda ref: _undo_wallet(ref),
 }
+
+
+def _undo_wallet(ref: str) -> None:
+    w = json.loads(ref)
+    if w["op"] == "wallet_added":
+        if not store.remove_wallet(w["name"]):
+            raise ValueError("é a única carteira")
+    else:
+        store.add_wallet(w["name"], w.get("currency"))
 
 
 @app.get("/v1/activity", dependencies=[Depends(auth)])
@@ -985,18 +1018,94 @@ def meetings_list():
     return r if r.get("locked") else {"meetings": r.get("meetings", [])}
 
 
-@app.get("/v1/expenses/summary", dependencies=[Depends(auth)])
-def expenses_summary(month: str | None = None):
-    """Gastos do mês (AAAA-MM; padrão: mês atual), por moeda, empresa e categoria."""
+def _month_range(month: str | None) -> tuple[str, str, str]:
     import calendar
     import re
     m = month if month and re.fullmatch(r"\d{4}-\d{2}", month) else features._now().strftime("%Y-%m")
     y, mm = int(m[:4]), int(m[5:])
     if not 1 <= mm <= 12 or not 2000 <= y <= 2100:
         raise HTTPException(400, "mês inválido")
-    last = calendar.monthrange(y, mm)[1]
-    out = tools.run("summarize_expenses", {"date_from": f"{m}-01", "date_to": f"{m}-{last:02d}"})
-    return {"month": m, **out, "bills": features.list_bills()["bills"]}
+    return m, f"{m}-01", f"{m}-{calendar.monthrange(y, mm)[1]:02d}"
+
+
+@app.get("/v1/expenses/summary", dependencies=[Depends(auth)])
+def expenses_summary(month: str | None = None, wallet: str | None = None):
+    """Gastos do mês (AAAA-MM; padrão: mês atual), por moeda, carteira e categoria. `wallet` filtra uma carteira."""
+    m, d0, d1 = _month_range(month)
+    args = {"date_from": d0, "date_to": d1}
+    if wallet:
+        args["business"] = wallet[:40]
+    out = tools.run("summarize_expenses", args)
+    # carteiras com o total do mês de cada uma (para os botões de filtro), mesmo quando há filtro
+    by_w: dict = {}
+    for r in store.query_expenses(d0, d1, limit=10000):
+        by_w.setdefault(r["business"], {}).setdefault(r["currency"], 0)
+        by_w[r["business"]][r["currency"]] = round(by_w[r["business"]][r["currency"]] + r["amount"], 2)
+    names = [w["name"] for w in store.wallets()]
+    wallets = [{**w, "totals": by_w.get(w["name"], {})} for w in store.wallets()]
+    wallets += [{"name": b, "currency": None, "totals": t, "archived": True} for b, t in by_w.items() if b not in names]
+    bills = features.list_bills()["bills"]
+    if wallet:
+        bills = [b for b in bills if (b.get("business") or "").lower() == wallet.strip().lower()]
+    return {"month": m, "wallet": wallet or None, **out, "wallets": wallets, "bills": bills}
+
+
+class WalletIn(BaseModel):
+    name: str
+    currency: str | None = None
+
+
+@app.get("/v1/wallets", dependencies=[Depends(auth)])
+def wallets_list():
+    return {"wallets": store.wallets(), "can_add": plans.allows("extra_business")}
+
+
+@app.post("/v1/wallets", dependencies=[Depends(auth)])
+def wallets_save(body: WalletIn):
+    """Cria uma carteira ou muda a moeda dela (mesmo caminho da conversa, com Atividade e Desfazer)."""
+    args = {"add_business": body.name}
+    if body.currency:
+        args["business_currency"] = body.currency
+    r = tools.run("update_profile", args)
+    if r.get("locked"):
+        return r
+    if r.get("error"):
+        raise HTTPException(400, r["error"])
+    agent._record("update_profile", args, r)
+    return {"wallets": store.wallets()}
+
+
+@app.post("/v1/wallets/remove", dependencies=[Depends(auth)])
+def wallets_remove(body: WalletIn):
+    args = {"remove_business": body.name}
+    r = tools.run("update_profile", args)
+    if r.get("error"):
+        raise HTTPException(400, r["error"])
+    if not r.get("wallet_changes"):
+        raise HTTPException(409, "não dá para remover a única carteira")
+    agent._record("update_profile", args, r)
+    return {"wallets": store.wallets()}
+
+
+class ExportIn(BaseModel):
+    month: str | None = None
+    wallet: str | None = None
+
+
+@app.post("/v1/expenses/export", dependencies=[Depends(auth)])
+def expenses_export(body: ExportIn):
+    """Pacote do contador (planilha + recibos) do mês, de uma carteira ou de todas."""
+    m, d0, d1 = _month_range(body.month)
+    args = {"date_from": d0, "date_to": d1}
+    if body.wallet:
+        args["business"] = body.wallet[:40]
+    r = tools.run("export_for_accountant", args)
+    if r.get("locked"):
+        return r
+    if r.get("error"):
+        raise HTTPException(400, r["error"])
+    agent._record("export_for_accountant", args, r)
+    return {"document_id": r["document_id"], "title": r["title"], "url": features.sign(r["document_id"])}
 
 
 @app.get("/v1/booking", dependencies=[Depends(auth)])

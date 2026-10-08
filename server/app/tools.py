@@ -22,10 +22,12 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "amount": {"type": "number", "description": "valor total pago, ex. 45.90"},
-                "currency": {"type": "string", "description": "GBP, EUR, BRL... se não dito, a moeda padrão"},
+                "currency": {"type": "string", "description": "GBP, EUR, BRL... se não dito, a moeda da carteira"},
                 "category": {"type": "string", "enum": config.CATEGORIES},
                 "business": {"type": "string",
-                             "description": "a qual empresa/carteira pertence; se não dito, pergunte ou use 'Pessoal'"},
+                             "description": "carteira (empresa ou conta) do PERFIL. Escolha pelo contexto: empresa "
+                                            "citada, moeda/país do recibo. Se mais de uma carteira servir (ex. pessoal "
+                                            "ou empresa na mesma moeda) e não der para saber, PERGUNTE antes de lançar"},
                 "date": {"type": "string", "description": "AAAA-MM-DD; se não dito, hoje"},
                 "merchant": {"type": "string", "description": "estabelecimento, ex. Shell, Tesco"},
                 "vat": {"type": "number", "description": "IVA/VAT do recibo, se houver"},
@@ -144,10 +146,15 @@ TOOLS = [
 PROFILE_TOOL = {
     "name": "update_profile",
     "description": "Muda o perfil do usuário: nome, fuso horário (IANA, ex. Europe/Lisbon), moeda padrão (GBP, EUR, "
-                   "BRL...) e empresas/carteiras (adicionar ou remover). Só passe o que mudar.",
+                   "BRL...) e carteiras (empresas/contas: adicionar, remover ou definir a moeda de uma). Só passe o "
+                   "que mudar.",
     "parameters": {"type": "object", "properties": {
         "name": {"type": "string"}, "timezone": {"type": "string"}, "currency": {"type": "string"},
-        "add_business": {"type": "string"}, "remove_business": {"type": "string"}}},
+        "add_business": {"type": "string", "description": "nova carteira, ex. 'Pessoal BR'"},
+        "business_currency": {"type": "string",
+                              "description": "moeda da carteira (de add_business, ou de wallet), ex. BRL"},
+        "wallet": {"type": "string", "description": "carteira existente cuja moeda vai mudar"},
+        "remove_business": {"type": "string"}}},
 }
 
 TOOLS += features.TOOLS + meetings.TOOLS + booking.TOOLS + web_tools.TOOLS + [plans.UPSELL_TOOL, PROFILE_TOOL]
@@ -293,8 +300,8 @@ def _add_expense(amount, category, business, currency=None, date=None, merchant=
     amount = round(float(amount), 2)
     if amount <= 0:
         return {"error": "valor precisa ser maior que zero"}
-    cur = (currency or store.default_currency()).upper()
     known = store.match_business(business)
+    cur = (currency or store.wallet_currency(known) or store.default_currency()).upper()
     if not known:
         if plans.allows("extra_business"):
             store.save_profile(businesses=store.businesses() + [business.strip()])
@@ -316,25 +323,34 @@ def _add_expense(amount, category, business, currency=None, date=None, merchant=
     return out
 
 
-def _update_profile(name=None, timezone=None, currency=None, add_business=None, remove_business=None):
+def _update_profile(name=None, timezone=None, currency=None, add_business=None, remove_business=None,
+                    business_currency=None, wallet=None):
     from zoneinfo import ZoneInfo
-    biz = store.businesses()
     if timezone:
         try:
             ZoneInfo(timezone)
         except Exception:
             return {"error": f"fuso horário desconhecido: {timezone} (use o formato Europe/Lisbon)"}
-    if add_business and not store.match_business(add_business):
-        if len(biz) >= 1 and not plans.allows("extra_business"):
-            return plans.locked("extra_business")
-        biz = biz + [add_business.strip()[:40]]
+    if business_currency and not store._valid_currency(business_currency):
+        return {"error": "moeda inválida (use o código de 3 letras, ex. GBP, EUR, BRL)"}
+    if add_business and not store.match_business(add_business) and not plans.allows("extra_business"):
+        return plans.locked("extra_business")
+    if wallet and not store.match_business(wallet):
+        return {"error": f"carteira desconhecida: {wallet}. Carteiras: {', '.join(store.businesses())}"}
+    changed = []
+    if add_business:
+        new = not store.match_business(add_business)
+        w = store.add_wallet(add_business, business_currency)
+        changed.append(("wallet_added" if new else "wallet_changed", w))
+    elif wallet and business_currency:
+        changed.append(("wallet_changed", store.add_wallet(wallet, business_currency)))
     if remove_business:
-        b = store.match_business(remove_business)
-        if b and len(biz) > 1:
-            biz = [x for x in biz if x != b]
+        old = store.remove_wallet(remove_business)
+        if old:
+            changed.append(("wallet_removed", old))
     p = store.save_profile(name=(name or "").strip()[:40] or None, timezone=timezone,
-                           currency=(currency or "").strip().upper()[:3] or None, businesses=biz)
-    return {"ok": True, "profile": p}
+                           currency=(currency or "").strip().upper()[:3] or None)
+    return {"ok": True, "profile": p, "wallets": store.wallets(), "wallet_changes": changed}
 
 
 def _summarize_expenses(date_from, date_to, category=None, business=None):

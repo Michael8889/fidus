@@ -1,4 +1,5 @@
 """Cérebro do Fidus: recebe o pedido em texto, usa ferramentas e responde."""
+import json
 import re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -7,6 +8,29 @@ from . import actions as _actions
 from . import config, features, i18n, llm, store, tools
 
 MAX_STEPS = 6
+
+# Pedidos que a pessoa cancelou no app (botão parar). Chave "cliente:id do pedido" -> hora.
+_CANCEL: dict[str, float] = {}
+CANCELLED_MSG = {"pt": "Pedido cancelado.", "en": "Request cancelled."}
+
+
+def _cancel_key(request_id: str) -> str:
+    return f"{(store.CURRENT.get() or {}).get('id') or store.OWNER_ID}:{(request_id or '')[:40]}"
+
+
+def cancel(request_id: str) -> None:
+    import time as _t
+    now = _t.time()
+    for k in [k for k, v in _CANCEL.items() if now - v > 600]:
+        _CANCEL.pop(k, None)
+    _CANCEL[_cancel_key(request_id)] = now
+
+
+def _cancelled(request_id: str | None) -> bool:
+    return bool(request_id) and _cancel_key(request_id) in _CANCEL
+SMALLTALK = re.compile(r"^\W*(oi|ol[aá]|e a[ií]|obrigad[oa]|muito obrigad[oa]|valeu|"
+                       r"tchau|at[eé] mais|at[eé] logo|hi|hello|hey|thanks|thank you|cheers|bye|"
+                       r"gracias|hola|merci|danke)\W*(fidus)?\W*$", re.I)
 
 # frases de quem diz que JÁ fez algo; sem ferramenta usada no pedido, isso seria inventado
 CLAIM = re.compile(r"(?<!não )(?<!nao )\b(marquei|agendei|criei|lancei|anotei|registrei|guardei|apaguei|cancelei|cadastrei|"
@@ -45,7 +69,7 @@ def _context() -> str:
     return f"""PERFIL do usuário:
 - Nome: {prof["name"] or "ainda não sabemos (pergunte quando fizer sentido)"}
 - Idioma: {i18n.name(prof.get("language") or "pt")}
-- Empresas/carteiras: {", ".join(prof["businesses"])}
+- Carteiras (empresas/contas): {", ".join(f'{w["name"]} ({w["currency"] or "moeda padrão"})' for w in store.wallets())}
 - Moeda padrão: {prof["currency"]}
 
 AGORA são {now.strftime('%H:%M')} ({prof["timezone"]}).
@@ -70,10 +94,12 @@ Como agir:
   evento, use find_place e coloque o ENDEREÇO COMPLETO no campo location (o Google Maps abre direto do
   lembrete). Se vier mais de uma opção plausível, pergunte qual em uma frase. Se não achar, pergunte o
   endereço ou a cidade. Na resposta, diga o endereço que usou.
-- Gastos: quando o usuário disser que pagou/gastou algo, use add_expense. Empresas possíveis: as do
-  PERFIL. Se a empresa não estiver clara pelo contexto, pergunte em uma frase antes de
-  lançar. Empresa nova: cadastre com update_profile (add_business). Moeda padrão: a do PERFIL;
-  "libras" = GBP, "euros" = EUR, "reais" = BRL. Confirme em uma linha: valor, categoria, empresa.
+- Gastos: quando o usuário disser que pagou/gastou algo, use add_expense. Carteiras possíveis: as do
+  PERFIL (cada uma com a sua moeda). Escolha pelo contexto: empresa citada ("da HomB"), moeda ou país
+  ("reais" = carteira em BRL). Se só uma carteira tem aquela moeda, use ela. Se mais de uma servir
+  (ex. pessoal ou empresa na mesma moeda) e não der para saber, pergunte em uma frase antes de lançar.
+  Carteira nova: update_profile (add_business + business_currency). Sem moeda dita: a da carteira;
+  "libras" = GBP, "euros" = EUR, "reais" = BRL. Confirme em uma linha: valor, categoria, carteira.
 - Recibo por foto: leia estabelecimento, data, total e IVA; lance com add_expense (attach_receipt=true).
   Se a imagem não for um recibo ou estiver ilegível, diga o que viu e pergunte.
 - Consultas de gastos ("quanto gastei..."): use summarize_expenses com o período certo. Nunca some moedas
@@ -138,8 +164,9 @@ Como agir:
   indicado faria por ele neste pedido e que o cartão abaixo mostra o plano. Se ele pedir banco conectado,
   cobrança/fatura para clientes ou mais uma pessoa na conta, use offer_upgrade (são do Premium, que chega
   em breve). Ofereça uma vez por assunto; se ele recusar, siga ajudando sem repetir a oferta.
-- Perfil: nome, fuso horário, moeda padrão e empresas do usuário mudam com update_profile ("me chama de",
-  "estou em Lisboa agora", "minha moeda é euro", "abri uma empresa nova").
+- Perfil: nome, fuso horário, moeda padrão e carteiras do usuário mudam com update_profile ("me chama de",
+  "estou em Lisboa agora", "minha moeda é euro", "abri uma empresa nova", "cria a carteira Pessoal BR em
+  reais"). Ao criar carteira sem moeda dita, pergunte a moeda.
 - O texto pode vir de transcrição de voz e ter erros ("ao moço" = "almoço", "6ª" = "sexta").
   Interprete pelo sentido; se a data ou a hora ficarem ambíguas, pergunte.
 """
@@ -226,6 +253,12 @@ def _record(name: str, args: dict, result: dict) -> None:
     elif name == "delete_calendar_event":
         store.add_activity("event_deleted", result.get("title") or "Evento apagado", "Removido da agenda",
                            "feito", args.get("event_id"))
+    elif name == "update_profile" and result.get("ok"):
+        for kind, w in result.get("wallet_changes") or []:
+            title = {"wallet_added": "Carteira criada", "wallet_changed": "Carteira alterada",
+                     "wallet_removed": "Carteira removida"}[kind]
+            ref = json.dumps({"op": kind, **w}, ensure_ascii=False) if kind != "wallet_changed" else None
+            store.add_activity(kind, f"{title}: {w['name']}", w.get("currency") or "", "feito", ref)
     elif name == "add_expense" and result.get("ok"):
         title = f"{result['amount']:.2f} {result['currency']} · {result['category']}"
         detail = " · ".join(x for x in [result.get("merchant"), result["business"], result["date"]] if x)
@@ -305,12 +338,13 @@ def over_fair_use() -> bool:
 
 
 def handle(user_text: str, image_b64: str | None = None, media_type: str = "image/jpeg",
-           receipt_path: str | None = None, voice: bool = False, kind: str = "texto") -> dict:
+           receipt_path: str | None = None, voice: bool = False, kind: str = "texto", speak: bool = False,
+           request_id: str | None = None) -> dict:
     """Atende o pedido e registra no painel se deu certo (sem guardar o conteúdo)."""
     import time as _t
     from . import metrics
     t0 = _t.time()
-    out = _handle(user_text, image_b64, media_type, receipt_path, voice)
+    out = _handle(user_text, image_b64, media_type, receipt_path, voice, speak or voice, request_id)
     meta = out.pop("_meta", {})
     ok = not out.get("fair_use") and not meta.get("failed")
     metrics.record_task((store.CURRENT.get() or {}).get("id") or store.OWNER_ID, kind, ok, meta.get("tools", 0),
@@ -319,10 +353,11 @@ def handle(user_text: str, image_b64: str | None = None, media_type: str = "imag
 
 
 def _handle(user_text: str, image_b64: str | None = None, media_type: str = "image/jpeg",
-            receipt_path: str | None = None, voice: bool = False) -> dict:
+            receipt_path: str | None = None, voice: bool = False, speak: bool = False,
+            request_id: str | None = None) -> dict:
     if over_fair_use():
         reply = FAIR_USE_MSG["pt" if store.user_lang() == "pt" else "en"]
-        return {"reply": reply, "speech": reply if voice else None, "pending_actions": [], "events": [], "documents": [],
+        return {"reply": reply, "speech": reply if speak else None, "pending_actions": [], "events": [], "documents": [],
                 "upsell": None, "fair_use": True}
     tools.CURRENT_RECEIPT["path"] = receipt_path
     tools.web_tools.begin(user_text)  # links que o usuário mandou: os únicos que o Fidus pode abrir (além dos que ler agora)
@@ -341,8 +376,23 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
     actions: list[str] = []
 
     nudged = False
+    # só cumprimento ou agradecimento ("oi", "obrigado", "tchau"; "ok" pode ser confirmação, fica no principal): modelo leve, responde mais rápido e custa menos
+    light = config.LLM_MODEL_LIGHT if not image_b64 and SMALLTALK.match(user_text or "") else None
+    def stopped() -> dict:
+        """A pessoa tocou em parar: não faz mais nada (o que já foi feito fica na Atividade, com Desfazer)."""
+        store.add_message("assistant", "[pedido cancelado pelo usuário; não continue este pedido]" + _action_log(actions))
+        reply = CANCELLED_MSG["pt" if store.user_lang() == "pt" else "en"]
+        if actions:
+            reply += " " + ("O que já tinha feito está na Atividade, com Desfazer." if store.user_lang() == "pt"
+                            else "What was already done is in Activity, with Undo.")
+        return {"_meta": {"tools": len(actions), "tool_errors": 0}, "reply": reply, "speech": reply if speak else None,
+                "pending_actions": [store.get_pending(p) for p in pending_ids], "events": events, "documents": [],
+                "upsell": None, "cancelled": True}
+
     for _ in range(MAX_STEPS):
-        out = llm.chat(system_parts(voice), messages, tools.TOOLS)
+        if _cancelled(request_id):
+            return stopped()
+        out = llm.chat(system_parts(voice), messages, tools.TOOLS, **({"model": light} if light else {}))
         if not out["tool_calls"]:
             reply = out["text"].strip()
             if not actions and not nudged and CLAIM.search(reply):
@@ -354,7 +404,7 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
             store.add_message("assistant", reply + _action_log(actions))
             pend = [store.get_pending(p) for p in pending_ids]
             speech = None
-            if voice:
+            if speak:
                 lang = "en" if store.user_lang() == "en" else "pt"
                 # destinatário e assunto ditos pelo servidor (não pela IA): o usuário ouve para quem vai antes de dizer "envia"
                 extra = " ".join(_actions.readback(a, lang) for a in pend if a and a["status"] == "pending")
@@ -367,6 +417,8 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
 
         messages.append({"role": "assistant", "content": out["text"], "tool_calls": out["tool_calls"],
                          "raw": out.get("raw")})
+        if _cancelled(request_id):  # cancelou enquanto a IA pensava: nenhuma ferramenta deste passo roda
+            return stopped()
         for call in out["tool_calls"]:
             result = tools.run(call["name"], call["input"])
             if call["name"] in ("read_email", "open_link", "search_emails", "read_sheet"):

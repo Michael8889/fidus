@@ -356,11 +356,11 @@ function FormattedText({ text, color }: { text: string; color: string }) {
         const b = line.match(/^\s*(?:•|-|\*)\s+(.*)$/);
         if (b) return (
           <View key={i} style={{ flexDirection: "row", paddingLeft: 4 }}>
-            <Text style={{ color, width: 16, lineHeight: 22 }}>•</Text>
-            <Text selectable style={{ color, flex: 1, lineHeight: 22, fontSize: 15 }}>{inline(b[1], String(i))}</Text>
+            <Text style={{ color, width: 16, lineHeight: 24, fontSize: 16 }}>•</Text>
+            <Text selectable style={{ color, flex: 1, lineHeight: 24, fontSize: 16 }}>{inline(b[1], String(i))}</Text>
           </View>);
         if (!line.trim()) return <View key={i} style={{ height: 8 }} />;
-        return <Text key={i} selectable style={{ color, lineHeight: 22, fontSize: 15 }}>{inline(line, String(i))}</Text>;
+        return <Text key={i} selectable style={{ color, lineHeight: 24, fontSize: 16 }}>{inline(line, String(i))}</Text>;
       })}
     </View>
   );
@@ -421,7 +421,7 @@ function EmailCard({ a, c, dark, onSend, onCancel, onSave, onCopy, onEditing }: 
       ) : (<>
         <View style={[s.emailRow, { borderBottomColor: line }]}>
           <Text style={{ color: c.sub, width: 64 }}>{t("Para")}</Text>
-          <Text selectable style={{ color: c.text, flex: 1 }}>{to}</Text>
+          <Text selectable style={{ color: c.text, flex: 1, fontSize: 15 }}>{to}</Text>
         </View>
         <View style={[s.emailRow, { borderBottomColor: line }]}>
           <Text style={{ color: c.sub, width: 64 }}>{t("Assunto")}</Text>
@@ -497,6 +497,9 @@ function FidusApp() {
   const [meetings, setMeetings] = useState<any>(null);
   const [expenses, setExpenses] = useState<any>(null);
   const [expMonth, setExpMonth] = useState("");
+  const [expWallet, setExpWallet] = useState("");  // "" = todas as carteiras
+  const [expLock, setExpLock] = useState<any>(null);
+  const [newWallet, setNewWallet] = useState<{ name: string; currency: string } | null>(null);
   const [booking, setBooking] = useState<any>(null);
   const [referral, setReferral] = useState<any>(null);
   const [refApply, setRefApply] = useState("");
@@ -518,6 +521,9 @@ function FidusApp() {
   const [emailCode, setEmailCode] = useState("");
   const [lockAvail, setLockAvail] = useState(false);
   const [lockOn, setLockOn] = useState(false);
+  const [activeReq, setActiveReq] = useState("");  // pedido em andamento que pode ser parado
+  const cancelledReqs = useRef(new Set<string>());
+  const [speakAudio, setSpeakAudio] = useState(true);  // áudio gravado: o Fidus responde também em voz alta
   const [locked, setLocked] = useState(false);
   const bgAt = useRef(0);
   const kicked = useRef(false);
@@ -978,10 +984,17 @@ function FidusApp() {
     try { await voiceRec.stop(); } catch {}
     const uri = voiceRec.uri;
     if (!uri) return listen();
+    // se a resposta demorar, avisa que está vendo (para a pessoa não achar que o Fidus travou)
+    const fillers = [t("Um instante."), t("Deixa eu ver."), t("Já vejo isso.")];
+    const filler = setTimeout(() => {
+      if (!voiceActive.current || !Speech) return;
+      try { Speech.speak(fillers[Math.floor(Math.random() * fillers.length)], { language: ttsLanguage(), rate: 1.05 }); } catch {}
+    }, 2500);
     try {
       const audio_b64 = await new File(uri).base64();
       const ext = (uri.match(/\.[a-z0-9]+$/i)?.[0] || ".m4a").toLowerCase();
       const r = await post("/v1/voice_b64", { audio_b64, ext, mode: "voice", drafts: visibleDrafts() });
+      clearTimeout(filler);
       if (!voiceActive.current) return;
       if (!r.transcript) { speak(t("Não entendi. Pode repetir?")); return; }
       setVHeard(r.transcript);
@@ -990,6 +1003,7 @@ function FidusApp() {
       setVReply(r.reply || "");
       speak(r.speech || r.reply || t("Feito."));
     } catch (e: any) {
+      clearTimeout(filler);
       setVReply(`${t("Falha de conexão")}: ${e?.message ?? e}`);
       speak(t("Perdi a conexão com o servidor. Tente de novo em instantes."));
     }
@@ -1084,6 +1098,7 @@ function FidusApp() {
   useEffect(() => {
     (async () => {
       try { setLockAvail(!!LocalAuth && (await LocalAuth.hasHardwareAsync()) && (await LocalAuth.isEnrolledAsync())); } catch { setLockAvail(false); }
+      try { setSpeakAudio((await SecureStore.getItemAsync("speakAudio")) !== "0"); } catch {}
       const on = (await SecureStore.getItemAsync("lock")) === "1";
       setLockOn(on);
       if (on) { setLocked(true); unlock(); }
@@ -1107,6 +1122,21 @@ function FidusApp() {
         await SecureStore.setItemAsync("lock", "0"); setLockOn(false); setLocked(false);
       }
     } catch { setLocked(false); }  // sem o módulo: idem
+  }
+
+  async function toggleSpeakAudio() {
+    if (!Speech) return Alert.alert(t("Responder áudios em voz alta"), t("Instale o APK novo para o Fidus falar."));
+    const on = !speakAudio;
+    try { await SecureStore.setItemAsync("speakAudio", on ? "1" : "0"); } catch {}
+    setSpeakAudio(on); if (!on) { try { Speech.stop(); } catch {} }
+    flash(on ? t("O Fidus vai responder seus áudios falando") : t("Respostas aos áudios só por escrito"));
+  }
+
+  function sayReply(r: any) {  // resposta a um áudio gravado (fora do modo conversa)
+    if (!Speech || !speakAudio || voiceActive.current) return;
+    const text = r?.speech || r?.reply;
+    if (!text) return;
+    try { Speech.stop(); Speech.speak(text, { language: ttsLanguage(), rate: 1.02 }); } catch {}
   }
 
   async function toggleLock() {
@@ -1268,6 +1298,7 @@ function FidusApp() {
   async function toggleRec() {
     if (busy) return;
     if (recording) return stopRec();
+    try { Speech?.stop(); } catch {}
     try {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
       if (!perm.granted) return fail(t("permissão do microfone negada. Libere nas configurações do celular."));
@@ -1287,12 +1318,16 @@ function FidusApp() {
     if (!uri) return fail(t("nenhum áudio foi gravado. Tente de novo."));
     setBusy(true);
     const before = historyCount();
+    const rid = uid(); setActiveReq(rid);
     try {
       const audio_b64 = await new File(uri).base64();
       const ext = (uri.match(/\.[a-z0-9]+$/i)?.[0] || ".m4a").toLowerCase();
-      showResult(await post("/v1/voice_b64", { audio_b64, ext, drafts: visibleDrafts() }));
-    } catch (e: any) { await recover(e, before); }
-    finally { setBusy(false); }
+      const r = await post("/v1/voice_b64", { audio_b64, ext, drafts: visibleDrafts(), speak: !!Speech && speakAudio, request_id: rid });
+      if (cancelledReqs.current.has(rid)) return;
+      showResult(r);
+      sayReply(r);
+    } catch (e: any) { if (!cancelledReqs.current.has(rid)) await recover(e, before); }
+    finally { if (!cancelledReqs.current.has(rid)) setBusy(false); setActiveReq((x) => (x === rid ? "" : x)); }
   }
 
   // ---------- Foto: recibo ou documento ----------
@@ -1355,13 +1390,30 @@ function FidusApp() {
     const text = (preset ?? typed).trim();
     if (!text) return;
     if (busy) return;
+    try { Speech?.stop(); } catch {}
     if (!preset) setTyped("");
     setBusy(true);
     push({ id: uid(), type: "user", text });  // aparece na hora
     const before = historyCount();
-    try { showResult(await post("/v1/message", { text, drafts: visibleDrafts() }), false); }
-    catch (e: any) { await recover(e, before); }
-    finally { setBusy(false); }
+    const rid = uid(); setActiveReq(rid);
+    try {
+      const r = await post("/v1/message", { text, drafts: visibleDrafts(), request_id: rid });
+      if (!cancelledReqs.current.has(rid)) showResult(r, false);
+    }
+    catch (e: any) { if (!cancelledReqs.current.has(rid)) await recover(e, before); }
+    finally { if (!cancelledReqs.current.has(rid)) setBusy(false); setActiveReq((x) => (x === rid ? "" : x)); }
+  }
+
+  // botão parar: o Fidus não faz mais nada desse pedido (o que já fez fica na Atividade, com Desfazer)
+  function stopRequest() {
+    const rid = activeReq;
+    if (!rid) return;
+    cancelledReqs.current.add(rid);
+    post("/v1/cancel", { request_id: rid }, 10000).catch(() => {});
+    try { Speech?.stop(); } catch {}
+    setActiveReq(""); setBusy(false);
+    push({ id: uid(), type: "fidus", text: t("Pedido cancelado. Se algo já tinha sido feito, está na Atividade, com Desfazer.") });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   }
 
   // ---------- Ações que pedem autorização ----------
@@ -1441,6 +1493,50 @@ function FidusApp() {
   }
   const go = (sc: Screen) => closeDrawer(() => { setScreen(sc); loadScreen(sc); });
 
+  async function loadExpenses(month: string, wallet: string) {
+    const q = [month ? `month=${month}` : "", wallet ? `wallet=${encodeURIComponent(wallet)}` : ""].filter(Boolean).join("&");
+    setExpenses(await api(`/v1/expenses/summary${q ? `?${q}` : ""}`, {}, 20000));
+  }
+
+  function pickWallet(w: string) {
+    setExpWallet(w); setExpLock(null);
+    loadExpenses(expMonth, w).catch((e: any) => Alert.alert(t("Erro"), errMsg(e)));
+  }
+
+  async function saveWallet() {
+    const name = (newWallet?.name || "").trim();
+    const currency = (newWallet?.currency || "").trim().toUpperCase();
+    if (!name) return;
+    if (currency && !/^[A-Z]{3}$/.test(currency)) return Alert.alert(t("Carteira"), t("Moeda com 3 letras, ex. GBP, EUR, BRL"));
+    try {
+      const r = await post("/v1/wallets", { name, currency: currency || null }, 15000);
+      if (r.locked) { setExpLock(r); setNewWallet(null); return; }
+      setNewWallet(null); flash(t("Carteira salva"));
+      await loadExpenses(expMonth, expWallet);
+    } catch (e: any) { Alert.alert(t("Carteira"), errMsg(e)); }
+  }
+
+  function walletMenu(name: string) {
+    Alert.alert(name, t("Remover esta carteira? Os gastos já lançados nela continuam guardados."), [
+      { text: t("Cancelar"), style: "cancel" },
+      { text: t("Remover"), style: "destructive", onPress: async () => {
+        try {
+          await post("/v1/wallets/remove", { name }, 15000);
+          if (expWallet === name) setExpWallet("");
+          await loadExpenses(expMonth, expWallet === name ? "" : expWallet);
+        } catch (e: any) { Alert.alert(t("Carteira"), errMsg(e)); }
+      } },
+    ]);
+  }
+
+  async function exportWallet(month: string) {
+    try {
+      const r = await post("/v1/expenses/export", { month, wallet: expWallet || null }, 60000);
+      if (r.locked) return setExpLock(r);
+      await Linking.openURL(r.url);
+    } catch (e: any) { Alert.alert(t("Contador"), errMsg(e)); }
+  }
+
   async function loadScreen(sc: Screen, arg?: string) {
     if (sc === "tasks") return loadTasks();
     if (sc === "activity") return loadActivity();
@@ -1450,7 +1546,7 @@ function FidusApp() {
       if (sc === "convs") setConvs((await api("/v1/conversations", {}, 15000)).conversations || []);
       if (sc === "docs") setDocs((await api(`/v1/documents${arg ? `?q=${encodeURIComponent(arg)}` : ""}`, {}, 15000)).documents || []);
       if (sc === "meetings") setMeetings(await api("/v1/meetings", {}, 15000));
-      if (sc === "expenses") setExpenses(await api(`/v1/expenses/summary${arg ? `?month=${arg}` : ""}`, {}, 20000));
+      if (sc === "expenses") await loadExpenses(arg || "", expWallet);
       if (sc === "booking") setBooking(await api("/v1/booking", {}, 15000));
       if (sc === "invite") setReferral(await api("/v1/referral", {}, 15000));
       if (sc === "settings") {
@@ -1685,18 +1781,18 @@ function FidusApp() {
               <Pressable onPress={inviteMenu} style={[s.primarySm, { justifyContent: "center" }]}>
                 <Text style={s.primaryText}>{t("Convidar")}</Text></Pressable>
             </View>
-            <Text style={{ color: c.sub, fontSize: 13 }}>
+            <Text style={{ color: c.sub, fontSize: 14 }}>
               {t("{0} conta(s) · {1} convite(s) aguardando", admin.users.length, admin.invites.filter((i: any) => !i.used_at).length)}
             </Text>
             {admin.invites.filter((i: any) => !i.used_at).map((i: any) => (
-              <Text key={i.email} style={{ color: c.sub, fontSize: 13 }}>✉️ {i.email} · {t(PLAN_NAMES[i.plan] ?? i.plan)}</Text>
+              <Text key={i.email} style={{ color: c.sub, fontSize: 14 }}>✉️ {i.email} · {t(PLAN_NAMES[i.plan] ?? i.plan)}</Text>
             ))}
           </View>}
         renderItem={({ item: u }) => (
           <Pressable onPress={() => clientMenu(u)} style={[s.actCard, { backgroundColor: c.card, opacity: u.status === "ativo" ? 1 : 0.5 }]}>
             <View style={{ flex: 1 }}>
               <Text style={{ color: c.text, fontWeight: "700" }}>{u.name || u.email}{u.is_owner ? ` (${t("você")})` : ""}</Text>
-              <Text style={{ color: c.sub, fontSize: 13 }}>{u.email}</Text>
+              <Text style={{ color: c.sub, fontSize: 14 }}>{u.email}</Text>
               <Text style={{ color: c.sub, fontSize: 12, marginTop: 2 }}>
                 {t(PLAN_NAMES[u.plan] ?? u.plan)} · {t("{0} ações no mês", u.actions_this_month)} · {u.google_connected ? t("Google ok") : t("sem Google")}
                 {typeof u.ai_cost_month_usd === "number" ? ` · ${t("IA")} $${u.ai_cost_month_usd.toFixed(2)}` : ""}
@@ -1727,7 +1823,7 @@ function FidusApp() {
               <Pressable onPress={() => toggleTask(tk)} hitSlop={10}
                 style={[s.check, { borderColor: tk.priority === "alta" ? RED : c.sub }]} accessibilityLabel={t("Concluir")} />
               <View style={{ flex: 1 }}>
-                <Text style={{ color: c.text, fontWeight: "600" }}>{tk.title}</Text>
+                <Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{tk.title}</Text>
                 {(!!tk.due || tk.priority === "alta") && (
                   <Text style={{ color: tk.overdue ? RED : c.sub, fontSize: 12, marginTop: 2 }}>
                     {tk.due ? (tk.overdue ? t("atrasada · era {0}", fmtDay(tk.due)) : t("até {0}", fmtDay(tk.due))) : ""}
@@ -1781,7 +1877,7 @@ function FidusApp() {
         renderItem={({ item: cv }) => (
           <Card c={c} onPress={() => openConversation(cv.id)}>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: c.text, fontWeight: "600" }} numberOfLines={1}>{cv.title === "Conversa" ? t("Conversa") : cv.title}</Text>
+              <Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }} numberOfLines={1}>{cv.title === "Conversa" ? t("Conversa") : cv.title}</Text>
               <Text style={{ color: c.sub, fontSize: 12, marginTop: 2 }}>{fmtDate(cv.last)} · {t("{0} mensagens", cv.messages)}</Text>
             </View>
             <Text style={{ color: c.sub }}>›</Text>
@@ -1801,7 +1897,7 @@ function FidusApp() {
             <Card c={c} onPress={() => openDoc(d)}>
               <Text style={s.actIcon}>📄</Text>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: c.text, fontWeight: "600" }}>{d.title}</Text>
+                <Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{d.title}</Text>
                 {!!d.expires_on && <Text style={{ color: c.sub, fontSize: 12 }}>{t("vence {0}", `${fmtDay(d.expires_on)}/${d.expires_on.slice(0, 4)}`)}</Text>}
               </View>
               <Text style={{ color: MINT, fontWeight: "700" }}>{t("Abrir")}</Text>
@@ -1818,7 +1914,7 @@ function FidusApp() {
           <Card c={c} onPress={() => openMeeting(m)}>
             <Text style={s.actIcon}>🎙</Text>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: c.text, fontWeight: "600" }}>{m.title || t("Reunião")}</Text>
+              <Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{m.title || t("Reunião")}</Text>
               <Text style={{ color: c.sub, fontSize: 12 }}>{fmtDay(m.date)}/{(m.date || "").slice(0, 4)} · {m.status === "pronta" ? t("ata pronta") : m.status === "erro" ? t("erro") : t("processando")}</Text>
             </View>
             <Text style={{ color: c.sub }}>›</Text>
@@ -1840,11 +1936,42 @@ function FidusApp() {
             <Pressable hitSlop={10} onPress={() => { const m = shiftMonth(month, 1); setExpMonth(m); loadScreen("expenses", m); }}>
               <Text style={{ color: "#fff", fontSize: 22 }}>›</Text></Pressable>
           </View>
-          {!!e && Object.keys(e.by_business || {}).length > 0 && (
+          {!!e?.wallets && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+              {[{ name: "", label: t("Todas") }, ...e.wallets.map((w: any) => ({ name: w.name, label: w.currency ? `${w.name} · ${w.currency}` : w.name, archived: w.archived }))]
+                .map((w: any) => {
+                  const on = expWallet === w.name;
+                  return (
+                    <Pressable key={w.name || "_all"} onPress={() => pickWallet(w.name)} onLongPress={() => w.name && !w.archived && walletMenu(w.name)}
+                      style={[s.chip, { paddingVertical: 8, paddingHorizontal: 14, borderColor: on ? NAVY : c.line, backgroundColor: on ? NAVY : c.card }]}>
+                      <Text style={{ color: on ? "#fff" : c.text, fontSize: 15, fontWeight: on ? "700" : "400" }}>{w.label}</Text>
+                    </Pressable>);
+                })}
+              <Pressable onPress={() => setNewWallet({ name: "", currency: "" })} accessibilityLabel={t("Nova carteira")}
+                style={[s.chip, { paddingVertical: 8, paddingHorizontal: 14, borderColor: c.line, borderStyle: "dashed" }]}>
+                <Text style={{ color: c.sub, fontSize: 15 }}>+ {t("Carteira")}</Text></Pressable>
+            </ScrollView>)}
+          {!!newWallet && (
+            <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+              <Text style={{ color: c.sub, fontSize: 14 }}>{t("NOVA CARTEIRA")}</Text>
+              <TextInput value={newWallet.name} onChangeText={(v) => setNewWallet({ ...newWallet, name: v })} placeholder={t("Nome, ex. Pessoal BR")}
+                placeholderTextColor={c.sub} maxLength={40} style={[s.input, { color: c.text, backgroundColor: c.bg, marginBottom: 0 }]} />
+              <TextInput value={newWallet.currency} onChangeText={(v) => setNewWallet({ ...newWallet, currency: v.toUpperCase() })} placeholder={t("Moeda, ex. BRL")}
+                placeholderTextColor={c.sub} maxLength={3} autoCapitalize="characters" style={[s.input, { color: c.text, backgroundColor: c.bg, marginBottom: 0 }]} />
+              <View style={[s.row, { gap: 8 }]}>
+                <Pressable style={[s.secondary, { borderColor: c.line, flex: 1, alignItems: "center" }]} onPress={() => setNewWallet(null)}>
+                  <Text style={{ color: c.text }}>{t("Cancelar")}</Text></Pressable>
+                <Pressable style={[s.primary, { flex: 1, padding: 10 }]} onPress={saveWallet}>
+                  <Text style={s.primaryText}>{t("Salvar")}</Text></Pressable>
+              </View>
+            </Card>)}
+          <Lock r={expLock} />
+          {!!e && !expWallet && (e.wallets || []).filter((w: any) => Object.keys(w.totals || {}).length).length > 1 && (
             <Card c={c} style={{ flexDirection: "column", alignItems: "stretch" }}>
-              <Text style={{ color: c.sub, fontSize: 12, marginBottom: 4 }}>{t("POR EMPRESA")}</Text>
-              {Object.entries(e.by_business).map(([b, v]: any) => (
-                <View key={b} style={s.kv}><Text style={{ color: c.text }}>{b}</Text><Text style={{ color: c.text, fontWeight: "600" }}>{sumLine(v)}</Text></View>))}
+              <Text style={{ color: c.sub, fontSize: 12, marginBottom: 4 }}>{t("POR CARTEIRA")}</Text>
+              {e.wallets.filter((w: any) => Object.keys(w.totals || {}).length).map((w: any) => (
+                <Pressable key={w.name} onPress={() => pickWallet(w.name)} style={s.kv}>
+                  <Text style={{ color: c.text }}>{w.name} ›</Text><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{sumLine(w.totals)}</Text></Pressable>))}
             </Card>)}
           {!!e && Object.keys(e.by_category || {}).length > 0 && (
             <Card c={c} style={{ flexDirection: "column", alignItems: "stretch" }}>
@@ -1857,18 +1984,22 @@ function FidusApp() {
               <Text style={{ color: c.sub, fontSize: 12, marginBottom: 4 }}>{t("ÚLTIMOS LANÇAMENTOS")}</Text>
               {e.recent.map((r: any) => (
                 <View key={r.id} style={s.kv}>
-                  <Text style={{ color: c.text, flex: 1 }} numberOfLines={1}>{fmtDay(r.date)} · {r.merchant || t(r.category)} · {r.business}</Text>
-                  <Text style={{ color: c.text, fontWeight: "600" }}>{r.amount.toFixed(2)} {r.currency}</Text></View>))}
+                  <Text style={{ color: c.text, flex: 1, fontSize: 15 }} numberOfLines={1}>{fmtDay(r.date)} · {r.merchant || t(r.category)} · {r.business}</Text>
+                  <Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{r.amount.toFixed(2)} {r.currency}</Text></View>))}
             </Card>)}
           {!!e?.bills?.length && (
             <Card c={c} style={{ flexDirection: "column", alignItems: "stretch" }}>
               <Text style={{ color: c.sub, fontSize: 12, marginBottom: 4 }}>{t("CONTAS FIXAS")}</Text>
               {e.bills.map((b: any) => (
                 <View key={b.bill_id} style={s.kv}>
-                  <Text style={{ color: c.text, flex: 1 }}>{b.name} · {t("dia {0}", b.day_of_month)}</Text>
+                  <Text style={{ color: c.text, flex: 1, fontSize: 15 }}>{b.name} · {t("dia {0}", b.day_of_month)}</Text>
                   <Text style={{ color: c.text }}>{b.amount != null ? `${Number(b.amount).toFixed(2)} ${b.currency || ""}` : ""}</Text></View>))}
             </Card>)}
           {!!e && !e.count && !e.bills?.length && <Empty text={t("Nenhum gasto neste mês.\nDiga “paguei 30 libras de gasolina” ou mande a foto do recibo.")} />}
+          {!!e?.count && (
+            <Pressable style={[s.secondary, { borderColor: c.line, alignItems: "center" }]} onPress={() => exportWallet(month)}>
+              <Text style={{ color: c.text }}>📦 {expWallet ? t("Exportar {0} para o contador", expWallet) : t("Exportar o mês para o contador")}</Text></Pressable>)}
+          {!!e?.wallets && <Text style={{ color: c.sub, fontSize: 12, textAlign: "center" }}>{t("Toque e segure uma carteira para remover.")}</Text>}
         </ScrollView>
       );
     }
@@ -1877,7 +2008,7 @@ function FidusApp() {
         {loadingScreen && !booking ? <Empty text="" /> : booking && (<>
           <Text style={{ color: c.sub }}>{t("Mande este link para clientes marcarem horário direto na sua agenda, só nos horários livres.")}</Text>
           <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
-            <Text selectable style={{ color: c.text, fontWeight: "600" }}>{booking.link}</Text>
+            <Text selectable style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{booking.link}</Text>
             <View style={[s.row, { justifyContent: "flex-start", flexWrap: "wrap" }]}>
               <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => copyText(booking.link)}><Text style={{ color: c.text }}>{t("Copiar")}</Text></Pressable>
               <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => Share.share({ message: booking.link })}><Text style={{ color: c.text }}>{t("Compartilhar")}</Text></Pressable>
@@ -1890,7 +2021,7 @@ function FidusApp() {
             <View style={s.kv}><Text style={{ color: c.sub }}>{t("Antecedência")}</Text><Text style={{ color: c.text }}>{booking.min_notice_hours} h</Text></View>
             {(booking.types || []).map((x: string) => <Text key={x} style={{ color: c.text, marginTop: 4 }}>• {x}</Text>)}
           </Card>
-          <Text style={{ color: c.sub, fontSize: 13 }}>{t("Para mudar dias, horários ou tipos de atendimento, peça ao Fidus na conversa.")}</Text>
+          <Text style={{ color: c.sub, fontSize: 14 }}>{t("Para mudar dias, horários ou tipos de atendimento, peça ao Fidus na conversa.")}</Text>
         </>)}
       </ScrollView>
     );
@@ -1925,7 +2056,7 @@ function FidusApp() {
           {t("Como funciona: o desconto entra quando o amigo paga o primeiro mês. Os descontos não somam: vale um por cobrança, e os que sobram ficam para as cobranças seguintes.")}</Text>
         {!!referral && !referral.invited_by && (
           <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
-            <Text style={{ color: c.text, fontWeight: "600" }}>{t("Alguém te convidou?")}</Text>
+            <Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Alguém te convidou?")}</Text>
             <View style={[s.row, { gap: 8 }]}>
               <TextInput style={[s.input, s.flex, { color: c.text, backgroundColor: c.bg, marginBottom: 0 }]} placeholder="AB12CD"
                 placeholderTextColor={c.sub} autoCapitalize="characters" value={refApply} onChangeText={setRefApply} />
@@ -1942,8 +2073,8 @@ function FidusApp() {
         {!!panel && (
           <Card c={c} style={{ flexDirection: "column", alignItems: "center", gap: 8 }}>
             <Text selectable style={{ color: c.text, fontSize: 34, fontWeight: "800", letterSpacing: 6 }}>{panel.code}</Text>
-            <Text style={{ color: c.sub, fontSize: 13 }}>{t("Vale 5 minutos e só uma vez.")}</Text>
-            <Text selectable style={{ color: c.text, fontWeight: "600" }}>{panel.url}</Text>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{t("Vale 5 minutos e só uma vez.")}</Text>
+            <Text selectable style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{panel.url}</Text>
             <View style={[s.row, { justifyContent: "center", flexWrap: "wrap" }]}>
               <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => copyText(panel.url)}><Text style={{ color: c.text }}>{t("Copiar endereço")}</Text></Pressable>
               <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => Linking.openURL(panel.url).catch(() => {})}><Text style={{ color: c.text }}>{t("Abrir aqui")}</Text></Pressable>
@@ -1959,11 +2090,11 @@ function FidusApp() {
             <TextInput style={[s.input, s.flex, { color: c.text, backgroundColor: c.bg, marginBottom: 0 }]} value={nameEdit} onChangeText={setNameEdit} />
             <Pressable style={[s.primarySm, { justifyContent: "center" }]} onPress={saveName}><Text style={s.primaryText}>{t("Salvar")}</Text></Pressable>
           </View>
-          <Text style={{ color: c.sub, fontSize: 13 }}>{me?.email}</Text>
+          <Text style={{ color: c.sub, fontSize: 14 }}>{me?.email}</Text>
         </Card>
         <Card c={c} onPress={chooseLanguage}>
-          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600" }}>{t("Idioma")}</Text>
-            <Text style={{ color: c.sub, fontSize: 13 }}>{(LANG_CHOICES.find(([k]) => k === LANG) || [LANG, LANG])[1]}</Text></View>
+          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Idioma")}</Text>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{(LANG_CHOICES.find(([k]) => k === LANG) || [LANG, LANG])[1]}</Text></View>
           <Text style={{ color: c.sub }}>›</Text></Card>
         <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
           <Text style={{ color: c.sub, fontSize: 12 }}>{t("SEU PLANO")}</Text>
@@ -1981,35 +2112,39 @@ function FidusApp() {
         </Card>
         {storeReady && (<>
           <Card c={c} onPress={() => Linking.openURL(MANAGE_SUBS_URL).catch(() => {})}>
-            <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600" }}>{t("Gerenciar assinatura")}</Text>
-              <Text style={{ color: c.sub, fontSize: 13 }}>{t("Trocar forma de pagamento ou cancelar, direto na loja")}</Text></View>
+            <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Gerenciar assinatura")}</Text>
+              <Text style={{ color: c.sub, fontSize: 14 }}>{t("Trocar forma de pagamento ou cancelar, direto na loja")}</Text></View>
             <Text style={{ color: c.sub }}>›</Text></Card>
-          <Card c={c} onPress={restorePurchases}><Text style={{ color: c.text, flex: 1 }}>{t("Restaurar compras")}</Text></Card>
+          <Card c={c} onPress={restorePurchases}><Text style={{ color: c.text, flex: 1, fontSize: 15 }}>{t("Restaurar compras")}</Text></Card>
         </>)}
+        <Card c={c} onPress={toggleSpeakAudio}>
+          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Responder áudios em voz alta")}</Text>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{!Speech ? t("Disponível no app atualizado") : speakAudio ? t("Ligado: quando você manda áudio, o Fidus responde falando") : t("Desligado: respostas só por escrito")}</Text></View>
+          <Text style={{ color: speakAudio && Speech ? GREEN : c.sub, fontWeight: "700" }}>{speakAudio && Speech ? t("Ligado") : t("Ligar")}</Text></Card>
         <Card c={c} onPress={toggleLock}>
-          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600" }}>{t("Trava com digital ou rosto")}</Text>
-            <Text style={{ color: c.sub, fontSize: 13 }}>{lockAvail ? (lockOn ? t("Ligada: o Fidus pede sua digital ao abrir") : t("Desligada")) : t("Disponível no app atualizado, com digital ou rosto cadastrados")}</Text></View>
+          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Trava com digital ou rosto")}</Text>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{lockAvail ? (lockOn ? t("Ligada: o Fidus pede sua digital ao abrir") : t("Desligada")) : t("Disponível no app atualizado, com digital ou rosto cadastrados")}</Text></View>
           <Text style={{ color: lockOn ? GREEN : c.sub, fontWeight: "700" }}>{lockOn ? t("Ligada") : t("Ligar")}</Text></Card>
         <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
           <Text style={{ color: c.sub, fontSize: 12 }}>{t("ESTE APARELHO")}</Text>
-          <Text style={{ color: c.text, fontWeight: "600" }}>{device?.device_name || t("Este celular")}</Text>
+          <Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{device?.device_name || t("Este celular")}</Text>
           <Text style={{ color: c.sub, fontSize: 12 }}>{t("Sua conta funciona em um aparelho por vez. Entrar em outro desconecta este.")}</Text>
           <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
         </Card>
         <Card c={c} onPress={reconnectGoogle}>
-          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600" }}>Google</Text>
-            <Text style={{ color: c.sub, fontSize: 13 }}>{me?.google_connected ? t("Conectado · tocar para reconectar") : t("Não conectado · tocar para conectar")}</Text></View>
+          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>Google</Text>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{me?.google_connected ? t("Conectado · tocar para reconectar") : t("Não conectado · tocar para conectar")}</Text></View>
           <Text style={{ color: c.sub }}>›</Text></Card>
         {!!pendingMeet && <Card c={c} onPress={() => { const p = pendingMeet; setPendingMeet(null); setScreen("chat"); sendMeetingFile(p); }}>
-          <Text style={{ color: c.text, flex: 1 }}>🎙 {t("Reenviar reunião")}</Text></Card>}
+          <Text style={{ color: c.text, flex: 1, fontSize: 15 }}>🎙 {t("Reenviar reunião")}</Text></Card>}
         <Card c={c} onPress={exportData}>
-          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600" }}>{t("Exportar meus dados")}</Text>
-            <Text style={{ color: c.sub, fontSize: 13 }}>{t("Um arquivo com tudo: conversas, gastos, recibos, documentos")}</Text></View>
+          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Exportar meus dados")}</Text>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{t("Um arquivo com tudo: conversas, gastos, recibos, documentos")}</Text></View>
           <Text style={{ color: c.sub }}>›</Text></Card>
         <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
           <Pressable onPress={() => setDelOpen(!delOpen)}><Text style={{ color: RED, fontWeight: "600" }}>{t("Apagar minha conta")}</Text></Pressable>
           {delOpen && (<>
-            <Text style={{ color: c.sub, fontSize: 13 }}>{t("Apaga a conta e todos os dados. Não dá para desfazer pelo app. Para confirmar, digite APAGAR.")}</Text>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{t("Apaga a conta e todos os dados. Não dá para desfazer pelo app. Para confirmar, digite APAGAR.")}</Text>
             <View style={[s.row, { gap: 8 }]}>
               <TextInput style={[s.input, s.flex, { color: c.text, backgroundColor: c.bg, marginBottom: 0 }]} value={delWord} onChangeText={setDelWord}
                 autoCapitalize="characters" placeholder="APAGAR" placeholderTextColor={c.sub} />
@@ -2019,10 +2154,10 @@ function FidusApp() {
           </>)}
         </Card>
         <Card c={c} onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Fidus`).catch(() => {})}>
-          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600" }}>{t("Ajuda e contato")}</Text>
-            <Text style={{ color: c.sub, fontSize: 13 }}>{SUPPORT_EMAIL}</Text></View>
+          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Ajuda e contato")}</Text>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{SUPPORT_EMAIL}</Text></View>
           <Text style={{ color: c.sub }}>›</Text></Card>
-        <Card c={c} onPress={testConnection}><Text style={{ color: c.text, flex: 1 }}>{t("Testar conexão")}</Text></Card>
+        <Card c={c} onPress={testConnection}><Text style={{ color: c.text, flex: 1, fontSize: 15 }}>{t("Testar conexão")}</Text></Card>
         <Card c={c} onPress={() => Alert.alert(t("Sair da conta?"), "", [{ text: t("Cancelar"), style: "cancel" }, { text: t("Sair"), style: "destructive", onPress: logout }])}>
           <Text style={{ color: RED, fontWeight: "600", flex: 1 }}>{t("Sair da conta")}</Text></Card>
         <Text style={{ color: c.sub, fontSize: 11, textAlign: "center" }}>{base()}</Text>
@@ -2040,7 +2175,7 @@ function FidusApp() {
         <View style={s.topbar}>
           <Pressable onPress={openDrawer} hitSlop={10} style={s.iconBtn} accessibilityLabel={t("Menu")}>
             <MenuIcon color={c.text} /></Pressable>
-          <Text style={[s.header, { color: c.text, flex: 1 }]} numberOfLines={1}>{SCREEN_TITLE()[screen]}</Text>
+          <Text style={[s.header, { color: c.text, flex: 1, fontSize: 15 }]} numberOfLines={1}>{SCREEN_TITLE()[screen]}</Text>
           {screen === "chat" ? (<>
             <Pressable style={[s.chip, meeting ? { backgroundColor: RED, borderColor: RED } : { borderColor: c.line }]} onPress={meetingMenu}
               accessibilityLabel={t("Gravar reunião")}>
@@ -2075,7 +2210,7 @@ function FidusApp() {
             if (item.type === "fidus")
               return <View style={{ alignSelf: "flex-start", maxWidth: "85%" }}>
                 <View style={[s.bubble, { backgroundColor: c.card, maxWidth: "100%" }]}>
-                  <LinkText text={item.text} style={{ color: c.text }} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} /></View>
+                  <LinkText text={item.text} style={{ color: c.text, fontSize: 17, lineHeight: 26 }} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} /></View>
                 <View style={{ flexDirection: "row", gap: 2, marginTop: 2, marginLeft: 4 }}>
                   {[1, -1].map((v) => (
                     <Pressable key={v} hitSlop={6} onPress={() => sendFeedback(item.id, v)} accessibilityLabel={v > 0 ? t("Resposta boa") : t("Resposta ruim")}
@@ -2111,7 +2246,7 @@ function FidusApp() {
                 <Pressable onPress={() => openDoc(d)} style={[s.actCard, { backgroundColor: c.card, borderWidth: 1, borderColor: MINT }]}>
                   <Text style={s.actIcon}>📄</Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: c.text, fontWeight: "600" }}>{d.title}</Text>
+                    <Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{d.title}</Text>
                     {!!d.expires_on && <Text style={{ color: c.sub, fontSize: 12 }}>{t("vence {0}", `${fmtDay(d.expires_on)}/${d.expires_on.slice(0, 4)}`)}</Text>}
                   </View>
                   <Text style={{ color: MINT, fontWeight: "700" }}>{t("Abrir")}</Text>
@@ -2123,7 +2258,7 @@ function FidusApp() {
               return (
                 <View style={[s.draft, { backgroundColor: c.card, borderColor: MINT }]}>
                   <Text style={[s.draftLabel, { color: c.sub }]}>{t("Convite")} · {a.status === "pending" ? t("aguardando você") : a.status === "sending" ? t("enviando…") : a.status === "sent" ? t("enviado ✓") : t("cancelado")}</Text>
-                  <Text style={{ color: c.text, fontWeight: "600" }}>{a.payload.title}</Text>
+                  <Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{a.payload.title}</Text>
                   {!!a.payload.start && <Text style={{ color: c.sub }}>{fmtDate(a.payload.start)}</Text>}
                   <Text style={{ color: c.text, marginVertical: 6 }}>{t("Para")}: {(a.payload.emails || []).join(", ")}</Text>
                   {a.status === "pending" && (
@@ -2153,7 +2288,7 @@ function FidusApp() {
         {meeting && (
           <Pressable onPress={finishMeeting} style={[s.meetBar, { backgroundColor: c.card, borderColor: RED }]}>
             <Text style={{ color: RED, fontWeight: "800" }}>● REC {fmtClock(meetSecs)}</Text>
-            <Text style={{ color: c.text, flex: 1 }}>{t("Gravando a reunião. Mantenha o Fidus aberto.")}</Text>
+            <Text style={{ color: c.text, flex: 1, fontSize: 15 }}>{t("Gravando a reunião. Mantenha o Fidus aberto.")}</Text>
             <Text style={{ color: c.text, fontWeight: "700" }}>{t("Encerrar")}</Text>
           </Pressable>
         )}
@@ -2179,7 +2314,7 @@ function FidusApp() {
                 <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: RED }} />
                 <Text style={{ color: c.text, fontVariant: ["tabular-nums"], fontWeight: "600" }}>{fmtClock(recSecs)}</Text>
                 <RecordingBars color={c.sub} />
-                <Text style={{ color: c.sub, fontSize: 13 }} numberOfLines={1}>{t("Gravando…")}</Text>
+                <Text style={{ color: c.sub, fontSize: 14 }} numberOfLines={1}>{t("Gravando…")}</Text>
               </View>
               <Pressable onPress={stopRec} accessibilityLabel={t("Enviar áudio")} style={[s.sendBtn2, { backgroundColor: NAVY }]}>
                 <ArrowUpIcon color="#fff" />
@@ -2190,9 +2325,14 @@ function FidusApp() {
                 <PlusIcon color={c.text} />
               </Pressable>
               <TextInput style={[s.composerInput, { color: c.text }]}
-                placeholder={t("Fale ou escreva…")} multiline blurOnSubmit placeholderTextColor={c.sub} value={typed}
-                onChangeText={setTyped} onSubmitEditing={() => sendText()} returnKeyType="send" />
-              {typed.trim().length > 0 ? (
+                placeholder={t("Fale ou escreva…")} multiline placeholderTextColor={c.sub} value={typed}
+                onChangeText={setTyped} />{/* Enter só pula linha: envia apenas pelo botão */}
+              {activeReq ? (
+                <Pressable onPress={stopRequest} accessibilityLabel={t("Parar")} hitSlop={6}
+                  style={[s.sendBtn2, { backgroundColor: NAVY }]}>
+                  <View style={{ width: 13, height: 13, borderRadius: 2, backgroundColor: "#fff" }} />
+                </Pressable>
+              ) : typed.trim().length > 0 ? (
                 <Pressable onPress={() => sendText()} disabled={busy} accessibilityLabel={t("Enviar")}
                   style={[s.sendBtn2, { backgroundColor: busy ? c.sub : NAVY }]}>
                   <ArrowUpIcon color="#fff" />
@@ -2290,12 +2430,12 @@ function FidusApp() {
       <Modal visible={!!reader} animationType="slide" onRequestClose={() => setReader(null)}>
         <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 8, paddingBottom: insets.bottom }}>
           <View style={s.topbar}>
-            <Text style={[s.header, { color: c.text, flex: 1 }]} numberOfLines={1}>{reader?.title}</Text>
+            <Text style={[s.header, { color: c.text, flex: 1, fontSize: 15 }]} numberOfLines={1}>{reader?.title}</Text>
             <Pressable onPress={() => reader && copyText(reader.text)} hitSlop={10} style={s.iconBtn}><CopyIcon color={c.text} /></Pressable>
             <Pressable onPress={() => setReader(null)} hitSlop={10} style={s.iconBtn}><CloseIcon color={c.text} /></Pressable>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16 }}>
-            <LinkText text={reader?.text || ""} style={{ color: c.text, lineHeight: 22 }} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} />
+            <LinkText text={reader?.text || ""} style={{ color: c.text, fontSize: 17, lineHeight: 26 }} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} />
           </ScrollView>
         </View>
       </Modal>
@@ -2487,6 +2627,9 @@ const I18N_KEYS: string[] = [
   "Pode falar. (Para ouvir as respostas em voz alta, instale o APK novo.)",
   "Pode falar.",
   "Não consegui abrir o microfone",
+  "Um instante.",
+  "Deixa eu ver.",
+  "Já vejo isso.",
   "Não entendi. Pode repetir?",
   "Até mais!",
   "Feito.",
@@ -2509,6 +2652,10 @@ const I18N_KEYS: string[] = [
   "A conta será desconectada em todos os aparelhos, inclusive neste.",
   "Sair de todos",
   "Desbloquear o Fidus",
+  "Responder áudios em voz alta",
+  "Instale o APK novo para o Fidus falar.",
+  "O Fidus vai responder seus áudios falando",
+  "Respostas aos áudios só por escrito",
   "Trava",
   "Este celular não tem digital ou rosto cadastrados, ou o app precisa ser atualizado.",
   "Desligar a trava",
@@ -2545,6 +2692,7 @@ const I18N_KEYS: string[] = [
   "arquivo grande demais (máx. 15 MB).",
   "Arquivo",
   "arquivo",
+  "Pedido cancelado. Se algo já tinha sido feito, está na Atividade, com Desfazer.",
   "Enviar convite?",
   "O Google manda o convite por e-mail.",
   "Falha ao enviar",
@@ -2552,6 +2700,11 @@ const I18N_KEYS: string[] = [
   "Rascunho",
   "Enviar e-mail?",
   "Copiado",
+  "Carteira",
+  "Moeda com 3 letras, ex. GBP, EUR, BRL",
+  "Carteira salva",
+  "Remover esta carteira? Os gastos já lançados nela continuam guardados.",
+  "Remover",
   "Ainda processando…",
   "Idioma do Fidus",
   "Salvo",
@@ -2630,12 +2783,20 @@ const I18N_KEYS: string[] = [
   "ata pronta",
   "processando",
   "{0} lançamentos",
-  "POR EMPRESA",
+  "Todas",
+  "Nova carteira",
+  "NOVA CARTEIRA",
+  "Nome, ex. Pessoal BR",
+  "Moeda, ex. BRL",
+  "POR CARTEIRA",
   "POR CATEGORIA",
   "ÚLTIMOS LANÇAMENTOS",
   "CONTAS FIXAS",
   "dia {0}",
   "Nenhum gasto neste mês.\nDiga “paguei 30 libras de gasolina” ou mande a foto do recibo.",
+  "Exportar {0} para o contador",
+  "Exportar o mês para o contador",
+  "Toque e segure uma carteira para remover.",
   "Mande este link para clientes marcarem horário direto na sua agenda, só nos horários livres.",
   "Compartilhar",
   "Dias",
@@ -2671,12 +2832,16 @@ const I18N_KEYS: string[] = [
   "Gerenciar assinatura",
   "Trocar forma de pagamento ou cancelar, direto na loja",
   "Restaurar compras",
+  "Disponível no app atualizado",
+  "Ligado: quando você manda áudio, o Fidus responde falando",
+  "Desligado: respostas só por escrito",
+  "Ligado",
+  "Ligar",
   "Trava com digital ou rosto",
   "Ligada: o Fidus pede sua digital ao abrir",
   "Desligada",
   "Disponível no app atualizado, com digital ou rosto cadastrados",
   "Ligada",
-  "Ligar",
   "ESTE APARELHO",
   "Este celular",
   "Sua conta funciona em um aparelho por vez. Entrar em outro desconecta este.",
@@ -2713,6 +2878,7 @@ const I18N_KEYS: string[] = [
   "Enviar áudio",
   "Adicionar foto ou arquivo",
   "Fale ou escreva…",
+  "Parar",
   "Gravar áudio",
   "Modo conversa",
   "Recentes",
@@ -2732,7 +2898,7 @@ const I18N_KEYS: string[] = [
 const s = StyleSheet.create({
   composer: { flex: 1, flexDirection: "row", alignItems: "flex-end", gap: 6, borderWidth: 1, borderRadius: 26,
     paddingHorizontal: 8, paddingVertical: 7, minHeight: 54 },
-  composerInput: { flex: 1, fontSize: 16, paddingHorizontal: 6, paddingTop: 9, paddingBottom: 9, maxHeight: 130 },
+  composerInput: { flex: 1, fontSize: 17, paddingHorizontal: 6, paddingTop: 9, paddingBottom: 9, maxHeight: 130 },
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   sendBtn2: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   meetBar: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 12, marginBottom: 8, padding: 12, borderRadius: 12, borderWidth: 1.5 },
@@ -2756,9 +2922,9 @@ const s = StyleSheet.create({
   primarySm: { backgroundColor: NAVY, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 20 },
   primaryText: { color: "#fff", fontWeight: "600" },
   secondary: { borderWidth: 1, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16 },
-  bubble: { borderRadius: 14, padding: 12, maxWidth: "85%" },
+  bubble: { borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, maxWidth: "88%" },
   userBubble: { backgroundColor: NAVY, alignSelf: "flex-end" },
-  userText: { color: "#fff" },
+  userText: { color: "#fff", fontSize: 17, lineHeight: 26 },
   draft: { borderRadius: 14, padding: 14, borderWidth: 1.5 },
   draftLabel: { fontSize: 12, marginBottom: 6 },
   row: { flexDirection: "row", justifyContent: "flex-end", gap: 10 },
@@ -2770,7 +2936,7 @@ const s = StyleSheet.create({
   sendBlue: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", marginLeft: 4 },
   emailRow: { flexDirection: "row", paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   emailFoot: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, gap: 10 },
-  editInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
+  editInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16 },
   // setinha para o fim da conversa
   toBottom: { position: "absolute", alignSelf: "center", bottom: 10, width: 40, height: 40, borderRadius: 20, borderWidth: 1,
     alignItems: "center", justifyContent: "center", elevation: 4, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },

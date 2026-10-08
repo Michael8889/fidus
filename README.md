@@ -121,6 +121,16 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
   `https://www.googleapis.com/auth/spreadsheets` em Acesso a dados; depois cada pessoa toca em Reconectar Google.
 - Connecteam: usar o link de calendário (iCal) das escalas; o Fidus lê turnos e notas e pode lançar na planilha.
 
+## Carteiras, voz e botão parar (v0.9.5)
+- Carteiras: cada empresa/conta tem nome e moeda (ex. "Pessoal BR" em BRL). Tela de gastos com filtro por carteira,
+  totais na moeda de cada uma e exportação para o contador por carteira. Criar: no app (+ Carteira) ou pedindo ao
+  Fidus. Tocar e segurar remove (os gastos antigos ficam guardados). Mais de uma carteira: plano Negócio.
+- Áudio gravado é respondido também em voz alta (Configurações › Responder áudios em voz alta; precisa do APK com
+  expo-speech). No modo conversa, se demorar, o Fidus diz "um instante".
+- Cumprimentos e agradecimentos vão para o modelo leve (mais rápido e barato).
+- Enter na caixa de texto só pula linha; envia pelo botão. Enquanto o Fidus pensa, o botão vira "parar"
+  (`POST /v1/cancel`): ele não executa mais nada daquele pedido; o que já fez fica na Atividade com Desfazer.
+
 ## Idiomas e moedas
 - O app abre no idioma do celular (dá para trocar em Configurações). O servidor traduz os textos uma vez por idioma
   e guarda em `/data/i18n/<idioma>.json`; o app guarda uma cópia. O Fidus responde no idioma em que a pessoa fala.
