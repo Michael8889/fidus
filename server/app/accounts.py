@@ -53,6 +53,20 @@ def init() -> None:
                 used_at TEXT);
             """
         )
+        c.executescript("""
+            CREATE TABLE IF NOT EXISTS device_logins (user_id TEXT NOT NULL, device_id TEXT, device_name TEXT, at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS email_login_codes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, hash TEXT NOT NULL, expires REAL NOT NULL,
+                app_challenge TEXT, ref TEXT, used INTEGER NOT NULL DEFAULT 0);
+            CREATE TABLE IF NOT EXISTS email_login_failures (email TEXT NOT NULL, at REAL NOT NULL);
+            """)
+        dcols = {r[1] for r in c.execute("PRAGMA table_info(device_logins)").fetchall()}
+        if "ip" not in dcols:
+            c.execute("ALTER TABLE device_logins ADD COLUMN ip TEXT")
+        tcols = {r[1] for r in c.execute("PRAGMA table_info(tokens)").fetchall()}
+        for col in ("device_id", "device_name", "revoked_reason"):
+            if col not in tcols:
+                c.execute(f"ALTER TABLE tokens ADD COLUMN {col} TEXT")
         pcols = {r[1] for r in c.execute("PRAGMA table_info(login_pending)").fetchall()}
         if "ref" not in pcols:
             c.execute("ALTER TABLE login_pending ADD COLUMN ref TEXT")
@@ -174,11 +188,64 @@ def list_invites() -> list[dict]:
 
 
 # ---------- tokens do app ----------
-def issue_token(uid: str) -> str:
+def _clean_device(device_id: str | None, device_name: str | None) -> tuple[str | None, str | None]:
+    did = "".join(ch for ch in (device_id or "") if ch.isalnum() or ch in "-_")[:64] or None
+    name = (device_name or "").strip()[:60] or None
+    return did, name
+
+
+def issue_token(uid: str, device_id: str | None = None, device_name: str | None = None, ip: str | None = None) -> str:
+    """Novo acesso. UM APARELHO POR CONTA: os acessos de outros aparelhos são encerrados na hora (o app antigo
+    mostra "sua conta foi aberta em outro aparelho"). Assim um plano não vira conta dividida entre várias pessoas."""
+    did, name = _clean_device(device_id, device_name)
     tok = "fx_" + secrets.token_urlsafe(32)
     with _db() as c:
-        c.execute("INSERT INTO tokens(hash,user_id,created_at) VALUES(?,?,?)", (_h(tok), uid, store.now()))
+        prev = c.execute("SELECT device_id FROM tokens WHERE user_id=? AND revoked=0 ORDER BY created_at DESC LIMIT 1",
+                         (uid,)).fetchone()
+        c.execute("UPDATE tokens SET revoked=1, revoked_reason='outro_aparelho' WHERE user_id=? AND revoked=0 "
+                  "AND (device_id IS NULL OR device_id IS NOT ?)", (uid, did))
+        c.execute("INSERT INTO tokens(hash,user_id,created_at,device_id,device_name) VALUES(?,?,?,?,?)",
+                  (_h(tok), uid, store.now(), did, name))
+        if not prev or prev["device_id"] != did:
+            c.execute("INSERT INTO device_logins(user_id,device_id,device_name,at,ip) VALUES(?,?,?,?,?)",
+                      (uid, did, name, store.now(), (ip or "")[:64] or None))
     return tok
+
+
+def token_problem(token: str) -> str | None:
+    """Por que um token não vale mais ('outro_aparelho', 'saiu'), para o app explicar ao usuário."""
+    if not token or not token.startswith("fx_"):
+        return None
+    with _db() as c:
+        r = c.execute("SELECT revoked, revoked_reason FROM tokens WHERE hash=?", (_h(token),)).fetchone()
+    return (r["revoked_reason"] or "saiu") if r and r["revoked"] else None
+
+
+def current_device(token: str) -> dict | None:
+    with _db() as c:
+        r = c.execute("SELECT device_name, created_at FROM tokens WHERE hash=? AND revoked=0", (_h(token),)).fetchone()
+    return {"device_name": r["device_name"], "since": r["created_at"]} if r else None
+
+
+def logout_all(uid: str) -> int:
+    with _db() as c:
+        return c.execute("UPDATE tokens SET revoked=1, revoked_reason='saiu' WHERE user_id=? AND revoked=0", (uid,)).rowcount
+
+
+def distinct_ips(uid: str, days: int = 30) -> int:
+    from datetime import datetime, timedelta, timezone
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    with _db() as c:
+        return c.execute("SELECT COUNT(DISTINCT ip) FROM device_logins WHERE user_id=? AND at>=? AND ip IS NOT NULL",
+                         (uid, since)).fetchone()[0]
+
+
+def device_switches(uid: str, days: int = 30) -> int:
+    """Quantas vezes a conta entrou num aparelho diferente: muitas trocas = conta sendo dividida."""
+    from datetime import datetime, timedelta, timezone
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    with _db() as c:
+        return c.execute("SELECT COUNT(*) FROM device_logins WHERE user_id=? AND at>=?", (uid, since)).fetchone()[0]
 
 
 def user_for_token(token: str) -> dict | None:
@@ -202,7 +269,7 @@ _seen: dict = {}
 
 def revoke(token: str) -> None:
     with _db() as c:
-        c.execute("UPDATE tokens SET revoked=1 WHERE hash=?", (_h(token),))
+        c.execute("UPDATE tokens SET revoked=1, revoked_reason='saiu' WHERE hash=?", (_h(token),))
 
 
 # ---------- ida e volta ao Google ----------
@@ -249,7 +316,8 @@ def new_login_code(uid: str, app_challenge: str | None = None) -> str:
     return code
 
 
-def redeem_code(code: str, app_verifier: str | None = None) -> str | None:
+def redeem_code(code: str, app_verifier: str | None = None, device_id: str | None = None,
+                device_name: str | None = None, ip: str | None = None) -> str | None:
     """Troca o código (uso único, 10 min) por um token do app. Se o login começou no app, exige também o
     segredo do app: outro aplicativo que capture o link fidus://login não consegue usar o código."""
     code = (code or "").strip().upper().replace(" ", "").replace("-", "")
@@ -265,7 +333,7 @@ def redeem_code(code: str, app_verifier: str | None = None) -> str | None:
         if cur.rowcount != 1:
             return None
         uid = row["user_id"]
-    return issue_token(uid)
+    return issue_token(uid, device_id, device_name, ip)
 
 
 # ---------- links públicos (agendamento) ----------
@@ -372,7 +440,20 @@ def mark_paid(invitee_id: str) -> dict | None:
             return None
         c.execute("INSERT OR IGNORE INTO referral_credits(user_id,invitee_id,percent,created_at) VALUES(?,?,?,?)",
                   (r["referrer_id"], invitee_id, config.REFERRAL_PERCENT, store.now()))
+    _email_referrer(r["referrer_id"], invitee_id)
     return {"referrer_id": r["referrer_id"], "percent": config.REFERRAL_PERCENT}
+
+
+def _email_referrer(referrer_id: str, invitee_id: str) -> None:
+    from . import mailer
+    ref, friend = get_user(referrer_id), get_user(invitee_id)
+    if not ref:
+        return
+    with store.as_user(user_ctx(ref)):
+        lang, name = store.user_lang(), store.user_name()
+    to = config.OWNER_EMAIL if ref["id"] == store.OWNER_ID else ref.get("email")
+    mailer.send(to, "referral_paid", lang, name=name, percent=config.REFERRAL_PERCENT,
+                friend=((friend or {}).get("name") or "").split(" ")[0])
 
 
 def revoke_referral_reward(invitee_id: str) -> None:
@@ -420,3 +501,87 @@ def referral_stats(uid: str) -> dict:
             "next_discount": next_discount(uid), "percent": config.REFERRAL_PERCENT,
             "trial_days": config.REFERRAL_TRIAL_DAYS,
             "invited_by": ((mine["name"] or "").split(" ")[0] or "um amigo") if mine else None}
+
+
+# ---------- Entrar com e-mail (código de 6 números, como no Claude e no ChatGPT) ----------
+# Só para contas que NÃO entram pelo Google (contas novas por e-mail). Conta presa a um Google, e a do dono, entram
+# só pelo Google: assim quem um dia ficar com o e-mail antigo de alguém não leva a conta junto.
+EMAIL_CODE_TTL = 600
+EMAIL_FAILS_PER_DAY = 10   # erros por e-mail em 24 h (pedir código novo não zera)
+EMAIL_LIVE_CODES = 3       # códigos válidos ao mesmo tempo por e-mail (pedir outro não derruba o de quem já pediu)
+
+
+def _email_fails(c, email: str) -> int:
+    return c.execute("SELECT COUNT(*) FROM email_login_failures WHERE email=? AND at>?", (email, time.time() - 86400)).fetchone()[0]
+
+
+def start_email_login(email: str, app_challenge: str | None, ref: str | None = None) -> tuple[str | None, str | None]:
+    """("code", código) para mandar por e-mail; ("google", None) para avisar que essa conta entra pelo Google;
+    (None, None) quando não manda nada. O app recebe a mesma resposta nos três casos."""
+    email = (email or "").strip().lower()
+    if "@" not in email or len(email) > 200:
+        return None, None
+    u = by_email(email)
+    is_owner = bool(config.OWNER_EMAIL and email == config.OWNER_EMAIL)
+    if u:
+        if u["status"] != "ativo":
+            return None, None
+        if u.get("google_sub") or u["id"] == store.OWNER_ID:
+            return "google", None
+    elif is_owner:
+        return "google", None
+    elif not can_signup(email, ref)[0]:
+        return None, None
+    with _db() as c:
+        if _email_fails(c, email) >= EMAIL_FAILS_PER_DAY:
+            return None, None
+        c.execute("DELETE FROM email_login_codes WHERE expires<? OR used=1", (time.time(),))
+        live = c.execute("SELECT COUNT(*) FROM email_login_codes WHERE email=?", (email,)).fetchone()[0]
+        if live >= EMAIL_LIVE_CODES:
+            return None, None
+        code = f"{secrets.randbelow(10**6):06d}"
+        c.execute("INSERT INTO email_login_codes(email,hash,expires,app_challenge,ref) VALUES(?,?,?,?,?)",
+                  (email, _h(f"{email}:{code}"), time.time() + EMAIL_CODE_TTL, app_challenge, ref))
+    return "code", code
+
+
+def verify_email_login(email: str, code: str, app_verifier: str | None, device_id: str | None = None,
+                       device_name: str | None = None, ip: str | None = None) -> tuple[str | None, dict | None, str | None]:
+    """(token, usuário, erro). Uso único, 10 minutos, no máx. 10 erros por e-mail por dia; só o app que pediu usa."""
+    email = (email or "").strip().lower()
+    code = "".join(ch for ch in (code or "") if ch.isdigit())
+    with _db() as c:
+        if _email_fails(c, email) >= EMAIL_FAILS_PER_DAY:
+            return None, None, "muitas tentativas. Tente amanhã ou entre com o Google."
+        rows = c.execute("SELECT * FROM email_login_codes WHERE email=? AND used=0 AND expires>=?", (email, time.time())).fetchall()
+        ok = None
+        for r in rows:
+            if r["app_challenge"] and (not app_verifier or not hmac.compare_digest(r["app_challenge"], _h(app_verifier))):
+                continue
+            if hmac.compare_digest(r["hash"], _h(f"{email}:{code}")):
+                ok = r
+        if not ok:
+            c.execute("INSERT INTO email_login_failures(email,at) VALUES(?,?)", (email, time.time()))
+            return None, None, ("código errado." if rows else "código expirado. Peça um novo.")
+        if c.execute("UPDATE email_login_codes SET used=1 WHERE id=? AND used=0", (ok["id"],)).rowcount != 1:
+            return None, None, "código expirado. Peça um novo."
+        c.execute("UPDATE email_login_codes SET used=1 WHERE email=?", (email,))
+        ref = ok["ref"]
+    existing = by_email(email)
+    if existing and (existing.get("google_sub") or existing["id"] == store.OWNER_ID):
+        return None, None, "esta conta entra com o Google."
+    u = find_or_create(email, None, None, ref)
+    if not u:
+        return None, None, "este e-mail não tem acesso ao Fidus."
+    if ref:
+        apply_referral(u["id"], ref)
+    return issue_token(u["id"], device_id, device_name, ip), u, None
+
+
+def is_new_user(uid: str, days: int = 2) -> bool:
+    from datetime import datetime, timedelta, timezone
+    u = get_user(uid)
+    try:
+        return bool(u) and datetime.now(timezone.utc) - datetime.fromisoformat(u["created_at"]) <= timedelta(days=days)
+    except (TypeError, ValueError):
+        return False

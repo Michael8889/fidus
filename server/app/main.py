@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Uplo
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
-from . import accounts, actions, agent, booking, config, features, google_client, i18n, meetings, plans, store, tools
+from . import accounts, actions, agent, booking, config, features, google_client, i18n, mailer, meetings, plans, store, tools
 
 app = FastAPI(title="Fidus API", version="0.9.0", docs_url=None, redoc_url=None, openapi_url=None)  # não expõe o mapa da API
 store.init_db()
@@ -51,9 +51,11 @@ def _resume_all_meetings():
 _resume_all_meetings()
 
 
-def auth():
+def auth(request: Request):
     if store.CURRENT.get() is None:
-        raise HTTPException(401, "token inválido")
+        h = request.headers.get("authorization", "")
+        # o app mostra "sua conta foi aberta em outro aparelho" quando o motivo é esse
+        raise HTTPException(401, accounts.token_problem(h[7:].strip()) or "token inválido")
 
 
 def owner_only():
@@ -195,17 +197,92 @@ def google_callback(request: Request, state: str = "", error: str = ""):
 class CodeIn(BaseModel):
     code: str
     verifier: str | None = None
+    device_id: str | None = None
+    device_name: str | None = None
 
 
 @app.post("/v1/auth/exchange")
 def auth_exchange(body: CodeIn, request: Request):
     _rate_check(request, 20, "exchange")  # conta só as tentativas erradas
-    token = accounts.redeem_code(body.code, body.verifier)
+    token = accounts.redeem_code(body.code, body.verifier, body.device_id, body.device_name, _client_ip(request))
     if not token:
         _rate_record(request, "exchange")
         raise HTTPException(400, "código inválido ou expirado")
     u = accounts.user_for_token(token)
     return {"token": token, "user": {"id": u["id"], "email": u.get("email"), "name": u.get("name")}}
+
+
+# ---------- Entrar com e-mail (código de 6 números) ----------
+@app.get("/v1/auth/options")
+def auth_options():
+    return {"google": True, "email": mailer.enabled()}
+
+
+class EmailStartIn(BaseModel):
+    email: str
+    cc: str = ""   # hash do segredo do app (só o app que pediu consegue usar o código)
+    ref: str = ""
+
+
+@app.post("/v1/auth/email/start")
+def email_start(body: EmailStartIn, request: Request):
+    import re as _re
+    if not mailer.enabled():
+        raise HTTPException(503, "entrada por e-mail indisponível")
+    _rate_limit(request, 8, "emailstart")
+    email = body.email.strip().lower()
+    if not _re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        raise HTTPException(400, "e-mail inválido")
+    import time as _time
+    key = f"emailto:{email}"
+    if len(_hits(key)) >= 5:  # ninguém lota a caixa de alguém com códigos
+        raise HTTPException(429, "muitos códigos pedidos, tente mais tarde")
+    _book_hits[key] = _hits(key) + [_time.time()]
+    cc = body.cc.lower() if _re.fullmatch(r"[0-9a-fA-F]{64}", body.cc or "") else None
+    what, code = accounts.start_email_login(email, cc, (body.ref or "").strip() or None)
+    if what:
+        u = accounts.by_email(email)
+        lang = "pt"
+        if u:
+            with store.as_user(accounts.user_ctx(u)):
+                lang = store.user_lang()
+        elif request.headers.get("accept-language", "").lower()[:2] in ("en", "es"):
+            lang = request.headers["accept-language"].lower()[:2]
+        # em segundo plano nos dois casos: o tempo de resposta não revela quem é cliente
+        if what == "code":
+            mailer.send(email, "login_code", lang, code=code)
+        else:
+            mailer.send(email, "use_google", lang)
+    return {"ok": True}  # mesma resposta se o e-mail não tem acesso: não revela quem é cliente
+
+
+class EmailVerifyIn(BaseModel):
+    email: str
+    code: str
+    verifier: str | None = None
+    device_id: str | None = None
+    device_name: str | None = None
+
+
+@app.post("/v1/auth/email/verify")
+def email_verify(body: EmailVerifyIn, request: Request):
+    _rate_check(request, 20, "emailverify")
+    token, u, err = accounts.verify_email_login(body.email, body.code, body.verifier, body.device_id, body.device_name,
+                                                _client_ip(request))
+    if not token:
+        _rate_record(request, "emailverify")
+        raise HTTPException(400, err or "código inválido")
+    return {"token": token, "user": {"id": u["id"], "email": u.get("email"), "name": u.get("name")}}
+
+
+@app.post("/v1/auth/logout_all", dependencies=[Depends(auth)])
+def logout_all():
+    return {"ok": True, "closed": accounts.logout_all(store.current()["id"])}
+
+
+@app.get("/v1/auth/device", dependencies=[Depends(auth)])
+def this_device(request: Request):
+    return accounts.current_device(request.headers.get("authorization", "")[7:].strip()) or {}
 
 
 @app.get("/v1/me", dependencies=[Depends(auth)])
@@ -255,6 +332,11 @@ def profile_update(body: ProfileIn):
     if "timezone" in ch:
         store.kv_set("tz_set", "1")
     p = store.save_profile(**ch) if ch else cur
+    u = store.current()
+    if not u.get("is_owner") and u.get("email") and not store.kv_get("welcome_sent"):
+        store.kv_set("welcome_sent", "1")  # boas-vindas uma vez, já no idioma do celular, só para conta nova
+        if accounts.is_new_user(u["id"]):
+            mailer.send(u["email"], "welcome", store.user_lang(), name=store.user_name() if store.profile().get("name") else "")
     return {"profile": p, "language": store.user_lang(), "currency": plans.user_currency()}
 
 
@@ -279,7 +361,9 @@ def admin_users():
             out.append({"id": u["id"], "email": u.get("email"), "name": u.get("name"), "status": u["status"],
                         "created_at": u["created_at"], "last_seen": u.get("last_seen"), "plan": plans.current(),
                         "google_connected": google_client.is_connected(),
-                        "actions_this_month": stats.get("actions_this_month", 0), "is_owner": u["id"] == store.OWNER_ID})
+                        "actions_this_month": stats.get("actions_this_month", 0), "is_owner": u["id"] == store.OWNER_ID,
+                        "device_switches_30d": accounts.device_switches(u["id"]),
+                        "ips_30d": accounts.distinct_ips(u["id"])})
     return {"users": out, "invites": accounts.list_invites()}
 
 
@@ -900,7 +984,9 @@ async def billing_webhook(request: Request):
         return {"ok": True, "ignored": "cliente desconhecido"}
     product = (ev.get("new_product_id") or ev.get("product_id") or "").lower()
     plan = next((p for p in ("premium", "negocio", "essencial") if p in product), None)
+    mail = None
     with store.as_user(accounts.user_ctx(user)):
+        before = plans.current()
         if kind in ("INITIAL_PURCHASE", "RENEWAL", "PRODUCT_CHANGE", "UNCANCELLATION", "NON_RENEWING_PURCHASE") and plan:
             plans.set_plan(plan)
             store.kv_set("subscription", f"ativa:{plan}")
@@ -911,6 +997,14 @@ async def billing_webhook(request: Request):
             plans.set_plan(config.NEW_USER_PLAN)  # acabou o período pago: perde os recursos do plano
         elif kind == "BILLING_ISSUE":
             store.kv_set("subscription", f"problema_pagamento:{plans.current()}")
+        mail_kind = {"INITIAL_PURCHASE": "sub_started", "PRODUCT_CHANGE": "sub_started", "RENEWAL": "sub_renewed",
+                     "BILLING_ISSUE": "sub_billing_issue", "CANCELLATION": "sub_cancelled", "EXPIRATION": "sub_expired"}.get(kind)
+        if mail_kind:
+            shown = plans.PLANS[plan or before]["name"]
+            mail = (mail_kind, store.user_lang(), store.user_name(), shown)
+    to = config.OWNER_EMAIL if uid == store.OWNER_ID else user.get("email")
+    if mail:
+        mailer.send(to, mail[0], mail[1], name=mail[2], plan=mail[3])
     if kind == "CANCELLATION" and ev.get("cancel_reason") == "CUSTOMER_SUPPORT":
         accounts.revoke_referral_reward(uid)  # reembolso: o desconto de quem convidou não vale (se ainda não foi usado)
     if kind == "INITIAL_PURCHASE" and ev.get("period_type") != "TRIAL":

@@ -55,7 +55,7 @@ input::placeholder{color:#6F7B8C}
 <a href="#funcoes" style="color: #B7C0CC; text-decoration: none">{{t.navFeat}}</a>
 <a href="#planos" style="color: #B7C0CC; text-decoration: none">{{t.navPlans}}</a>
 <a href="#perguntas" style="color: #B7C0CC; text-decoration: none">{{t.navFaq}}</a>
-<a href="#acesso" style="background: #F2F5F7; color: #07090D; text-decoration: none; font-weight: 700; padding: 10px 18px; border-radius: 999px">{{t.navCta}}</a>
+<a href="{{x.ctaHref}}" style="background: #F2F5F7; color: #07090D; text-decoration: none; font-weight: 700; padding: 10px 18px; border-radius: 999px">{{t.navCta}}</a>
 </div>
 </div>
 </nav>
@@ -71,7 +71,29 @@ input::placeholder{color:#6F7B8C}
 </p>
 <h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(46px, 6.6vw, 88px); line-height: 1.02; letter-spacing: -0.035em">{{t.h1a}}<br>{{t.h1b}} <span class="rot" style="color: #3DDC97"><span class="rot-in"><span>{{t.r0}}</span><span>{{t.r1}}</span><span>{{t.r2}}</span><span>{{t.r3}}</span><span>{{t.r4}}</span><span>{{t.r0}}</span></span></span></h1>
 <p style="margin: 26px 0 0; font-size: 20px; line-height: 1.5; color: #B7C0CC; max-width: 36ch">{{t.lead}}</p>
-<form id="acesso" style="margin-top: 32px; display: flex; flex-wrap: wrap; gap: 10px; max-width: 540px" onSubmit="{{join}}">
+<div id="acesso" style="margin-top: 32px; display: flex; flex-direction: column; gap: 12px; max-width: 540px">
+<sc-if value="{{x.showStores}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<sc-if value="{{x.showPlay}}" hint-placeholder-val="{{ true }}">
+<a href="{{x.playUrl}}" style="display: flex; align-items: center; gap: 12px; text-decoration: none; background: #F2F5F7; color: #07090D; padding: 12px 20px; border-radius: 14px; min-height: 44px; box-sizing: border-box">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#07090D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5v17l14-8.5z"></path></svg>
+<span style="display: flex; flex-direction: column; line-height: 1.15"><span style="font-size: 12px; opacity: 0.75">{{t.getOn}}</span><span style="font-weight: 800; font-size: 18px">Google Play</span></span>
+</a>
+</sc-if>
+<sc-if value="{{x.showApple}}" hint-placeholder-val="{{ true }}">
+<a href="{{x.appleUrl}}" style="display: flex; align-items: center; gap: 12px; text-decoration: none; background: #F2F5F7; color: #07090D; padding: 12px 20px; border-radius: 14px; min-height: 44px; box-sizing: border-box">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#07090D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="3"></rect><path d="M11 18.5h2"></path></svg>
+<span style="display: flex; flex-direction: column; line-height: 1.15"><span style="font-size: 12px; opacity: 0.75">{{t.getOn}}</span><span style="font-weight: 800; font-size: 18px">App Store</span></span>
+</a>
+</sc-if>
+</div>
+<p style="margin: 0; font-size: 14px; color: #8D98A8">{{x.storeNote}}</p>
+</sc-if>
+<sc-if value="{{x.showForm}}" hint-placeholder-val="{{ true }}">
+<sc-if value="{{x.soonNote}}" hint-placeholder-val="{{ false }}">
+<p style="margin: 0 0 10px; font-size: 14px; color: #B7C0CC">{{x.soonNote}}</p>
+</sc-if>
+<form style="display: flex; flex-wrap: wrap; gap: 10px; max-width: 540px" onSubmit="{{join}}">
 <label for="email-hero" style="position: absolute; left: -9999px">{{t.emailLabel}}</label>
 <input id="email-hero" type="email" required placeholder="{{t.emailPh}}" style="flex: 1 1 240px; min-width: 0; padding: 17px 18px; border-radius: 14px; border: 1px solid #2A3341; background: #0E1218; color: #F2F5F7; font: inherit; font-size: 16px">
 <button type="submit" style="padding: 17px 24px; border-radius: 14px; border: 0; background: #3DDC97; color: #07090D; font: inherit; font-weight: 800; font-size: 16px; cursor: pointer">{{t.join}}</button>
@@ -79,6 +101,8 @@ input::placeholder{color:#6F7B8C}
 <sc-if value="{{joined}}" hint-placeholder-val="{{ false }}">
 <p class="msg" style="margin: 12px 0 0; color: #3DDC97; font-weight: 600">{{t.joined}}</p>
 </sc-if>
+</sc-if>
+</div>
 <div style="margin-top: 26px; display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 14px; color: #8D98A8">
 <span>{{t.c1}}</span><span>{{t.c2}}</span><span>{{t.c3}}</span>
 </div>
@@ -327,7 +351,7 @@ input::placeholder{color:#6F7B8C}
 <section style="padding: 0 24px 96px">
 <div style="max-width: 1200px; margin: 0 auto; background: #3DDC97; color: #07090D; border-radius: 32px; padding: clamp(32px, 6vw, 72px); display: flex; flex-wrap: wrap; gap: 28px; align-items: center; justify-content: space-between">
 <h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 5vw, 64px); line-height: 1; letter-spacing: -0.035em; max-width: 14ch">{{t.finalH}}</h2>
-<a href="#acesso" style="background: #07090D; color: #F2F5F7; text-decoration: none; font-weight: 800; font-size: 18px; padding: 18px 28px; border-radius: 16px">{{t.finalCta}}</a>
+<a href="{{x.ctaHref}}" style="background: #07090D; color: #F2F5F7; text-decoration: none; font-weight: 800; font-size: 18px; padding: 18px 28px; border-radius: 16px">{{x.finalCta}}</a>
 </div>
 </section>
 
@@ -362,7 +386,7 @@ input::placeholder{color:#6F7B8C}
 </footer>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":7200}}'>
+<script type="text/x-dc" data-dc-script data-props='{"playStoreUrl":{"editor":"text","default":"","section":"Lojas"},"appStoreUrl":{"editor":"text","default":"","section":"Lojas"},"$preview":{"width":1440,"height":7200}}'>
 // ---------- Idiomas e moedas ----------
 // Idioma: o do navegador (pt, en, es, fr, de, it, ms; outros veem em inglês). O visitante pode trocar no rodapé.
 // Moeda: Reino Unido = libra, Europa = euro, resto do mundo = dólar (pelo fuso do aparelho). A cobrança segue o país do cartão.
@@ -405,11 +429,19 @@ function fmtMoney(n, cur, loc) {
   catch (e) { return SYM[cur] + n.toFixed(2); }
 }
 // "{m45.90}" no texto vira o valor na moeda do visitante
+function detectPlatform() {
+  var ua = "";
+  try { ua = navigator.userAgent || ""; } catch (e) {}
+  if (/android/i.test(ua)) return "android";
+  if (/iphone|ipad|ipod/i.test(ua)) return "ios";
+  try { if (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) return "ios"; } catch (e) {}
+  return "desktop";
+}
 function fill(s, cur, loc) { return String(s).replace(/\{m([\d.]+)\}/g, function (_, v) { return fmtMoney(parseFloat(v), cur, loc); }); }
 
 var L = {
 pt: {
-  t: { navDay: "Um dia com o Fidus", navFeat: "Funções", navPlans: "Planos", navFaq: "Perguntas", navCta: "Começar agora →",
+  t: { getOn: "Baixe no", storeAfter: "Instale, abra o Fidus e crie sua conta em 1 minuto, direto no app.", iosSoon: "No iPhone: em breve. Deixe seu e-mail e avisamos.", androidSoon: "No Android: em breve. Deixe seu e-mail e avisamos.", download: "Baixar o app →", navDay: "Um dia com o Fidus", navFeat: "Funções", navPlans: "Planos", navFaq: "Perguntas", navCta: "Começar agora →",
     badge: "Acesso antecipado aberto · Android", h1a: "Fale.", h1b: "O Fidus", r0: "agenda.", r1: "lança.", r2: "responde.", r3: "lembra.", r4: "guarda.",
     lead: "O assistente pessoal que cuida da agenda, dos e-mails, dos gastos e dos documentos de quem toca a vida e o negócio entre países. Por voz, no seu idioma.",
     emailLabel: "Seu e-mail", emailPh: "seu@email.com", join: "Quero acesso →", joined: "Pronto. Você entra na próxima turma de testes.",
@@ -463,7 +495,7 @@ pt: {
     ["Como cancelo?", "Direto no app, a qualquer momento, sem ligação e sem multa."]]
 },
 en: {
-  t: { navDay: "A day with Fidus", navFeat: "Features", navPlans: "Pricing", navFaq: "FAQ", navCta: "Get started →",
+  t: { getOn: "Get it on", storeAfter: "Install it, open Fidus and create your account in 1 minute, right in the app.", iosSoon: "iPhone: coming soon. Leave your email and we’ll let you know.", androidSoon: "Android: coming soon. Leave your email and we’ll let you know.", download: "Download the app →", navDay: "A day with Fidus", navFeat: "Features", navPlans: "Pricing", navFaq: "FAQ", navCta: "Get started →",
     badge: "Early access open · Android", h1a: "Speak.", h1b: "Fidus", r0: "books it.", r1: "logs it.", r2: "replies.", r3: "reminds.", r4: "files it.",
     lead: "The personal assistant that handles the diary, emails, expenses and documents for people running a life and a business across countries. By voice, in your language.",
     emailLabel: "Your email", emailPh: "you@email.com", join: "Get access →", joined: "Done. You're in the next test group.",
@@ -517,7 +549,7 @@ en: {
     ["How do I cancel?", "Right in the app, any time, no phone call and no fee."]]
 },
 es: {
-  t: { navDay: "Un día con Fidus", navFeat: "Funciones", navPlans: "Planes", navFaq: "Preguntas", navCta: "Empezar ahora →",
+  t: { getOn: "Descárgalo en", storeAfter: "Instálalo, abre Fidus y crea tu cuenta en 1 minuto, desde la app.", iosSoon: "En iPhone: muy pronto. Deja tu correo y te avisamos.", androidSoon: "En Android: muy pronto. Deja tu correo y te avisamos.", download: "Descargar la app →", navDay: "Un día con Fidus", navFeat: "Funciones", navPlans: "Planes", navFaq: "Preguntas", navCta: "Empezar ahora →",
     badge: "Acceso anticipado abierto · Android", h1a: "Habla.", h1b: "Fidus", r0: "agenda.", r1: "anota.", r2: "responde.", r3: "recuerda.", r4: "guarda.",
     lead: "El asistente personal que se encarga de la agenda, los correos, los gastos y los documentos de quien lleva su vida y su negocio entre países. Por voz, en tu idioma.",
     emailLabel: "Tu correo", emailPh: "tu@correo.com", join: "Quiero acceso →", joined: "Listo. Entras en el próximo grupo de pruebas.",
@@ -571,7 +603,7 @@ es: {
     ["¿Cómo cancelo?", "Desde la app, cuando quieras, sin llamadas ni penalización."]]
 },
 fr: {
-  t: { navDay: "Une journée avec Fidus", navFeat: "Fonctions", navPlans: "Tarifs", navFaq: "Questions", navCta: "Commencer →",
+  t: { getOn: "Disponible sur", storeAfter: "Installez-le, ouvrez Fidus et créez votre compte en 1 minute, dans l’app.", iosSoon: "Sur iPhone : bientôt. Laissez votre e-mail, on vous prévient.", androidSoon: "Sur Android : bientôt. Laissez votre e-mail, on vous prévient.", download: "Télécharger l’app →", navDay: "Une journée avec Fidus", navFeat: "Fonctions", navPlans: "Tarifs", navFaq: "Questions", navCta: "Commencer →",
     badge: "Accès anticipé ouvert · Android", h1a: "Parlez.", h1b: "Fidus", r0: "planifie.", r1: "enregistre.", r2: "répond.", r3: "rappelle.", r4: "classe.",
     lead: "L’assistant personnel qui gère l’agenda, les e-mails, les dépenses et les documents de ceux qui mènent leur vie et leur entreprise entre plusieurs pays. À la voix, dans votre langue.",
     emailLabel: "Votre e-mail", emailPh: "vous@email.com", join: "Je veux l’accès →", joined: "C’est fait. Vous serez dans le prochain groupe de test.",
@@ -625,7 +657,7 @@ fr: {
     ["Comment résilier ?", "Directement dans l’app, à tout moment, sans appel ni frais."]]
 },
 de: {
-  t: { navDay: "Ein Tag mit Fidus", navFeat: "Funktionen", navPlans: "Preise", navFaq: "Fragen", navCta: "Jetzt starten →",
+  t: { getOn: "Jetzt bei", storeAfter: "Installieren, Fidus öffnen und in 1 Minute dein Konto anlegen – direkt in der App.", iosSoon: "iPhone: bald verfügbar. Hinterlass deine E-Mail, wir melden uns.", androidSoon: "Android: bald verfügbar. Hinterlass deine E-Mail, wir melden uns.", download: "App laden →", navDay: "Ein Tag mit Fidus", navFeat: "Funktionen", navPlans: "Preise", navFaq: "Fragen", navCta: "Jetzt starten →",
     badge: "Früher Zugang offen · Android", h1a: "Sprich.", h1b: "Fidus", r0: "plant.", r1: "bucht.", r2: "antwortet.", r3: "erinnert.", r4: "archiviert.",
     lead: "Der persönliche Assistent für Kalender, E-Mails, Ausgaben und Dokumente – für alle, die Leben und Geschäft über Ländergrenzen hinweg führen. Per Sprache, in deiner Sprache.",
     emailLabel: "Deine E-Mail", emailPh: "du@email.com", join: "Zugang sichern →", joined: "Erledigt. Du bist in der nächsten Testgruppe.",
@@ -679,7 +711,7 @@ de: {
     ["Wie kündige ich?", "Direkt in der App, jederzeit, ohne Anruf und ohne Gebühr."]]
 },
 it: {
-  t: { navDay: "Una giornata con Fidus", navFeat: "Funzioni", navPlans: "Piani", navFaq: "Domande", navCta: "Inizia ora →",
+  t: { getOn: "Disponibile su", storeAfter: "Installala, apri Fidus e crea il tuo account in 1 minuto, direttamente nell’app.", iosSoon: "Su iPhone: in arrivo. Lascia la tua e-mail e ti avvisiamo.", androidSoon: "Su Android: in arrivo. Lascia la tua e-mail e ti avvisiamo.", download: "Scarica l’app →", navDay: "Una giornata con Fidus", navFeat: "Funzioni", navPlans: "Piani", navFaq: "Domande", navCta: "Inizia ora →",
     badge: "Accesso anticipato aperto · Android", h1a: "Parla.", h1b: "Fidus", r0: "pianifica.", r1: "registra.", r2: "risponde.", r3: "ricorda.", r4: "archivia.",
     lead: "L’assistente personale che gestisce agenda, e-mail, spese e documenti di chi porta avanti vita e lavoro tra più paesi. A voce, nella tua lingua.",
     emailLabel: "La tua e-mail", emailPh: "tu@email.com", join: "Voglio l’accesso →", joined: "Fatto. Sei nel prossimo gruppo di test.",
@@ -733,7 +765,7 @@ it: {
     ["Come disdico?", "Dall’app, quando vuoi, senza telefonate e senza penali."]]
 },
 ms: {
-  t: { navDay: "Sehari bersama Fidus", navFeat: "Ciri-ciri", navPlans: "Pelan", navFaq: "Soalan", navCta: "Mula sekarang →",
+  t: { getOn: "Dapatkan di", storeAfter: "Pasang, buka Fidus dan cipta akaun anda dalam 1 minit, terus dalam aplikasi.", iosSoon: "iPhone: akan datang. Tinggalkan e-mel anda dan kami akan maklumkan.", androidSoon: "Android: akan datang. Tinggalkan e-mel anda dan kami akan maklumkan.", download: "Muat turun aplikasi →", navDay: "Sehari bersama Fidus", navFeat: "Ciri-ciri", navPlans: "Pelan", navFaq: "Soalan", navCta: "Mula sekarang →",
     badge: "Akses awal dibuka · Android", h1a: "Cakap.", h1b: "Fidus", r0: "jadualkan.", r1: "rekodkan.", r2: "balas.", r3: "ingatkan.", r4: "simpan.",
     lead: "Pembantu peribadi yang menguruskan jadual, e-mel, perbelanjaan dan dokumen untuk mereka yang menguruskan hidup dan perniagaan merentas negara. Dengan suara, dalam bahasa anda.",
     emailLabel: "E-mel anda", emailPh: "anda@email.com", join: "Saya mahu akses →", joined: "Selesai. Anda dalam kumpulan ujian seterusnya.",
@@ -801,7 +833,7 @@ var CURS = [["GBP", "£ GBP"], ["EUR", "€ EUR"], ["USD", "$ USD"]];
 class Component extends DCLogic {
   constructor(props) {
     super(props);
-    this.state = { tick: 0, dayPick: -1, open: 0, joined: false, yearly: false, lang: detectLang(), cur: detectCurrency() };
+    this.state = { tick: 0, dayPick: -1, open: 0, joined: false, yearly: false, lang: detectLang(), cur: detectCurrency(), platform: detectPlatform() };
   }
   componentDidMount() {
     var self = this;
@@ -827,9 +859,24 @@ class Component extends DCLogic {
     var dc = D.day[dayIdx];
     var yearly = this.state.yearly;
     var prices = PRICES[cur];
+    // lojas: no Android vai para a Google Play, no iPhone para a App Store, no computador mostra as duas.
+    // Loja ainda sem link: aparece a lista de espera.
+    var play = (this.props.playStoreUrl || "").trim(), apple = (this.props.appStoreUrl || "").trim();
+    var plat = this.state.platform;
+    var showPlay = !!play && plat !== "ios", showApple = !!apple && plat !== "android";
+    var showStores = showPlay || showApple;
+    var direct = plat === "android" ? play : plat === "ios" ? apple : "";
+    var storeNote = T.storeAfter;
+    if (plat === "ios" && !apple && play) storeNote = T.iosSoon;
+    if (plat === "android" && !play && apple) storeNote = T.androidSoon;
     return {
       t: T,
-      x: { toast2s: f(T.toast2s), priceNote: T.priceNote.replace("{c}", T.cur[cur]) },
+      x: { toast2s: f(T.toast2s), priceNote: T.priceNote.replace("{c}", T.cur[cur]),
+           showStores: showStores, showPlay: showPlay, showApple: showApple, playUrl: play || "#acesso", appleUrl: apple || "#acesso",
+           showForm: !showStores || (plat === "ios" && !apple) || (plat === "android" && !play),
+           storeNote: showStores && direct ? T.storeAfter : (showStores ? (plat === "desktop" ? T.storeAfter : storeNote) : ""),
+           soonNote: plat === "ios" && !apple && play ? T.iosSoon : plat === "android" && !play && apple ? T.androidSoon : "",
+           ctaHref: direct || "#acesso", finalCta: showStores ? T.download : T.finalCta },
       shown: shown, typing: typing, status: typing ? T.typing : T.online,
       toast1: step >= 2, toast2: step >= 4, toast3: step >= 6,
       row1: D.cmd1.concat(D.cmd1), row2: D.cmd2.concat(D.cmd2),

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator, Alert, Animated, Dimensions, Easing, FlatList, I18nManager, Keyboard, KeyboardAvoidingView, Linking,
+  ActivityIndicator, Alert, Animated, AppState, Dimensions, Easing, FlatList, I18nManager, Keyboard, KeyboardAvoidingView, Linking,
   Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, useColorScheme,
 } from "react-native";
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from "expo-audio";
@@ -25,6 +25,8 @@ const hasNativePurchases = !!opt(() => {
 });
 const PurchasesMod: any = hasNativePurchases ? opt(() => require("react-native-purchases")) : null;
 const Purchases: any = PurchasesMod ? (PurchasesMod.default || PurchasesMod) : null;
+// trava com digital/rosto (APK com expo-local-authentication)
+const LocalAuth: any = opt(() => require("expo-local-authentication"));
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
 
@@ -69,6 +71,8 @@ const _SERVER_TEXTS = () => [
   t("Essencial"), t("Premium"), t("combustível"), t("alimentação"), t("transporte"), t("materiais"), t("ferramentas"),
   t("manutenção"), t("escritório"), t("software"), t("telefone e internet"), t("impostos e taxas"), t("moradia"), t("saúde"),
   t("lazer"), t("viagem"), t("salários e prestadores"), t("outros"),
+  t("código expirado. Peça um novo."), t("código errado."), t("este e-mail não tem acesso ao Fidus."),
+  t("esta conta entra com o Google."), t("muitas tentativas. Tente amanhã ou entre com o Google."),
 ];
 
 // modo conversa: gravação com medidor de volume para saber quando a pessoa parou de falar
@@ -500,6 +504,17 @@ function FidusApp() {
   const [nameEdit, setNameEdit] = useState("");
   const [pendingMeet, setPendingMeet] = useState<string | null>(null);
   const [billing, setBilling] = useState<any>(null);
+  const [authOpts, setAuthOpts] = useState<any>(null);
+  const [emailMode, setEmailMode] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [emailSent, setEmailSent] = useState(false);
+  const [emailCode, setEmailCode] = useState("");
+  const [lockAvail, setLockAvail] = useState(false);
+  const [lockOn, setLockOn] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const bgAt = useRef(0);
+  const kicked = useRef(false);
+  const [device, setDevice] = useState<any>(null);
   const [storeReady, setStoreReady] = useState(false);
   // rascunhos na tela e fora de edição: só esses podem sair quando o usuário diz "envia"
   const itemsRef = useRef<Item[]>([]);
@@ -536,6 +551,7 @@ function FidusApp() {
   useEffect(() => {  // tela de entrada já no idioma do celular
     LOCALE = deviceLocale();
     loadLang(LOCALE);
+    fetch(DEFAULT_SERVER + "/v1/auth/options").then((r) => r.json()).then(setAuthOpts).catch(() => {});
   }, []);
 
   // Android (tela cheia): o teclado cobre o app, então empurramos o conteúdo para cima
@@ -700,7 +716,19 @@ function FidusApp() {
         ...init, signal: ctrl.signal,
         headers: { Authorization: `Bearer ${token.trim()}`, ...(init.headers || {}) },
       });
-      if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+      if (!r.ok) {
+        const body = await r.text();
+        if (r.status === 401 && token && !kicked.current && /outro_aparelho|"saiu"|token inválido/.test(body)) {
+          kicked.current = true;  // conta aberta em outro celular (um aparelho por conta) ou acesso encerrado
+          setTimeout(() => {
+            Alert.alert(t("Você saiu deste aparelho"), /outro_aparelho/.test(body)
+              ? t("Sua conta do Fidus foi aberta em outro aparelho. Cada conta funciona em um aparelho por vez. Para usar aqui, entre de novo.")
+              : t("Seu acesso foi encerrado. Entre de novo para continuar."));
+            logoutLocal();
+          }, 100);
+        }
+        throw new Error(`${r.status}: ${body}`);
+      }
       return r.json();
     } catch (e: any) {
       console.log("[Fidus] erro", path, e?.message ?? e);
@@ -1007,10 +1035,75 @@ function FidusApp() {
     ]);
   }
 
-  async function logout() {
-    try { await api("/v1/auth/logout", { method: "POST" }, 8000); } catch { /* sem rede: sai assim mesmo */ }
+  async function logoutLocal() {
     await SecureStore.deleteItemAsync("token");
-    setToken(""); setMe(null); setItems([]); setScreen("chat"); setConfigured(false);
+    setToken(""); setMe(null); setItems([]); setScreen("chat"); setConfigured(false); setLocked(false);
+    setEmailMode(false); setEmailSent(false); setEmailCode("");
+  }
+
+  async function logout() {
+    kicked.current = true;  // saindo por vontade própria: sem o aviso de "acesso encerrado"
+    try { await api("/v1/auth/logout", { method: "POST" }, 8000); } catch { /* sem rede: sai assim mesmo */ }
+    await logoutLocal();
+  }
+
+  function logoutAll() {
+    Alert.alert(t("Sair de todos os aparelhos?"), t("A conta será desconectada em todos os aparelhos, inclusive neste."), [
+      { text: t("Cancelar"), style: "cancel" },
+      { text: t("Sair de todos"), style: "destructive", onPress: async () => {
+          kicked.current = true;
+          try { await api("/v1/auth/logout_all", { method: "POST" }, 10000); } catch {}
+          await logoutLocal();
+        } },
+    ]);
+  }
+
+  // ---------- Aparelho ----------
+  async function deviceInfo() {
+    let id = await SecureStore.getItemAsync("deviceId");
+    if (!id) { id = randomSecret().slice(0, 32); await SecureStore.setItemAsync("deviceId", id); }
+    const model = (Platform as any).constants?.Model || (Platform as any).constants?.model || "";
+    return { device_id: id, device_name: `${Platform.OS === "ios" ? "iPhone" : "Android"}${model ? ` · ${model}` : ""}` };
+  }
+
+  // ---------- Trava com digital ou rosto ----------
+  useEffect(() => {
+    (async () => {
+      try { setLockAvail(!!LocalAuth && (await LocalAuth.hasHardwareAsync()) && (await LocalAuth.isEnrolledAsync())); } catch { setLockAvail(false); }
+      const on = (await SecureStore.getItemAsync("lock")) === "1";
+      setLockOn(on);
+      if (on) { setLocked(true); unlock(); }
+    })();
+    const sub = AppState.addEventListener("change", async (st) => {
+      if (st === "background") bgAt.current = Date.now();
+      if (st === "active" && bgAt.current && Date.now() - bgAt.current > 30000 && (await SecureStore.getItemAsync("lock")) === "1") {
+        setLocked(true); unlock();
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  async function unlock() {
+    try {
+      const enrolled = await LocalAuth.isEnrolledAsync();
+      const r = enrolled ? await LocalAuth.authenticateAsync({ promptMessage: t("Desbloquear o Fidus"), cancelLabel: t("Cancelar") }) : null;
+      if (r?.success) return setLocked(false);
+      // digital/rosto removidos do celular ou indisponíveis: não prende a pessoa fora do app
+      if (!enrolled || ["not_enrolled", "passcode_not_set", "not_available"].includes(r?.error)) {
+        await SecureStore.setItemAsync("lock", "0"); setLockOn(false); setLocked(false);
+      }
+    } catch { setLocked(false); }  // sem o módulo: idem
+  }
+
+  async function toggleLock() {
+    if (!lockAvail) return Alert.alert(t("Trava"), t("Este celular não tem digital ou rosto cadastrados, ou o app precisa ser atualizado."));
+    try {
+      const r = await LocalAuth.authenticateAsync({ promptMessage: lockOn ? t("Desligar a trava") : t("Ligar a trava") });
+      if (!r?.success) return;
+      const on = !lockOn;
+      await SecureStore.setItemAsync("lock", on ? "1" : "0");
+      setLockOn(on); flash(on ? t("Trava ligada") : t("Trava desligada"));
+    } catch (e: any) { Alert.alert(t("Trava"), e?.message ?? String(e)); }
   }
 
   // ---------- Entrar com Google ----------
@@ -1033,12 +1126,49 @@ function FidusApp() {
     try {
       const verifier = await SecureStore.getItemAsync("loginSecret");
       const r = await fetch(`${sv}/v1/auth/exchange`, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: clean, verifier }) });
+        body: JSON.stringify({ code: clean, verifier, ...(await deviceInfo()) }) });
       if (!r.ok) throw new Error(r.status === 400 ? t("código inválido ou expirado. Entre com o Google de novo.") : `${t("erro")} ${r.status}`);
       const j = await r.json();
       await SecureStore.setItemAsync("server", sv); await SecureStore.setItemAsync("token", j.token);
       await SecureStore.deleteItemAsync("loginSecret");
-      setServer(sv); setToken(j.token); setLoginCode(""); setConfigured(true);
+      setServer(sv); setToken(j.token); setLoginCode(""); kicked.current = false; setConfigured(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) { Alert.alert(t("Não deu certo"), e?.message ?? String(e)); }
+    finally { setLoggingIn(false); }
+  }
+
+  // ---------- Entrar com e-mail (código de 6 números) ----------
+  async function emailStart() {
+    const email = loginEmail.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return Alert.alert(t("E-mail"), t("Digite um e-mail válido."));
+    const sv = normServer();
+    setLoggingIn(true);
+    try {
+      const secret = randomSecret();
+      await SecureStore.setItemAsync("loginSecret", secret);
+      const ref = refCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+      const r = await fetch(`${sv}/v1/auth/email/start`, { method: "POST", headers: { "Content-Type": "application/json", "Accept-Language": LOCALE },
+        body: JSON.stringify({ email, cc: sha256hex(secret), ref }) });
+      if (!r.ok) throw new Error(r.status === 429 ? t("Muitos códigos pedidos. Tente mais tarde.") : `${t("erro")} ${r.status}`);
+      setEmailSent(true);
+    } catch (e: any) { Alert.alert(t("Não deu certo"), e?.message ?? String(e)); }
+    finally { setLoggingIn(false); }
+  }
+
+  async function emailVerify() {
+    const code = emailCode.replace(/\D/g, "");
+    if (code.length !== 6) return Alert.alert(t("Código"), t("Digite os 6 números que chegaram no seu e-mail."));
+    const sv = normServer();
+    setLoggingIn(true);
+    try {
+      const verifier = await SecureStore.getItemAsync("loginSecret");
+      const r = await fetch(`${sv}/v1/auth/email/verify`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loginEmail.trim().toLowerCase(), code, verifier, ...(await deviceInfo()) }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(t(String(j?.detail || r.status)));
+      await SecureStore.setItemAsync("server", sv); await SecureStore.setItemAsync("token", j.token);
+      await SecureStore.deleteItemAsync("loginSecret");
+      setServer(sv); setToken(j.token); setEmailCode(""); setEmailSent(false); setEmailMode(false); kicked.current = false; setConfigured(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) { Alert.alert(t("Não deu certo"), e?.message ?? String(e)); }
     finally { setLoggingIn(false); }
@@ -1313,6 +1443,7 @@ function FidusApp() {
         setPlan(await api("/v1/plan", {}, 15000));
         const m = await api("/v1/me", {}, 15000); setMe(m); setNameEdit(m.profile?.name || m.name || "");
         setPendingMeet(await SecureStore.getItemAsync("pendingMeeting"));
+        try { setDevice(await api("/v1/auth/device", {}, 10000)); } catch {}
       }
     } catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
     finally { setLoadingScreen(false); }
@@ -1405,6 +1536,28 @@ function FidusApp() {
           <Text style={{ color: c.sub, marginBottom: 28, fontSize: 16 }}>{t("Fale. O Fidus resolve.")}</Text>
           <Pressable style={[s.primary, { flexDirection: "row", justifyContent: "center", gap: 10 }]} onPress={loginGoogle}>
             <Text style={[s.primaryText, { fontSize: 17 }]}>{t("Entrar com o Google")}</Text></Pressable>
+          {authOpts?.email && !emailMode && (
+            <Pressable style={[s.secondary, { borderColor: c.sub, alignItems: "center", marginTop: 10, paddingVertical: 14 }]} onPress={() => setEmailMode(true)}>
+              <Text style={{ color: c.text, fontSize: 16, fontWeight: "600" }}>{t("Entrar com e-mail")}</Text></Pressable>)}
+          {emailMode && (
+            <View style={{ marginTop: 14 }}>
+              {!emailSent ? (<>
+                <TextInput style={[s.input, { color: c.text, backgroundColor: c.card }]} placeholder={t("seu@email.com")} placeholderTextColor={c.sub}
+                  autoCapitalize="none" keyboardType="email-address" autoComplete="email" value={loginEmail} onChangeText={setLoginEmail}
+                  onSubmitEditing={emailStart} />
+                <Pressable style={[s.primary, { opacity: loggingIn ? 0.5 : 1 }]} disabled={loggingIn} onPress={emailStart}>
+                  <Text style={s.primaryText}>{loggingIn ? "…" : t("Mandar código")}</Text></Pressable>
+              </>) : (<>
+                <Text style={{ color: c.sub, marginBottom: 8 }}>{t("Mandamos um código de 6 números para {0}. Ele vale 10 minutos.", loginEmail.trim())}</Text>
+                <TextInput style={[s.input, { color: c.text, backgroundColor: c.card, letterSpacing: 8, fontSize: 22, textAlign: "center" }]}
+                  placeholder="000000" placeholderTextColor={c.sub} keyboardType="number-pad" maxLength={6} autoComplete="one-time-code"
+                  value={emailCode} onChangeText={setEmailCode} onSubmitEditing={emailVerify} />
+                <Pressable style={[s.primary, { opacity: loggingIn ? 0.5 : 1 }]} disabled={loggingIn} onPress={emailVerify}>
+                  <Text style={s.primaryText}>{loggingIn ? "…" : t("Entrar")}</Text></Pressable>
+                <Pressable onPress={() => { setEmailSent(false); setEmailCode(""); }} style={{ marginTop: 10 }}>
+                  <Text style={{ color: c.sub, textDecorationLine: "underline" }}>{t("Usar outro e-mail ou mandar de novo")}</Text></Pressable>
+              </>)}
+            </View>)}
           <Text style={{ color: c.sub, marginTop: 16, marginBottom: 6, fontSize: 13 }}>{t("Tem um código de convite? (opcional)")}</Text>
           <TextInput style={[s.input, { color: c.text, backgroundColor: c.card, letterSpacing: 2 }]}
             placeholder="AB12CD" placeholderTextColor={c.sub} autoCapitalize="characters" autoCorrect={false}
@@ -1428,7 +1581,7 @@ function FidusApp() {
               const sv = normServer(); const tk = token.trim(); if (!tk) return;
               setServer(sv); setToken(tk);
               await SecureStore.setItemAsync("server", sv); await SecureStore.setItemAsync("token", tk);
-              setConfigured(true);
+              kicked.current = false; setConfigured(true);
             }}><Text style={{ color: c.text }}>{t("Entrar com token")}</Text></Pressable>
           </>)}
         </ScrollView>
@@ -1757,6 +1910,16 @@ function FidusApp() {
             <Text style={{ color: c.sub }}>›</Text></Card>
           <Card c={c} onPress={restorePurchases}><Text style={{ color: c.text, flex: 1 }}>{t("Restaurar compras")}</Text></Card>
         </>)}
+        <Card c={c} onPress={toggleLock}>
+          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600" }}>{t("Trava com digital ou rosto")}</Text>
+            <Text style={{ color: c.sub, fontSize: 13 }}>{lockAvail ? (lockOn ? t("Ligada: o Fidus pede sua digital ao abrir") : t("Desligada")) : t("Disponível no app atualizado, com digital ou rosto cadastrados")}</Text></View>
+          <Text style={{ color: lockOn ? GREEN : c.sub, fontWeight: "700" }}>{lockOn ? t("Ligada") : t("Ligar")}</Text></Card>
+        <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
+          <Text style={{ color: c.sub, fontSize: 12 }}>{t("ESTE APARELHO")}</Text>
+          <Text style={{ color: c.text, fontWeight: "600" }}>{device?.device_name || t("Este celular")}</Text>
+          <Text style={{ color: c.sub, fontSize: 12 }}>{t("Sua conta funciona em um aparelho por vez. Entrar em outro desconecta este.")}</Text>
+          <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
+        </Card>
         <Card c={c} onPress={reconnectGoogle}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600" }}>Google</Text>
             <Text style={{ color: c.sub, fontSize: 13 }}>{me?.google_connected ? t("Conectado · tocar para reconectar") : t("Não conectado · tocar para conectar")}</Text></View>
@@ -2036,6 +2199,16 @@ function FidusApp() {
         <View pointerEvents="none" style={[s.toast, { bottom: insets.bottom + 90 }]}>
           <Text style={{ color: "#fff", fontWeight: "600" }}>{toast}</Text></View>
       )}
+      <Modal visible={locked} animationType="fade" onRequestClose={() => {}} statusBarTranslucent>
+        <View style={{ flex: 1, backgroundColor: c.bg, alignItems: "center", justifyContent: "center", gap: 18, padding: 24 }}>
+          <Text style={[s.logo, { color: c.text }]}>Fidus</Text>
+          <Text style={{ color: c.sub, textAlign: "center" }}>{t("Use sua digital ou rosto para abrir.")}</Text>
+          <Pressable style={[s.primary, { paddingHorizontal: 32 }]} onPress={unlock}><Text style={s.primaryText}>{t("Desbloquear")}</Text></Pressable>
+          <Pressable onPress={() => Alert.alert(t("Sair da conta?"), t("Você vai precisar entrar de novo com o Google ou o e-mail."), [
+            { text: t("Cancelar"), style: "cancel" }, { text: t("Sair"), style: "destructive", onPress: logout }])} style={{ marginTop: 8 }}>
+            <Text style={{ color: c.sub, textDecorationLine: "underline" }}>{t("Sair da conta")}</Text></Pressable>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -2088,6 +2261,11 @@ const I18N_KEYS: string[] = [
   "viagem",
   "salários e prestadores",
   "outros",
+  "código expirado. Peça um novo.",
+  "código errado.",
+  "este e-mail não tem acesso ao Fidus.",
+  "esta conta entra com o Google.",
+  "muitas tentativas. Tente amanhã ou entre com o Google.",
   "☀️ Bom dia",
   "Bom dia! O que eu tenho hoje?",
   "💷 Gastos do mês",
@@ -2148,6 +2326,9 @@ const I18N_KEYS: string[] = [
   "Erro",
   "A conexão caiu. Buscando a resposta no servidor…",
   "Não consegui buscar a resposta. Confira sua internet e veja a Atividade antes de repetir o pedido.",
+  "Você saiu deste aparelho",
+  "Sua conta do Fidus foi aberta em outro aparelho. Cada conta funciona em um aparelho por vez. Para usar aqui, entre de novo.",
+  "Seu acesso foi encerrado. Entre de novo para continuar.",
   "o servidor demorou demais para responder",
   "Conexão",
   "Conexão ok.",
@@ -2201,11 +2382,24 @@ const I18N_KEYS: string[] = [
   "Desfazer?",
   "Apagar \"{0}\" da sua agenda?",
   "Desfazer",
+  "Sair de todos os aparelhos?",
+  "A conta será desconectada em todos os aparelhos, inclusive neste.",
+  "Sair de todos",
+  "Desbloquear o Fidus",
+  "Trava",
+  "Este celular não tem digital ou rosto cadastrados, ou o app precisa ser atualizado.",
+  "Desligar a trava",
+  "Ligar a trava",
+  "Trava ligada",
+  "Trava desligada",
   "Código",
   "Digite o código de 8 letras que apareceu depois do Google.",
   "código inválido ou expirado. Entre com o Google de novo.",
   "erro",
   "Não deu certo",
+  "Digite um e-mail válido.",
+  "Muitos códigos pedidos. Tente mais tarde.",
+  "Digite os 6 números que chegaram no seu e-mail.",
   "Clientes",
   "Digite o e-mail Google da pessoa.",
   "Convite criado",
@@ -2253,9 +2447,14 @@ const I18N_KEYS: string[] = [
   "Configurações",
   "Fale. O Fidus resolve.",
   "Entrar com o Google",
+  "Entrar com e-mail",
+  "seu@email.com",
+  "Mandar código",
+  "Mandamos um código de 6 números para {0}. Ele vale 10 minutos.",
+  "Entrar",
+  "Usar outro e-mail ou mandar de novo",
   "Tem um código de convite? (opcional)",
   "Depois do Google, se o app não abrir sozinho, digite o código:",
-  "Entrar",
   "Fechar opções avançadas",
   "Opções avançadas",
   "Token de administrador",
@@ -2332,6 +2531,16 @@ const I18N_KEYS: string[] = [
   "Gerenciar assinatura",
   "Trocar forma de pagamento ou cancelar, direto na loja",
   "Restaurar compras",
+  "Trava com digital ou rosto",
+  "Ligada: o Fidus pede sua digital ao abrir",
+  "Desligada",
+  "Disponível no app atualizado, com digital ou rosto cadastrados",
+  "Ligada",
+  "Ligar",
+  "ESTE APARELHO",
+  "Este celular",
+  "Sua conta funciona em um aparelho por vez. Entrar em outro desconecta este.",
+  "Sair de todos os aparelhos",
   "Conectado · tocar para reconectar",
   "Não conectado · tocar para conectar",
   "Reenviar reunião",
@@ -2365,6 +2574,9 @@ const I18N_KEYS: string[] = [
   "Pensando…",
   "Falando…",
   "Fale normalmente: quando você parar, eu respondo. Toque no círculo para enviar na hora ou para me interromper. Diga “tchau” para sair.",
+  "Use sua digital ou rosto para abrir.",
+  "Desbloquear",
+  "Você vai precisar entrar de novo com o Google ou o e-mail.",
   "...",
 ];
 // @i18n-keys-end

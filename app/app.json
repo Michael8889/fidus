@@ -48,6 +48,12 @@
         {
           "color": "#0E1E3A"
         }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "O Fidus usa o Face ID para proteger sua conta."
+        }
       ]
     ],
     "icon": "./assets/icon.png",

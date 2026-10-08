@@ -10,6 +10,7 @@ fidus/
 │   ├── app/
 │   │   ├── main.py        endpoints HTTP (app, link público de agendamento, OAuth do Google, convites, assinatura)
 │   │   ├── actions.py     envio de e-mails/convites só com autorização (toque em Enviar ou "envia" na conversa)
+│   │   ├── mailer.py      e-mails do Fidus aos clientes (código de entrada, boas-vindas, assinatura, convite) via Resend
 │   │   ├── i18n.py        tradução dos textos do app (feita uma vez pela IA e guardada) e textos fixos
 │   │   ├── agent.py       "cérebro": prompt, laço de ferramentas, registro na aba Atividade
 │   │   ├── tools.py       ferramentas de agenda, gastos e e-mail + roteamento + bloqueio por plano
@@ -63,6 +64,18 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
 - Enquanto o app do Google estiver como "Interno", só contas do domínio da empresa conseguem entrar. Para
   testadores de fora: mudar para "Externo" em modo de teste e adicionar os e-mails deles como usuários de teste.
 
+## Entrada e segurança
+- Entrar com o **Google** ou com **e-mail + código de 6 números** (como no Claude). O código por e-mail só vale para
+  contas que não são do Google; conta do Google e a do dono entram só pelo Google (o e-mail avisa isso).
+  Máx. 10 erros por e-mail por dia; até 3 códigos válidos ao mesmo tempo; o código só funciona no app que pediu.
+- **Um aparelho por conta**: entrar num celular desconecta o anterior ("sua conta foi aberta em outro aparelho").
+  A aba Clientes mostra trocas de aparelho e IPs diferentes no mês (sinal de conta dividida).
+  Configurações › "Sair de todos os aparelhos".
+- **Trava com digital ou rosto** (opcional, APK com `expo-local-authentication`): pede a digital ao abrir e ao
+  voltar depois de 30 s fora. Se a digital for removida do celular, a trava desliga sozinha.
+- E-mails automáticos pelo Resend (`FIDUS_RESEND_API_KEY`, `FIDUS_EMAIL_FROM` com domínio verificado): código de
+  entrada, boas-vindas (só conta nova), assinatura (ativa, renovada, falha, cancelada, terminou) e convite aceito.
+
 ## Idiomas e moedas
 - O app abre no idioma do celular (dá para trocar em Configurações). O servidor traduz os textos uma vez por idioma
   e guarda em `/data/i18n/<idioma>.json`; o app guarda uma cópia. O Fidus responde no idioma em que a pessoa fala.
@@ -88,6 +101,11 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
      webhook acima com o segredo, copiar a chave pública do SDK (`goog_...`).
   3. No `.env` do servidor: `FIDUS_REVENUECAT_ANDROID_KEY` e `FIDUS_BILLING_WEBHOOK_SECRET`. Gerar e instalar o APK novo.
 - Sem as chaves, o botão de assinar mostra "em breve" (como antes).
+
+## Site
+- `site/landing.dc.html` (cópia do site no Claude Design). Idioma e moeda do visitante; botões da Google Play e da
+  App Store conforme o celular (os links entram nas Tweaks do site: `playStoreUrl`, `appStoreUrl`). Loja sem link =
+  lista de espera. O cadastro acontece no app.
 
 ## Configuração
 Tudo no `server/.env` (modelo em `server/.env.example`). Trocar de IA = mudar `FIDUS_LLM_PROVIDER`.

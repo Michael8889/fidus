@@ -83,3 +83,6 @@ BILLING_WEBHOOK_SECRET = (env("FIDUS_BILLING_WEBHOOK_SECRET", "") or "").strip()
 # Chaves PÚBLICAS do SDK da RevenueCat (começam com goog_ / appl_). Ficam no app de qualquer jeito; não são segredo.
 REVENUECAT_ANDROID_KEY = (env("FIDUS_REVENUECAT_ANDROID_KEY", "") or "").strip()
 REVENUECAT_IOS_KEY = (env("FIDUS_REVENUECAT_IOS_KEY", "") or "").strip()
+# E-mails do Fidus para os clientes (código de entrada, boas-vindas, assinatura, convite). Serviço: Resend.
+RESEND_API_KEY = (env("FIDUS_RESEND_API_KEY", "") or "").strip()
+EMAIL_FROM = (env("FIDUS_EMAIL_FROM", "") or "").strip()  # ex. "Fidus <ola@seudominio.com>"
