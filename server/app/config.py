@@ -35,6 +35,12 @@ DATA_DIR = env("FIDUS_DATA_DIR") or os.path.dirname(os.path.abspath(RECEIPTS_DIR
 LLM_PROVIDER = env("FIDUS_LLM_PROVIDER", "anthropic")
 LLM_MODEL = env("FIDUS_LLM_MODEL", "claude-sonnet-5-5")
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY")
+# Modelo mais barato para tarefas simples (tradução de telas, textos fixos)
+LLM_MODEL_LIGHT = env("FIDUS_LLM_MODEL_LIGHT", "claude-haiku-4-5-20251001" if env("FIDUS_LLM_PROVIDER", "anthropic") == "anthropic" else "") or None
+# Preço de um modelo fora da lista do llm.py: "entrada,saída,gravar_cache,ler_cache" em US$ por milhão de tokens
+CUSTOM_PRICES = tuple(float(x) for x in (env("FIDUS_LLM_PRICES", "") or "").split(",") if x.strip()) or None
+# Uso justo: gasto de IA por cliente por dia (US$). Passou, o Fidus pede para continuar amanhã. 0 = sem limite.
+FAIR_USE_DAILY_USD = float(env("FIDUS_FAIR_USE_DAILY_USD", "5") or 0)
 # Necessário só para chaves que valem para vários workspaces (começa com wrkspc_)
 ANTHROPIC_WORKSPACE_ID = (env("ANTHROPIC_WORKSPACE_ID") or "").strip() or None
 OPENAI_COMPAT_BASE_URL = env("OPENAI_COMPAT_BASE_URL", "https://api.openai.com/v1")

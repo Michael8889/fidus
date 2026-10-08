@@ -10,6 +10,8 @@ fidus/
 │   ├── app/
 │   │   ├── main.py        endpoints HTTP (app, link público de agendamento, OAuth do Google, convites, assinatura)
 │   │   ├── actions.py     envio de e-mails/convites só com autorização (toque em Enviar ou "envia" na conversa)
+│   │   ├── account_data.py exportar e apagar a conta do cliente
+│   │   ├── backup.py      backup diário (bancos + arquivos) e idade do último backup
 │   │   ├── mailer.py      e-mails do Fidus aos clientes (código de entrada, boas-vindas, assinatura, convite) via Resend
 │   │   ├── i18n.py        tradução dos textos do app (feita uma vez pela IA e guardada) e textos fixos
 │   │   ├── agent.py       "cérebro": prompt, laço de ferramentas, registro na aba Atividade
@@ -75,6 +77,28 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
   voltar depois de 30 s fora. Se a digital for removida do celular, a trava desliga sozinha.
 - E-mails automáticos pelo Resend (`FIDUS_RESEND_API_KEY`, `FIDUS_EMAIL_FROM` com domínio verificado): código de
   entrada, boas-vindas (só conta nova), assinatura (ativa, renovada, falha, cancelada, terminou) e convite aceito.
+
+## Custo de IA e uso justo
+- Cada chamada à IA grava tokens e custo no banco do cliente (`store.add_usage`, preços em `llm.PRICES`).
+  O dono vê o custo do mês por cliente na aba Clientes e em `GET /v1/admin/costs`.
+- Economia: as regras e as ferramentas ficam em cache na Anthropic (custam 10% nas chamadas seguintes; a data e
+  o perfil vão depois do cache), e telas/textos fixos são traduzidos pelo modelo barato (`FIDUS_LLM_MODEL_LIGHT`).
+- Uso justo: cliente que passa de `FIDUS_FAIR_USE_DAILY_USD` (padrão US$ 5) num dia recebe um aviso educado e
+  volta no dia seguinte. O dono não tem limite.
+
+## Dados do cliente
+- Configurações › **Exportar meus dados**: .zip com tudo em JSON + recibos e documentos (sem as chaves do Google).
+- Configurações › **Apagar minha conta** (digitar APAGAR): encerra acessos, desconecta o Google, desliga o link
+  público, tira e-mail e nome da conta e move a pasta para `/data/deleted`, destruída de vez após 30 dias.
+  Manda e-mail lembrando de cancelar a assinatura na loja.
+
+## Backup e monitoramento
+- Backup automático todo dia às 03:30 UTC em `deploy/data/backups` (últimos 14), com cópia segura dos bancos.
+  Na mão: `docker exec fidus_server python -m app.backup` ou `POST /v1/admin/backup`. Falhou: e-mail para o dono.
+- **Cópia fora do servidor** (recomendado antes de vender): sincronizar `deploy/data/backups` com um armazenamento
+  externo (ex. Hetzner Storage Box com rclone).
+- `GET /health` responde 503 se o backup estiver atrasado (+36 h), se falhou ou se o disco tiver menos de 2 GB.
+  Cadastre esse endereço num monitor grátis (ex. UptimeRobot) para receber alerta se o Fidus cair.
 
 ## Idiomas e moedas
 - O app abre no idioma do celular (dá para trocar em Configurações). O servidor traduz os textos uma vez por idioma

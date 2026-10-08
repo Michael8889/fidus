@@ -196,7 +196,7 @@ def test_voice_mode_short_spoken_reply():
 
     agent.llm.chat = chat
     r = client.post("/v1/message", json={"text": "o que tenho sexta", "mode": "voice"}, headers=H).json()
-    assert "MODO CONVERSA" in seen["system"]
+    assert "MODO CONVERSA" in "".join(seen["system"])  # regras fixas (em cache) + contexto
     sp = r["speech"]
     assert "•" not in sp and "http" not in sp and "9 de outubro" in sp and "libras" in sp
     assert speechify("€12,50 e £3") == "12,50 euros e 3 libras"

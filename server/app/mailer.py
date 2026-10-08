@@ -61,6 +61,14 @@ _T = {
         "en": ("Your Fidus code: {code}", "<p>Your code to sign in to Fidus:</p><p style='font-size:32px;font-weight:800;letter-spacing:6px'>{code}</p><p>It is valid for 10 minutes. If this wasn't you, ignore this email: no one gets in without the code.</p>"),
         "es": ("Tu código de Fidus: {code}", "<p>Tu código para entrar en Fidus:</p><p style='font-size:32px;font-weight:800;letter-spacing:6px'>{code}</p><p>Vale 10 minutos. Si no fuiste tú, ignora este correo: nadie entra sin el código.</p>"),
     },
+    "admin_alert": {
+        "pt": ("Alerta do Fidus", "<p>{text}</p>"), "en": ("Fidus alert", "<p>{text}</p>"), "es": ("Alerta de Fidus", "<p>{text}</p>"),
+    },
+    "account_deleted": {
+        "pt": ("Sua conta do Fidus foi apagada", "<p>{name}, sua conta do Fidus foi apagada, como você pediu. Seus dados são destruídos de vez em 30 dias; até lá, se foi um engano, responda este e-mail.</p><p>Se você tinha assinatura pela Google Play ou App Store, cancele também por lá para não ser cobrado.</p>"),
+        "en": ("Your Fidus account has been deleted", "<p>{name}, your Fidus account has been deleted, as you asked. Your data is permanently destroyed in 30 days; until then, if this was a mistake, reply to this email.</p><p>If you had a subscription through Google Play or the App Store, cancel it there too so you aren't charged.</p>"),
+        "es": ("Tu cuenta de Fidus se ha eliminado", "<p>{name}, tu cuenta de Fidus se ha eliminado, como pediste. Tus datos se destruyen definitivamente en 30 días; hasta entonces, si fue un error, responde a este correo.</p><p>Si tenías suscripción por Google Play o App Store, cancélala también allí para que no te cobren.</p>"),
+    },
     "use_google": {
         "pt": ("Entre no Fidus com o Google", "<p>Alguém pediu um código para entrar no Fidus com este e-mail.</p><p>A sua conta entra com o <b>Google</b>: no app, toque em <b>Entrar com o Google</b>. Se não foi você, ignore este e-mail.</p>"),
         "en": ("Sign in to Fidus with Google", "<p>Someone asked for a code to sign in to Fidus with this email.</p><p>Your account signs in with <b>Google</b>: in the app, tap <b>Sign in with Google</b>. If this wasn't you, ignore this email.</p>"),

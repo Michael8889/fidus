@@ -114,6 +114,10 @@ def _create(path: str) -> None:
             CREATE TABLE IF NOT EXISTS bookings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, type_id TEXT, start TEXT NOT NULL, name TEXT NOT NULL,
                 email TEXT, phone TEXT, address TEXT, notes TEXT, event_id TEXT, created_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS usage (
+                day TEXT NOT NULL, model TEXT NOT NULL, calls INTEGER NOT NULL DEFAULT 0, input INTEGER NOT NULL DEFAULT 0,
+                output INTEGER NOT NULL DEFAULT 0, cache_write INTEGER NOT NULL DEFAULT 0, cache_read INTEGER NOT NULL DEFAULT 0,
+                searches INTEGER NOT NULL DEFAULT 0, cost REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, model));
             CREATE TABLE IF NOT EXISTS pending_actions (
                 id TEXT PRIMARY KEY, kind TEXT NOT NULL, payload TEXT NOT NULL,
                 status TEXT NOT NULL, created_at TEXT NOT NULL);
@@ -375,3 +379,39 @@ def match_business(name: str | None) -> str | None:
         if b.strip().lower() == name.strip().lower():
             return b
     return None
+
+
+# ---------- Custo de IA por cliente ----------
+def add_usage(u: dict) -> None:
+    if not u or not u.get("calls"):
+        return
+    from . import llm
+    cost = llm.cost_usd(u)
+    day = datetime.now(timezone.utc).date().isoformat()
+    with _conn() as c:
+        c.execute("INSERT INTO usage(day,model,calls,input,output,cache_write,cache_read,searches,cost) VALUES(?,?,?,?,?,?,?,?,?) "
+                  "ON CONFLICT(day,model) DO UPDATE SET calls=calls+excluded.calls, input=input+excluded.input, "
+                  "output=output+excluded.output, cache_write=cache_write+excluded.cache_write, "
+                  "cache_read=cache_read+excluded.cache_read, searches=searches+excluded.searches, cost=cost+excluded.cost",
+                  (day, u.get("model") or "?", u.get("calls", 0), u.get("input", 0), u.get("output", 0),
+                   u.get("cache_write", 0), u.get("cache_read", 0), u.get("searches", 0), cost))
+
+
+def usage_cost(since_day: str) -> float:
+    with _conn() as c:
+        return round(c.execute("SELECT COALESCE(SUM(cost),0) FROM usage WHERE day>=?", (since_day,)).fetchone()[0], 4)
+
+
+def usage_summary(days: int = 30) -> dict:
+    from datetime import timedelta
+    today = datetime.now(timezone.utc).date()
+    since = (today - timedelta(days=days - 1)).isoformat()
+    with _conn() as c:
+        r = c.execute("SELECT COALESCE(SUM(calls),0) calls, COALESCE(SUM(input),0) input, COALESCE(SUM(output),0) output, "
+                      "COALESCE(SUM(cache_write),0) cache_write, COALESCE(SUM(cache_read),0) cache_read, "
+                      "COALESCE(SUM(searches),0) searches, COALESCE(SUM(cost),0) cost FROM usage WHERE day>=?", (since,)).fetchone()
+    out = dict(r)
+    out["cost"] = round(out["cost"], 4)
+    out["today"] = usage_cost(today.isoformat())
+    out["month"] = usage_cost(today.replace(day=1).isoformat())
+    return out

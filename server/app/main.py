@@ -1,13 +1,14 @@
 """API do Fidus."""
 import html
 import os
+import shutil
 import tempfile
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
-from . import accounts, actions, agent, booking, config, features, google_client, i18n, mailer, meetings, plans, store, tools
+from . import account_data, accounts, actions, agent, backup, booking, config, features, google_client, i18n, mailer, meetings, plans, store, tools
 
 app = FastAPI(title="Fidus API", version="0.9.0", docs_url=None, redoc_url=None, openapi_url=None)  # não expõe o mapa da API
 store.init_db()
@@ -49,6 +50,8 @@ def _resume_all_meetings():
 
 
 _resume_all_meetings()
+if (os.getenv("FIDUS_BACKUP_AUTO", "1") or "1") not in ("0", "false", "no"):
+    backup.start_daily()  # backup todo dia às 03:30 (UTC)
 
 
 def auth(request: Request):
@@ -78,7 +81,24 @@ class EditIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "google_connected": google_client.is_connected(), "llm": config.LLM_PROVIDER}
+    """Para monitor externo (ex. UptimeRobot): responde 503 se o backup está atrasado ou o disco quase cheio."""
+    from fastapi.responses import JSONResponse
+    problems = []
+    age = backup.age_hours()
+    if age is not None and age > 36:
+        problems.append(f"backup atrasado ({int(age)} h)")
+    if backup.last() and not backup.last().get("ok"):
+        problems.append("último backup falhou")
+    try:
+        free_gb = shutil.disk_usage(config.DATA_DIR).free / 1e9
+        if free_gb < 2:
+            problems.append(f"disco quase cheio ({free_gb:.1f} GB livres)")
+    except OSError:
+        free_gb = None
+    body = {"ok": not problems, "problems": problems, "google_connected": google_client.is_connected(),
+            "llm": config.LLM_PROVIDER, "backup_age_hours": round(age, 1) if age is not None else None,
+            "disk_free_gb": round(free_gb, 1) if free_gb is not None else None}
+    return JSONResponse(body, status_code=200 if not problems else 503)
 
 
 # ---------- Login e conexão com o Google ----------
@@ -275,6 +295,38 @@ def email_verify(body: EmailVerifyIn, request: Request):
     return {"token": token, "user": {"id": u["id"], "email": u.get("email"), "name": u.get("name")}}
 
 
+# ---------- Meus dados: exportar e apagar a conta ----------
+@app.post("/v1/account/export", dependencies=[Depends(auth)])
+def account_export(request: Request):
+    _rate_limit(request, 5, "export")
+    r = account_data.export_zip()
+    return {**r, "url": features.sign(r["document_id"])}
+
+
+class DeleteIn(BaseModel):
+    confirm: str
+
+
+@app.post("/v1/account/delete", dependencies=[Depends(auth)])
+def account_delete(body: DeleteIn):
+    """Apaga a conta (exigido pela Google Play e pela GDPR). Pede a palavra de confirmação para não ser um toque sem querer."""
+    if body.confirm.strip().upper() not in ("APAGAR", "DELETE", "BORRAR", "SUPPRIMER", "LÖSCHEN", "ELIMINA", "PADAM"):
+        raise HTTPException(400, "confirmação errada")
+    u = store.current()
+    lang, name, email = store.user_lang(), store.user_name(), u.get("email")
+    r = account_data.delete_account(u["id"])
+    if r.get("error"):
+        raise HTTPException(400, r["error"])
+    if email:
+        mailer.send(email, "account_deleted", lang, name=name)
+    return r
+
+
+@app.post("/v1/admin/backup", dependencies=[Depends(owner_only)])
+def admin_backup():
+    return backup.run()
+
+
 @app.post("/v1/auth/logout_all", dependencies=[Depends(auth)])
 def logout_all():
     return {"ok": True, "closed": accounts.logout_all(store.current()["id"])}
@@ -353,6 +405,8 @@ def logout(request: Request):
 def admin_users():
     out = []
     for u in accounts.list_users():
+        if u["status"] == "apagado":
+            continue
         with store.as_user(accounts.user_ctx(u)):
             try:
                 stats = features.month_stats()
@@ -363,8 +417,34 @@ def admin_users():
                         "google_connected": google_client.is_connected(),
                         "actions_this_month": stats.get("actions_this_month", 0), "is_owner": u["id"] == store.OWNER_ID,
                         "device_switches_30d": accounts.device_switches(u["id"]),
+                        "ai_cost_month_usd": _safe_cost(),
                         "ips_30d": accounts.distinct_ips(u["id"])})
     return {"users": out, "invites": accounts.list_invites()}
+
+
+def _safe_cost() -> float:
+    try:
+        return store.usage_summary(1)["month"]
+    except Exception:  # noqa: BLE001
+        return 0.0
+
+
+@app.get("/v1/admin/costs", dependencies=[Depends(owner_only)])
+def admin_costs(days: int = 30):
+    """Custo de IA por cliente (últimos N dias e mês atual) e o total, para acompanhar a margem."""
+    rows = []
+    for u in accounts.list_users():
+        if u["status"] == "apagado":
+            continue
+        with store.as_user(accounts.user_ctx(u)):
+            try:
+                us = store.usage_summary(max(1, min(days, 365)))
+            except Exception:  # noqa: BLE001
+                continue
+            rows.append({"id": u["id"], "email": u.get("email"), "plan": plans.current(), **us})
+    rows.sort(key=lambda r: r["month"], reverse=True)
+    return {"users": rows, "total_month_usd": round(sum(r["month"] for r in rows), 2),
+            "total_period_usd": round(sum(r["cost"] for r in rows), 2), "fair_use_daily_usd": config.FAIR_USE_DAILY_USD}
 
 
 class InviteIn(BaseModel):

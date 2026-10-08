@@ -1489,6 +1489,27 @@ function FidusApp() {
     catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
   }
 
+  async function exportData() {
+    try {
+      flash(t("Preparando seus dados…"));
+      const r = await api("/v1/account/export", { method: "POST" }, 120000);
+      Alert.alert(t("Seus dados"), t("O arquivo com todos os seus dados está pronto. Ele também fica em Documentos."), [
+        { text: t("Fechar"), style: "cancel" }, { text: t("Baixar"), onPress: () => Linking.openURL(r.url).catch(() => {}) }]);
+    } catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
+  }
+
+  const [delWord, setDelWord] = useState("");
+  const [delOpen, setDelOpen] = useState(false);
+  async function deleteAccount() {
+    try {
+      await post("/v1/account/delete", { confirm: delWord }, 30000);
+      setDelOpen(false); setDelWord("");
+      Alert.alert(t("Conta apagada"), t("Sua conta foi apagada. Se você tinha assinatura pela Google Play ou App Store, cancele também por lá."));
+      kicked.current = true;
+      await logoutLocal();
+    } catch (e: any) { Alert.alert(t("Erro"), /confirmação/.test(errMsg(e)) ? t("Digite APAGAR para confirmar.") : errMsg(e)); }
+  }
+
   async function shareInvite() {
     if (!referral) return;
     const msg = t("Estou usando o Fidus, um assessor pessoal por voz: agenda, e-mails, gastos e recibos. Com o meu convite você ganha {0} dias grátis: {1} (código {2})",
@@ -1641,6 +1662,8 @@ function FidusApp() {
               <Text style={{ color: c.sub, fontSize: 13 }}>{u.email}</Text>
               <Text style={{ color: c.sub, fontSize: 12, marginTop: 2 }}>
                 {t(PLAN_NAMES[u.plan] ?? u.plan)} · {t("{0} ações no mês", u.actions_this_month)} · {u.google_connected ? t("Google ok") : t("sem Google")}
+                {typeof u.ai_cost_month_usd === "number" ? ` · ${t("IA")} $${u.ai_cost_month_usd.toFixed(2)}` : ""}
+                {u.device_switches_30d > 2 ? ` · ⚠️ ${t("{0} trocas de aparelho", u.device_switches_30d)}` : ""}
                 {u.status !== "ativo" ? ` · ${t("SUSPENSO")}` : ""}</Text>
             </View>
             <Text style={{ color: c.sub }}>›</Text>
@@ -1926,6 +1949,22 @@ function FidusApp() {
           <Text style={{ color: c.sub }}>›</Text></Card>
         {!!pendingMeet && <Card c={c} onPress={() => { const p = pendingMeet; setPendingMeet(null); setScreen("chat"); sendMeetingFile(p); }}>
           <Text style={{ color: c.text, flex: 1 }}>🎙 {t("Reenviar reunião")}</Text></Card>}
+        <Card c={c} onPress={exportData}>
+          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600" }}>{t("Exportar meus dados")}</Text>
+            <Text style={{ color: c.sub, fontSize: 13 }}>{t("Um arquivo com tudo: conversas, gastos, recibos, documentos")}</Text></View>
+          <Text style={{ color: c.sub }}>›</Text></Card>
+        <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+          <Pressable onPress={() => setDelOpen(!delOpen)}><Text style={{ color: RED, fontWeight: "600" }}>{t("Apagar minha conta")}</Text></Pressable>
+          {delOpen && (<>
+            <Text style={{ color: c.sub, fontSize: 13 }}>{t("Apaga a conta e todos os dados. Não dá para desfazer pelo app. Para confirmar, digite APAGAR.")}</Text>
+            <View style={[s.row, { gap: 8 }]}>
+              <TextInput style={[s.input, s.flex, { color: c.text, backgroundColor: c.bg, marginBottom: 0 }]} value={delWord} onChangeText={setDelWord}
+                autoCapitalize="characters" placeholder="APAGAR" placeholderTextColor={c.sub} />
+              <Pressable style={[s.primarySm, { backgroundColor: RED, justifyContent: "center" }]} onPress={deleteAccount}>
+                <Text style={s.primaryText}>{t("Apagar")}</Text></Pressable>
+            </View>
+          </>)}
+        </Card>
         <Card c={c} onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Fidus`).catch(() => {})}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600" }}>{t("Ajuda e contato")}</Text>
             <Text style={{ color: c.sub, fontSize: 13 }}>{SUPPORT_EMAIL}</Text></View>
@@ -2432,6 +2471,14 @@ const I18N_KEYS: string[] = [
   "Ainda processando…",
   "Idioma do Fidus",
   "Salvo",
+  "Preparando seus dados…",
+  "Seus dados",
+  "O arquivo com todos os seus dados está pronto. Ele também fica em Documentos.",
+  "Fechar",
+  "Baixar",
+  "Conta apagada",
+  "Sua conta foi apagada. Se você tinha assinatura pela Google Play ou App Store, cancele também por lá.",
+  "Digite APAGAR para confirmar.",
   "Estou usando o Fidus, um assessor pessoal por voz: agenda, e-mails, gastos e recibos. Com o meu convite você ganha {0} dias grátis: {1} (código {2})",
   "Pronto! Você ganhou {0} dias grátis.",
   "Anual",
@@ -2473,6 +2520,8 @@ const I18N_KEYS: string[] = [
   "{0} ações no mês",
   "Google ok",
   "sem Google",
+  "IA",
+  "{0} trocas de aparelho",
   "SUSPENSO",
   "Nova tarefa…",
   "Nenhuma tarefa aberta.\nDiga, por exemplo: “cria a tarefa de revisar o contrato até sexta”.",
@@ -2544,6 +2593,10 @@ const I18N_KEYS: string[] = [
   "Conectado · tocar para reconectar",
   "Não conectado · tocar para conectar",
   "Reenviar reunião",
+  "Exportar meus dados",
+  "Um arquivo com tudo: conversas, gastos, recibos, documentos",
+  "Apagar minha conta",
+  "Apaga a conta e todos os dados. Não dá para desfazer pelo app. Para confirmar, digite APAGAR.",
   "Ajuda e contato",
   "Testar conexão",
   "Sair da conta?",

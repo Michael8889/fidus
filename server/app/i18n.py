@@ -74,7 +74,7 @@ def _ask(lang: str, strings: list[str]) -> dict:
               "breaks, the name Fidus and placeholders like {0} or {name} exactly. Reply ONLY with a JSON object "
               "mapping each original string to its translation.")
     out = llm.chat(system, [{"role": "user", "content": json.dumps(strings, ensure_ascii=False)}], [],
-                   web_search=False)
+                   web_search=False, model=config.LLM_MODEL_LIGHT)
     text = out.get("text") or ""
     m = re.search(r"\{.*\}", text, re.S)
     if not m:
@@ -125,7 +125,7 @@ def localize(text: str) -> str:
     try:
         out = llm.chat(f"Translate the message to {LANGS[lang]}. Keep the layout, emojis, numbers, names and line "
                        "breaks. Reply only with the translated message.", [{"role": "user", "content": text}], [],
-                       web_search=False)
+                       web_search=False, model=config.LLM_MODEL_LIGHT)
         return (out.get("text") or "").strip() or text
     except Exception:  # noqa: BLE001
         return text

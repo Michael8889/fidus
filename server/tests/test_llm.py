@@ -25,7 +25,7 @@ def fake_client(calls, fail_web=False):
 
         def create(self, **kw):
             calls.append(kw)
-            if fail_web and any(t.get("name") == "web_search" for t in kw["tools"]):
+            if fail_web and any(t.get("name") == "web_search" for t in kw.get("tools", [])):
                 req = httpx.Request("POST", "https://x")
                 raise anthropic.BadRequestError("web_search is not enabled", response=httpx.Response(400, request=req), body=None)
             if len(calls) == 1 and not fail_web:
@@ -51,3 +51,31 @@ def test_web_search_fallback(monkeypatch):
     monkeypatch.setattr(config, "WEB_SEARCH", True)
     out = llm._anthropic("sys", [{"role": "user", "content": "oi"}], [])
     assert out["text"] == "Achei 3 lojas." and config.WEB_SEARCH is False
+
+
+def test_cache_marks_fixed_prompt_and_usage_cost(monkeypatch):
+    calls = []
+
+    class U:
+        input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens = 1000, 200, 0, 9000
+        server_tool_use = None
+
+    class C:
+        def __init__(self, **kw):
+            self.messages = self
+
+        def create(self, **kw):
+            calls.append(kw)
+            r = Resp([Block(type="text", text="ok")])
+            r.usage = U()
+            return r
+    monkeypatch.setattr(anthropic, "Anthropic", C)
+    monkeypatch.setattr(config, "WEB_SEARCH", False)
+    out = llm._anthropic(("regras fixas", "hoje é quinta"), [{"role": "user", "content": "oi"}], [], model="claude-sonnet-5-5")
+    sysblocks = calls[0]["system"]
+    assert sysblocks[0]["cache_control"] and sysblocks[0]["text"] == "regras fixas" and "cache_control" not in sysblocks[1]
+    assert calls[0]["messages"][-1]["content"][-1]["cache_control"]
+    u = out["usage"]
+    assert u["cache_read"] == 9000 and u["calls"] == 1
+    # 1000*2 + 200*10 + 9000*0.2 = 5800 por milhão
+    assert abs(llm.cost_usd(u) - 0.0058) < 1e-9

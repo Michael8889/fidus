@@ -585,3 +585,17 @@ def is_new_user(uid: str, days: int = 2) -> bool:
         return bool(u) and datetime.now(timezone.utc) - datetime.fromisoformat(u["created_at"]) <= timedelta(days=days)
     except (TypeError, ValueError):
         return False
+
+
+def forget_user(uid: str, email: str | None) -> None:
+    """Conta apagada: encerra acessos e desliga tudo que aponta para ela. Fica só o id, sem e-mail nem nome."""
+    with _db() as c:
+        c.execute("UPDATE tokens SET revoked=1, revoked_reason='saiu' WHERE user_id=?", (uid,))
+        c.execute("UPDATE users SET status='apagado', email=NULL, name=NULL, google_sub=NULL WHERE id=?", (uid,))
+        c.execute("DELETE FROM public_slugs WHERE user_id=?", (uid,))
+        c.execute("DELETE FROM referral_codes WHERE user_id=?", (uid,))
+        c.execute("DELETE FROM login_codes WHERE user_id=?", (uid,))
+        c.execute("DELETE FROM device_logins WHERE user_id=?", (uid,))
+        if email:
+            c.execute("DELETE FROM invites WHERE lower(email)=lower(?)", (email,))
+            c.execute("DELETE FROM email_login_codes WHERE email=?", (email.lower(),))

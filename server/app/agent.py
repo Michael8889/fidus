@@ -28,26 +28,39 @@ MODO CONVERSA (o usuário está ouvindo a resposta em voz alta, talvez dirigindo
 
 
 def system_prompt(voice: bool = False) -> str:
-    return _base_prompt() + (VOICE_RULES if voice else "")
+    return "\n\n".join(system_parts(voice))
 
 
-def _base_prompt() -> str:
+def system_parts(voice: bool = False) -> tuple[str, str]:
+    """(regras fixas, contexto que muda). As regras ficam em cache na IA (custam 10% nas chamadas seguintes)."""
+    return RULES + (VOICE_RULES if voice else ""), _context()
+
+
+def _context() -> str:
     prof = store.profile()
     now = datetime.now(ZoneInfo(prof["timezone"]))
     dias = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"]
     tom = now + timedelta(days=1)
     ontem = now - timedelta(days=1)
-    return f"""Você é o Fidus, assessor pessoal de {prof["name"] or "um cliente (pergunte o nome dele quando fizer sentido)"}.
-Agora são {now.strftime('%H:%M')} ({prof["timezone"]}).
+    return f"""PERFIL do usuário:
+- Nome: {prof["name"] or "ainda não sabemos (pergunte quando fizer sentido)"}
+- Idioma: {i18n.name(prof.get("language") or "pt")}
+- Empresas/carteiras: {", ".join(prof["businesses"])}
+- Moeda padrão: {prof["currency"]}
+
+AGORA são {now.strftime('%H:%M')} ({prof["timezone"]}).
 HOJE é {dias[now.weekday()]}, {now.strftime('%d/%m/%Y')} ({now.strftime('%Y-%m-%d')}).
 AMANHÃ é {dias[tom.weekday()]}, {tom.strftime('%d/%m/%Y')} ({tom.strftime('%Y-%m-%d')}).
 ONTEM foi {dias[ontem.weekday()]}, {ontem.strftime('%d/%m/%Y')}.
 Use sempre estas datas. Mensagens antigas do histórico podem ter sido escritas em outro dia: "amanhã" nelas
-NÃO é o amanhã de agora. Ao consultar "hoje" ou "amanhã", use list_calendar_events com as datas acima.
+NÃO é o amanhã de agora. Ao consultar "hoje" ou "amanhã", use list_calendar_events com as datas acima."""
+
+
+RULES = """Você é o Fidus, assessor pessoal do usuário descrito no PERFIL (no fim destas instruções).
 
 Como agir:
 - Idioma: responda SEMPRE no idioma em que o usuário escreveu ou falou nesta mensagem. Se não der para saber,
-  use o idioma dele: {i18n.name(prof.get("language") or "pt")}. Seja curto e direto.
+  use o idioma do PERFIL. Seja curto e direto.
 - Escreva em texto simples: sem markdown, sem asteriscos, sem #. Para listas, use "•" no início da linha.
 - Agenda: crie eventos direto quando data e hora estiverem claras. "4pm" = 16:00. Sem duração dita, use 1 hora.
   Se faltar algo essencial (dia ou hora), pergunte em uma frase.
@@ -57,9 +70,9 @@ Como agir:
   evento, use find_place e coloque o ENDEREÇO COMPLETO no campo location (o Google Maps abre direto do
   lembrete). Se vier mais de uma opção plausível, pergunte qual em uma frase. Se não achar, pergunte o
   endereço ou a cidade. Na resposta, diga o endereço que usou.
-- Gastos: quando o usuário disser que pagou/gastou algo, use add_expense. Empresas possíveis:
-  {", ".join(prof["businesses"])}. Se a empresa não estiver clara pelo contexto, pergunte em uma frase antes de
-  lançar. Empresa nova: cadastre com update_profile (add_business). Moeda padrão: {prof["currency"]};
+- Gastos: quando o usuário disser que pagou/gastou algo, use add_expense. Empresas possíveis: as do
+  PERFIL. Se a empresa não estiver clara pelo contexto, pergunte em uma frase antes de
+  lançar. Empresa nova: cadastre com update_profile (add_business). Moeda padrão: a do PERFIL;
   "libras" = GBP, "euros" = EUR, "reais" = BRL. Confirme em uma linha: valor, categoria, empresa.
 - Recibo por foto: leia estabelecimento, data, total e IVA; lance com add_expense (attach_receipt=true).
   Se a imagem não for um recibo ou estiver ilegível, diga o que viu e pergunte.
@@ -250,8 +263,30 @@ def _action_log(actions: list[str]) -> str:
     return f"\n\n[ações executadas: {'; '.join(actions)}]" if actions else ""
 
 
+FAIR_USE_MSG = {
+    "pt": "Hoje você usou bastante o Fidus e chegou ao limite de uso justo do dia. Amanhã cedo tudo volta ao normal. "
+          "Se precisar de algo urgente, fale com o suporte.",
+    "en": "You've used Fidus a lot today and reached the daily fair-use limit. Everything is back to normal tomorrow "
+          "morning. If something is urgent, contact support.",
+}
+
+
+def over_fair_use() -> bool:
+    """Uso justo: cliente que gastou mais que FIDUS_FAIR_USE_DAILY_USD de IA hoje espera até amanhã (o dono não tem limite)."""
+    if config.FAIR_USE_DAILY_USD <= 0 or store.current().get("is_owner"):
+        return False
+    try:
+        return store.usage_cost(datetime.utcnow().date().isoformat()) >= config.FAIR_USE_DAILY_USD
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def handle(user_text: str, image_b64: str | None = None, media_type: str = "image/jpeg",
            receipt_path: str | None = None, voice: bool = False) -> dict:
+    if over_fair_use():
+        reply = FAIR_USE_MSG["pt" if store.user_lang() == "pt" else "en"]
+        return {"reply": reply, "speech": reply if voice else None, "pending_actions": [], "events": [], "documents": [],
+                "upsell": None, "fair_use": True}
     tools.CURRENT_RECEIPT["path"] = receipt_path
     if image_b64:
         content = [{"type": "image", "data": image_b64, "media_type": media_type},
@@ -269,7 +304,7 @@ def handle(user_text: str, image_b64: str | None = None, media_type: str = "imag
 
     nudged = False
     for _ in range(MAX_STEPS):
-        out = llm.chat(system_prompt(voice), messages, tools.TOOLS)
+        out = llm.chat(system_parts(voice), messages, tools.TOOLS)
         if not out["tool_calls"]:
             reply = out["text"].strip()
             if not actions and not nudged and CLAIM.search(reply):

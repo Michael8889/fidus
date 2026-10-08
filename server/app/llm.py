@@ -2,25 +2,50 @@
 
 Trocar de provedor = mudar FIDUS_LLM_PROVIDER no .env. Formato interno neutro:
 mensagens {role, content} e ferramentas {name, description, parameters (JSON Schema)}.
-Resposta: {"text": str, "tool_calls": [{"id", "name", "input"}]}.
+Resposta: {"text": str, "tool_calls": [{"id", "name", "input"}], "usage": {...}}.
+
+`system` pode ser texto ou (parte_fixa, parte_que_muda): a parte fixa (regras + ferramentas) fica em cache na
+Anthropic e custa 10% nas chamadas seguintes; a que muda (data, hora, perfil) vai depois.
+Cada chamada grava tokens e custo no banco do cliente (store.add_usage), para medir o custo por cliente.
 """
 import json
 
 from . import config, store
 
 
-def chat(system: str, messages: list[dict], tools: list[dict], web_search: bool = True) -> dict:
+def chat(system, messages: list[dict], tools: list[dict], web_search: bool = True, model: str | None = None) -> dict:
     if config.LLM_PROVIDER == "anthropic":
-        return _anthropic(system, messages, tools, web_search)
-    if config.LLM_PROVIDER == "openai_compat":
-        return _openai_compat(system, messages, tools)
-    raise ValueError(f"Provedor desconhecido: {config.LLM_PROVIDER}")
+        out = _anthropic(system, messages, tools, web_search, model or config.LLM_MODEL)
+    elif config.LLM_PROVIDER == "openai_compat":
+        sys_text = "\n\n".join(system) if isinstance(system, (tuple, list)) else system
+        out = _openai_compat(sys_text, messages, tools, model or config.LLM_MODEL)
+    else:
+        raise ValueError(f"Provedor desconhecido: {config.LLM_PROVIDER}")
+    try:
+        store.add_usage(out.get("usage") or {})
+    except Exception:  # noqa: BLE001 - medir nunca derruba a resposta
+        pass
+    return out
+
+
+# Preço por milhão de tokens: (entrada, saída, gravar cache 5 min, ler cache). Fonte: tabela de preços da Anthropic
+# (out/2026). Modelos fora da lista usam FIDUS_PRICE_* ou o preço do Sonnet.
+PRICES = {"claude-sonnet-5-5": (2.0, 10.0, 2.5, 0.2), "claude-haiku-4-5": (1.0, 5.0, 1.25, 0.1)}
+SEARCH_PRICE = 10.0 / 1000  # busca na web: US$ 10 por mil
+
+
+def cost_usd(u: dict) -> float:
+    model = u.get("model") or ""
+    p = next((v for k, v in PRICES.items() if model.startswith(k)), None) or config.CUSTOM_PRICES or PRICES["claude-sonnet-5-5"]
+    return round((u.get("input", 0) * p[0] + u.get("output", 0) * p[1] + u.get("cache_write", 0) * p[2]
+                  + u.get("cache_read", 0) * p[3]) / 1_000_000 + u.get("searches", 0) * SEARCH_PRICE, 6)
 
 
 # ---------- Anthropic ----------
-def _anthropic(system, messages, tools, web_search=True):
+def _anthropic(system, messages, tools, web_search=True, model=None):
     import anthropic
 
+    model = model or config.LLM_MODEL
     headers = {"anthropic-workspace-id": config.ANTHROPIC_WORKSPACE_ID} if config.ANTHROPIC_WORKSPACE_ID else None
     client = anthropic.Anthropic(api_key=(config.ANTHROPIC_API_KEY or "").strip(), default_headers=headers)
     msgs = []
@@ -56,6 +81,17 @@ def _anthropic(system, messages, tools, web_search=True):
             msgs.append({"role": m["role"], "content": blocks})
         else:
             msgs.append({"role": m["role"], "content": m["content"]})
+    # cache: regras + ferramentas (parte fixa) e a conversa até aqui (as voltas seguintes do mesmo pedido reaproveitam)
+    if isinstance(system, (tuple, list)):
+        fixed, dynamic = system[0], "\n\n".join(system[1:])
+        system = [{"type": "text", "text": fixed, "cache_control": {"type": "ephemeral"}}] + \
+                 ([{"type": "text", "text": dynamic}] if dynamic else [])
+    if msgs and msgs[-1]["role"] == "user":
+        last = msgs[-1]
+        content = last["content"] if isinstance(last["content"], list) else [{"type": "text", "text": last["content"]}]
+        if content and isinstance(content[-1], dict) and content[-1].get("type") in ("text", "tool_result", "image", "document"):
+            content = content[:-1] + [{**content[-1], "cache_control": {"type": "ephemeral"}}]
+            msgs[-1] = {**last, "content": content}
     api_tools = [{"name": t["name"], "description": t["description"], "input_schema": t["parameters"]} for t in tools]
     if config.WEB_SEARCH and web_search:
         # busca na web feita pela própria Anthropic (opcional; outros provedores seguem sem ela)
@@ -63,17 +99,27 @@ def _anthropic(system, messages, tools, web_search=True):
                           "user_location": {"type": "approximate", "country": config.WEB_SEARCH_COUNTRY,
                                             "timezone": store.user_tz()}})
     raw: list = []
+    usage = {"model": model, "calls": 0, "input": 0, "output": 0, "cache_write": 0, "cache_read": 0, "searches": 0}
+    extra = {"tools": api_tools} if api_tools else {}
     for _ in range(3):  # "pause_turn": a busca longa pede para continuar a mesma resposta
         try:
-            resp = client.messages.create(model=config.LLM_MODEL, max_tokens=4000, system=system,
-                                          messages=msgs, tools=api_tools)
+            resp = client.messages.create(model=model, max_tokens=4000, system=system, messages=msgs, **extra)
         except anthropic.BadRequestError as e:
             if "web_search" not in str(e) or not config.WEB_SEARCH:
                 raise
             config.WEB_SEARCH = False  # busca não liberada nesta conta: segue sem ela
             api_tools = [t for t in api_tools if t.get("name") != "web_search"]
-            resp = client.messages.create(model=config.LLM_MODEL, max_tokens=4000, system=system,
-                                          messages=msgs, tools=api_tools)
+            extra = {"tools": api_tools} if api_tools else {}
+            resp = client.messages.create(model=model, max_tokens=4000, system=system, messages=msgs, **extra)
+        u = getattr(resp, "usage", None)
+        if u is not None:
+            usage["calls"] += 1
+            usage["input"] += getattr(u, "input_tokens", 0) or 0
+            usage["output"] += getattr(u, "output_tokens", 0) or 0
+            usage["cache_write"] += getattr(u, "cache_creation_input_tokens", 0) or 0
+            usage["cache_read"] += getattr(u, "cache_read_input_tokens", 0) or 0
+            stu = getattr(u, "server_tool_use", None)
+            usage["searches"] += (getattr(stu, "web_search_requests", 0) or 0) if stu else 0
         raw += [b.model_dump(exclude_none=True) for b in resp.content]
         if resp.stop_reason != "pause_turn":
             break
@@ -81,11 +127,11 @@ def _anthropic(system, messages, tools, web_search=True):
     blocks = raw
     text = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
     calls = [{"id": b["id"], "name": b["name"], "input": b["input"]} for b in blocks if b.get("type") == "tool_use"]
-    return {"text": text, "tool_calls": calls, "raw": raw}
+    return {"text": text, "tool_calls": calls, "raw": raw, "usage": usage}
 
 
 # ---------- OpenAI-compatível (OpenAI, Mistral, vLLM, Ollama, etc.) ----------
-def _openai_compat(system, messages, tools):
+def _openai_compat(system, messages, tools, model=None):
     from openai import OpenAI
 
     client = OpenAI(base_url=config.OPENAI_COMPAT_BASE_URL, api_key=config.OPENAI_COMPAT_API_KEY or "none")
@@ -106,8 +152,11 @@ def _openai_compat(system, messages, tools):
         else:
             msgs.append({"role": m["role"], "content": m["content"]})
     extra = {"tools": [{"type": "function", "function": t} for t in tools]} if tools else {}
-    resp = client.chat.completions.create(model=config.LLM_MODEL, messages=msgs, **extra)
+    resp = client.chat.completions.create(model=model or config.LLM_MODEL, messages=msgs, **extra)
     choice = resp.choices[0].message
     calls = [{"id": c.id, "name": c.function.name, "input": json.loads(c.function.arguments or "{}")}
              for c in (choice.tool_calls or [])]
-    return {"text": choice.content or "", "tool_calls": calls}
+    u = getattr(resp, "usage", None)
+    usage = {"model": model, "calls": 1, "input": getattr(u, "prompt_tokens", 0) or 0,
+             "output": getattr(u, "completion_tokens", 0) or 0}
+    return {"text": choice.content or "", "tool_calls": calls, "usage": usage}
