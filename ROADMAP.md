@@ -16,6 +16,11 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - Velocidade da voz: medir cada etapa (transcrição, IA, voz) no painel e atacar a mais lenta (respostas curtas no
   modo conversa, começar a falar antes de terminar, modelo leve nos pedidos simples)
 - Política de privacidade e termos de uso (site e app)
+- Parceiros (influenciadores): código próprio por criador (ex. ANA); criador ganha 10% de cada mensalidade paga pelo
+  cliente durante 12 meses, só enquanto o cliente pagar (cancelou, parou); seguidor ganha desconto no 1º mês (20%,
+  ajustável por parceiro; oferta "parceiro" na Play); aba Parceiros no painel com entradas, pagantes e comissão do mês
+- Português de Portugal (pt-PT) como idioma próprio no app, no Fidus e no site
+- Site: página "Membro fundador" (lista de espera com código aplicado) e página "Seja parceiro" (candidatura)
 
 ## Fase 1 — Empresa e contas (em paralelo)
 - [ ] **Você**: conta bancária da empresa
