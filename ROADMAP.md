@@ -3,7 +3,7 @@
 Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude**.
 
 ## Fase 0 — Agora (esta semana)
-- [ ] **Você**: instalar a versão nova (servidor: `deploy-hetzner.ps1`; app: `update-app.ps1`)
+- [x] **Você**: instalar a versão nova (servidor: `deploy-hetzner.ps1`; app: `update-app.ps1`)
 - [ ] **Você**: cadastrar o endereço `/health` do servidor num monitor grátis (UptimeRobot) para alerta se cair
 - [ ] **Você**: convidar sua esposa (menu › Clientes) e usar os dois por 1–2 semanas, anotando o que der errado
 - [ ] **Claude**: corrigir o que aparecer no uso real
