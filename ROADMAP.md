@@ -13,7 +13,9 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [ ] **Você**: Google Cloud: ativar a Google Sheets API + escopo de planilhas; todos tocam em Reconectar Google
 
 ## Anotado para a próxima versão (juntar e rodar uma vez só)
-- (vazio)
+- Velocidade da voz: medir cada etapa (transcrição, IA, voz) no painel e atacar a mais lenta (respostas curtas no
+  modo conversa, começar a falar antes de terminar, modelo leve nos pedidos simples)
+- Política de privacidade e termos de uso (site e app)
 
 ## Fase 1 — Empresa e contas (em paralelo)
 - [ ] **Você**: conta bancária da empresa
