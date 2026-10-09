@@ -24,17 +24,20 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 
 ## Funil Fidus → mentoria (HARVEST Framework) — discreto, por e-mail (nada de mentoria dentro do app)
 - [ ] **Você**: conteúdo com a sua imagem (@michael.gbd) mostrando o Fidus; CTA para baixar com o código MIKE
-- [ ] **Claude**: no cadastro, UMA caixa desmarcada: "Quero receber por e-mail dicas de gestão do Mike e convites da
-      HARVEST, parceira do Fidus" (a mentoria é outra empresa: precisa ser nomeada; LGPD/GDPR/PECR); só o nome e o
-      e-mail de quem marcou vão para a HARVEST; link de descadastro em todo e-mail; política de privacidade cita isso
+- [ ] **Claude**: no cadastro, UMA caixa desmarcada: "Quero receber dicas de gestão e novidades do Fidus por e-mail"
+      (LGPD/GDPR/PECR); tudo sai pelo Fidus, sem citar a HARVEST; a lista fica na Fidus Labs; link de descadastro
 - [ ] **Claude**: newsletter "Notas do Mike" pelo Resend: boas-vindas + sequência automática (dica de gestão +
       dica de uso do Fidus; a cada 3–4 e-mails, convite para o diagnóstico da mentoria); só para quem marcou a caixa;
       nunca usar e-mails, agenda ou gastos do cliente para segmentar
 - [ ] **Claude**: painel › aba Leads (interna): quem aceitou, quem abriu/clicou, quem agendou
-- [x] **Você**: oferta de entrada = diagnóstico gratuito de 30 min; a mentoria fica na HARVEST (empresa separada)
-- [ ] **Você**: nome jurídico e país da HARVEST (para a política de privacidade e o rodapé dos e-mails)
+- [x] **Você**: oferta de entrada = diagnóstico gratuito de 30 min; a mentoria é oferecida pelo Fidus (sem citar a HARVEST)
 
-## Fase 1 — Empresa e contas (em paralelo)
+## Boas-vindas do Fidus (setup em conversa, primeiro uso)
+- [ ] **Claude**: perguntas automáticas no 1º uso (puláveis, por voz ou texto): nome, perfil (autônomo/empresa/
+      ambos), carteiras e moedas, cidade/fuso, prioridades, estilo de resposta, horário do "bom dia"; depois
+      expectativas (o que faz, aprovação antes de enviar, Desfazer, privacidade) e uma primeira tarefa real;
+      última pergunta: dicas por e-mail (opt-in). Respostas viram perfil e carteiras automaticamente
+ Empresa e contas (em paralelo)
 - [ ] **Você**: conta bancária da empresa
 - [ ] **Você**: registro no ICO (proteção de dados, taxa anual pequena)
 - [x] **Você**: busca de marca no Reino Unido (08/10): nenhuma "FIDUS" viva em software (classes 9/42); atenção a
