@@ -52,7 +52,7 @@ def test_owner_dashboard_flow(monkeypatch):
     assert client.get("/admin/api/me").status_code == 401
     b = panel(H)
     me = b.get("/admin/api/me").json()
-    assert me["role"] == "owner" and set(me["screens"]) == {"system", "heart", "business", "clients", "team"}
+    assert me["role"] == "owner" and set(me["screens"]) == {"system", "heart", "business", "clients", "partners", "leads", "team"}
     client.post("/v1/message", json={"text": "oi"}, headers=H)  # gera um pedido medido
     sysd = b.get("/admin/api/system").json()
     assert "series" in sysd and sysd["requests_24h"] >= 1

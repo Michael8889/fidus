@@ -122,6 +122,10 @@ def can_signup(email: str, ref: str | None = None) -> tuple[bool, str | None]:
         return True, inv["plan"]
     if ref and config.REFERRAL_SIGNUP and referrer_for_code(ref) and _ref_signups_today(ref) < REFERRAL_DAILY_CAP:
         return True, None  # indicação de um cliente vale como convite (com limite por dia)
+    if ref and config.REFERRAL_SIGNUP:
+        from . import partners
+        if partners.get(ref):
+            return True, None  # código de criador parceiro também abre o cadastro
     return config.SIGNUP_OPEN, None
 
 
@@ -409,6 +413,9 @@ def apply_referral(invitee_id: str, code: str | None) -> dict:
     from datetime import datetime, timedelta, timezone
     ref = referrer_for_code(code)
     if not ref:
+        from . import partners
+        if partners.get(code):  # código de criador parceiro: desconto no 1º mês e comissão para o criador
+            return partners.link(invitee_id, code)
         return {"error": "código de convite não encontrado"}
     if ref["id"] == invitee_id:
         return {"error": "não dá para usar o próprio código"}

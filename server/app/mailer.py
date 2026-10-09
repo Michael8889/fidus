@@ -16,11 +16,16 @@ def enabled() -> bool:
     return bool(config.RESEND_API_KEY and config.EMAIL_FROM)
 
 
-def _deliver(to: str, subject: str, html_body: str, text: str) -> None:
+def _deliver(to: str, subject: str, html_body: str, text: str, attachments: list | None = None,
+             headers: dict | None = None) -> None:
     import requests
-    r = requests.post("https://api.resend.com/emails", timeout=15,
-                      headers={"Authorization": f"Bearer {config.RESEND_API_KEY}"},
-                      json={"from": config.EMAIL_FROM, "to": [to], "subject": subject, "html": html_body, "text": text})
+    payload = {"from": config.EMAIL_FROM, "to": [to], "subject": subject, "html": html_body, "text": text}
+    if attachments:
+        payload["attachments"] = attachments  # [{"filename": ..., "content": base64}]
+    if headers:
+        payload["headers"] = headers
+    r = requests.post("https://api.resend.com/emails", timeout=30,
+                      headers={"Authorization": f"Bearer {config.RESEND_API_KEY}"}, json=payload)
     if r.status_code >= 300:
         raise RuntimeError(f"Resend {r.status_code}: {r.text[:200]}")
 
@@ -47,12 +52,35 @@ def send(to: str, kind: str, lang: str = "pt", wait: bool = False, **v) -> bool:
     return True
 
 
+def send_raw(to: str, subject: str, body_html: str, attachments: list | None = None, headers: dict | None = None,
+             wait: bool = True, footer: str = "") -> bool:
+    """E-mail montado por quem chama (newsletter, exportação de gastos). Mesmo visual dos outros."""
+    if not enabled() or not to:
+        return False
+    page = _layout(body_html + footer)
+    text = body_html
+    for tag in ("<b>", "</b>", "<p>", "</p>", "<br>"):
+        text = text.replace(tag, "\n" if tag in ("</p>", "<br>") else "")
+    if wait:
+        _deliver(to, subject, page, text, attachments, headers)
+        return True
+    threading.Thread(target=lambda: _safe(to, subject, page, text, attachments, headers), daemon=True).start()
+    return True
+
+
+def _safe(*a) -> None:
+    try:
+        _deliver(*a)
+    except Exception as e:  # noqa: BLE001
+        log.warning("e-mail para %s falhou: %s", a[0], e)
+
+
 def _layout(body: str) -> str:
-    return ('<div style="background:#F4F6F8;padding:32px 12px;font-family:Arial,Helvetica,sans-serif">'
+    return ('<div style="background:#F6F6F5;padding:32px 12px;font-family:Arial,Helvetica,sans-serif">'
             '<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;padding:28px;color:#07090D;'
             'font-size:15px;line-height:1.55"><div style="font-weight:800;font-size:22px;margin-bottom:16px">'
             '<span style="display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:9px;'
-            'background:#3DDC97;color:#07090D;margin-right:8px">F</span>Fidus</div>' + body + '</div></div>')
+            'background:#111111;color:#FFFFFF;margin-right:8px">F</span>Fidus</div>' + body + '</div></div>')
 
 
 _T = {

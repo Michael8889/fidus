@@ -95,4 +95,9 @@ REVENUECAT_ANDROID_KEY = (env("FIDUS_REVENUECAT_ANDROID_KEY", "") or "").strip()
 REVENUECAT_IOS_KEY = (env("FIDUS_REVENUECAT_IOS_KEY", "") or "").strip()
 # E-mails do Fidus para os clientes (código de entrada, boas-vindas, assinatura, convite). Serviço: Resend.
 RESEND_API_KEY = (env("FIDUS_RESEND_API_KEY", "") or "").strip()
+# dados da empresa nas páginas de privacidade e termos (/privacy, /terms)
+COMPANY_ADDRESS = (env("FIDUS_COMPANY_ADDRESS", "") or "").strip()
+SUPPORT_EMAIL = (env("FIDUS_SUPPORT_EMAIL", "") or "").strip()
+# link do diagnóstico gratuito de 30 min (vai nos e-mails de dicas); sem ele, os convites não saem
+MENTOR_BOOKING_URL = (env("FIDUS_MENTOR_BOOKING_URL", "") or "").strip()
 EMAIL_FROM = (env("FIDUS_EMAIL_FROM", "") or "").strip()  # ex. "Fidus <ola@seudominio.com>"

@@ -12,7 +12,7 @@ import threading
 from . import config, llm, store
 
 LANGS = {
-    "pt": "português", "en": "English", "es": "español", "fr": "français", "de": "Deutsch", "it": "italiano",
+    "pt": "português", "pt-pt": "português europeu (de Portugal)", "en": "English", "es": "español", "fr": "français", "de": "Deutsch", "it": "italiano",
     "nl": "Nederlands", "pl": "polski", "ro": "română", "sv": "svenska", "da": "dansk", "nb": "norsk bokmål",
     "fi": "suomi", "cs": "čeština", "sk": "slovenčina", "hu": "magyar", "el": "ελληνικά", "bg": "български",
     "hr": "hrvatski", "sl": "slovenščina", "lt": "lietuvių", "lv": "latviešu", "et": "eesti", "uk": "українська",
@@ -40,7 +40,10 @@ _guard = threading.Lock()
 
 
 def norm(lang: str | None) -> str:
-    code = (lang or "").strip().lower().replace("_", "-").split("-")[0]
+    raw = (lang or "").strip().lower().replace("_", "-")
+    if raw.startswith("pt-pt"):
+        return "pt-pt"  # português de Portugal: idioma próprio (o app é escrito em português do Brasil)
+    code = raw.split("-")[0]
     if code == "no":
         code = "nb"
     return code if code in LANGS else ""
@@ -153,4 +156,4 @@ _MSG = {
 def msg(key: str) -> str:
     lang = store.user_lang()
     d = _MSG[key]
-    return d.get(lang) or d["en" if lang != "pt" else "pt"]
+    return d.get(lang) or d["pt" if lang.startswith("pt") else "en"]

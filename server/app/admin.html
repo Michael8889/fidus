@@ -84,7 +84,13 @@ const T = {
   owner:"Owner", remove:"Remove", audit:"Activity log", when:"When", who:"Who", what:"What", added_by:"Added by",
   team_help:"The person signs in to the Fidus app with this Google account and opens menu › Company dashboard to get a code.",
   confirm_remove:"Remove {0} from the team?", saved:"Saved", loading:"Loading…", na:"—", note_fx:"Estimated from assigned plans until store billing is live; approximate exchange rates.",
-  sessions_expired:"Your session has ended. Sign in again.", code_bad:"Invalid or expired code."},
+  sessions_expired:"Your session has ended. Sign in again.", code_bad:"Invalid or expired code.",
+  partners:"Partners", leads:"Leads", p_title:"Creator partners", p_help:"Creator code (e.g. ANA). Followers get the discount on their first month; the creator earns a share of every payment for the set months, only while the customer keeps paying.",
+  p_code:"Code", p_name:"Name", p_percent:"Commission %", p_discount:"Follower discount %", p_months:"Months", p_signups:"Sign-ups", p_paying:"Paying",
+  p_month:"This month", p_due:"To pay", p_mark:"Mark as paid", p_active:"Active", p_pause:"Pause", p_resume:"Resume", p_confirm:"Mark everything owed to {0} as paid?",
+  l_title:"Email tips list", l_help:"Only people who ticked “send me tips by email”. Never their emails, diary or spending.", l_active:"Subscribed", l_unsub:"Unsubscribed",
+  l_sent:"Emails sent", l_since:"Since", l_work:"Profile", l_prio:"Priorities", l_csv:"Download CSV",
+  voice_speed:"Voice speed (median, 24 h)", voice_stages_help:"transcription · AI thinking · natural voice"},
  pt: {title:"Painel do Fidus", language:"Idioma", logout:"Sair", system:"Sistema", heart:"HEART", business:"Negócio",
   clients:"Clientes", team:"Equipe", signin:"Entrar no painel", signin_help:"No app do Fidus, abra o menu › Painel da empresa e digite aqui o código de 8 letras. Ele vale 5 minutos.",
   enter:"Entrar", all_ok:"Tudo funcionando", problems:"Precisa de atenção", uptime:"No ar há", requests24:"Chamadas (24 h)", asks24:"Pedidos ao Fidus (24 h)",
@@ -108,7 +114,13 @@ const T = {
   owner:"Dono", remove:"Remover", audit:"Registro de atividades", when:"Quando", who:"Quem", what:"O quê", added_by:"Adicionado por",
   team_help:"A pessoa entra no app do Fidus com esse Google e abre menu › Painel da empresa para pegar o código.",
   confirm_remove:"Tirar {0} da equipe?", saved:"Salvo", loading:"Carregando…", na:"—", note_fx:"Estimativa pelos planos atribuídos até a cobrança pela loja estar ligada; câmbio aproximado.",
-  sessions_expired:"Sua sessão terminou. Entre de novo.", code_bad:"Código inválido ou expirado."}
+  sessions_expired:"Sua sessão terminou. Entre de novo.", code_bad:"Código inválido ou expirado.",
+  partners:"Parceiros", leads:"Leads", p_title:"Criadores parceiros", p_help:"Código do criador (ex. ANA). O seguidor ganha o desconto no 1º mês; o criador ganha a porcentagem de cada pagamento pelos meses definidos, só enquanto o cliente pagar.",
+  p_code:"Código", p_name:"Nome", p_percent:"Comissão %", p_discount:"Desconto do seguidor %", p_months:"Meses", p_signups:"Entraram", p_paying:"Pagando",
+  p_month:"Este mês", p_due:"A pagar", p_mark:"Marcar como pago", p_active:"Ativo", p_pause:"Pausar", p_resume:"Reativar", p_confirm:"Marcar tudo o que se deve a {0} como pago?",
+  l_title:"Lista de dicas por e-mail", l_help:"Só quem marcou “quero receber dicas por e-mail”. Nunca os e-mails, a agenda ou os gastos da pessoa.", l_active:"Inscritos", l_unsub:"Saíram",
+  l_sent:"E-mails enviados", l_since:"Desde", l_work:"Perfil", l_prio:"Prioridades", l_csv:"Baixar CSV",
+  voice_speed:"Velocidade da voz (mediana, 24 h)", voice_stages_help:"transcrição · IA pensando · voz natural"}
 };
 let L = "en";
 try { L = localStorage.getItem("fidus_admin_lang") || "en"; } catch (e) {}
@@ -171,12 +183,12 @@ function render() {
       catch (err) { $("#lerr").textContent = /inválido|expir/.test(err.message) ? t("code_bad") : err.message; } };
     return;
   }
-  const order = ["system", "heart", "business", "clients", "team"].filter((s) => ME.screens.includes(s));
+  const order = ["system", "heart", "business", "clients", "partners", "leads", "team"].filter((s) => ME.screens.includes(s));
   if (!TAB || !order.includes(TAB)) TAB = order[0];
   tabs.innerHTML = order.map((s) => `<button data-s="${s}" ${s === TAB ? 'aria-current="page"' : ""}>${esc(t(s))}</button>`).join("");
   tabs.querySelectorAll("button").forEach((b) => b.onclick = () => { TAB = b.dataset.s; render(); });
   $("#main").innerHTML = `<p class="muted">${esc(t("loading"))}</p>`;
-  ({system: showSystem, heart: showHeart, business: showBusiness, clients: showClients, team: showTeam})[TAB]().catch((e) => {
+  ({system: showSystem, heart: showHeart, business: showBusiness, clients: showClients, partners: showPartners, leads: showLeads, team: showTeam})[TAB]().catch((e) => {
     $("#main").innerHTML = `<div class="banner bad">${esc(e.message)}</div>`; });
 }
 
@@ -194,6 +206,7 @@ async function showSystem() {
       ${card(t("disk"), d.disk_free_gb == null ? t("na") : num(d.disk_free_gb, 1) + " GB", `${esc(t("uptime"))}: ${up} · v${esc(d.version)}`)}
       ${card(t("google"), `${num(d.google_connected)} / ${num(d.accounts)}`, esc(d.model))}
       ${card(t("ai_today"), money(d.ai_cost_today_usd, "USD"))}
+      ${d.voice_stages ? card(t("voice_speed"), ["transcricao", "ia", "voz"].map((k) => d.voice_stages[k] && d.voice_stages[k].p50 != null ? num(d.voice_stages[k].p50 / 1000, 1) + " s" : "—").join(" · "), esc(t("voice_stages_help"))) : ""}
     </div>
     <div class="grid" style="margin-top:12px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
       <div class="card"><h3>${esc(t("requests_chart"))}</h3>${chart(d.series, ["requests"], ["var(--mint)"])}</div>
@@ -279,6 +292,55 @@ async function showClients() {
     </tbody></table></div>`;
   document.querySelectorAll("[data-plan]").forEach((s) => s.onchange = async () => { await api(`clients/${s.dataset.plan}/plan`, {method: "POST", body: JSON.stringify({plan: s.value})}); showClients(); });
   document.querySelectorAll("[data-status]").forEach((b) => b.onclick = async () => { await api(`clients/${b.dataset.status}/status`, {method: "POST", body: JSON.stringify({status: b.dataset.to})}); showClients(); });
+}
+
+const curr = (o) => Object.entries(o || {}).map(([c, v]) => money(v, c)).join(" · ") || "—";
+
+async function showPartners() {
+  const d = await api("partners");
+  $("#main").innerHTML = `<div class="sec" style="margin-top:0">${esc(t("p_title"))}</div>
+    ${d.can_manage ? `<form class="card row" id="pf"><p class="small" style="width:100%;margin:0">${esc(t("p_help"))}</p>
+      <label class="small">${esc(t("p_code"))}<input id="pc" required maxlength="12" style="display:block;width:110px;text-transform:uppercase"></label>
+      <label class="small">${esc(t("p_name"))}<input id="pn" required maxlength="80" style="display:block"></label>
+      <label class="small">${esc(t("email"))}<input id="pe" type="email" maxlength="120" style="display:block"></label>
+      <label class="small">${esc(t("p_percent"))}<input id="pp" type="number" min="1" max="50" value="10" style="display:block;width:80px"></label>
+      <label class="small">${esc(t("p_discount"))}<input id="pd" type="number" min="0" max="100" value="20" style="display:block;width:80px"></label>
+      <label class="small">${esc(t("p_months"))}<input id="pm" type="number" min="1" max="36" value="12" style="display:block;width:70px"></label>
+      <button class="btn">${esc(t("add"))}</button><span id="perr" class="err"></span></form>` : ""}
+    <div class="card tablebox" style="margin-top:12px"><table><thead><tr><th>${esc(t("p_code"))}</th><th>${esc(t("p_name"))}</th><th>%</th>
+      <th>${esc(t("p_signups"))}</th><th>${esc(t("p_paying"))}</th><th>${esc(t("p_month"))}</th><th>${esc(t("p_due"))}</th><th></th></tr></thead><tbody>
+      ${d.partners.map((p) => `<tr><td><b>${esc(p.code)}</b>${p.active ? "" : ` <span class="pill">${esc(t("p_pause"))}</span>`}</td>
+        <td>${esc(p.name)}<div class="small">${esc(p.email || "")}</div></td><td class="small">${p.percent}% · −${p.discount}% · ${p.months}m</td>
+        <td>${num(p.signups)}</td><td>${num(p.paying)}</td><td>${curr(p.this_month)}</td><td><b>${curr(p.due)}</b></td>
+        <td><div class="row">${Object.keys(p.due || {}).length ? `<button class="btn ghost" data-paid="${esc(p.code)}">${esc(t("p_mark"))}</button>` : ""}
+          ${d.can_manage ? `<button class="btn ghost" data-act="${esc(p.code)}" data-to="${p.active ? "0" : "1"}">${esc(t(p.active ? "p_pause" : "p_resume"))}</button>` : ""}</div></td></tr>`).join("")
+        || `<tr><td colspan="8" class="muted">${esc(t("none"))}</td></tr>`}
+    </tbody></table></div>`;
+  const f = $("#pf");
+  if (f) f.onsubmit = async (e) => { e.preventDefault();
+    try { await api("partners", {method: "POST", body: JSON.stringify({code: $("#pc").value, name: $("#pn").value, email: $("#pe").value,
+      percent: +$("#pp").value, discount: +$("#pd").value, months: +$("#pm").value})}); showPartners(); }
+    catch (err) { $("#perr").textContent = err.message; } };
+  document.querySelectorAll("[data-paid]").forEach((b) => b.onclick = async () => {
+    if (!confirm(t("p_confirm", b.dataset.paid))) return;
+    await api(`partners/${encodeURIComponent(b.dataset.paid)}/paid`, {method: "POST"}); showPartners(); });
+  document.querySelectorAll("[data-act]").forEach((b) => b.onclick = async () => {
+    await api(`partners/${encodeURIComponent(b.dataset.act)}/active`, {method: "POST", body: JSON.stringify({active: b.dataset.to === "1"})}); showPartners(); });
+}
+
+async function showLeads() {
+  const d = await api("leads");
+  $("#main").innerHTML = `<div class="sec" style="margin-top:0">${esc(t("l_title"))}</div>
+    <p class="small muted">${esc(t("l_help"))}</p>
+    <div class="grid">${card(t("l_active"), num(d.active))}${card(t("l_unsub"), num(d.unsubscribed))}</div>
+    <p><a class="btn ghost" href="/admin/api/leads.csv">${esc(t("l_csv"))}</a></p>
+    <div class="card tablebox"><table><thead><tr><th>${esc(t("email"))}</th><th>${esc(t("l_work"))}</th><th>${esc(t("l_prio"))}</th>
+      <th>${esc(t("l_since"))}</th><th>${esc(t("l_sent"))}</th><th>${esc(t("status"))}</th></tr></thead><tbody>
+      ${d.leads.map((l) => `<tr><td>${esc(l.email)}<div class="small">${esc(l.name || "")} ${esc(l.country || "")} ${esc(l.lang || "")}</div></td>
+        <td>${esc(l.work_type || "—")}</td><td class="small">${esc(l.priorities || "—")}</td><td>${dateIso(l.consent_at)}</td>
+        <td>${num(l.step)} / ${num(d.sequence_len)}</td><td>${l.consent ? `<span class="pill green">${esc(t("l_active"))}</span>` : `<span class="pill">${esc(t("l_unsub"))}</span>`}</td></tr>`).join("")
+        || `<tr><td colspan="6" class="muted">${esc(t("none"))}</td></tr>`}
+    </tbody></table></div>`;
 }
 
 async function showTeam() {

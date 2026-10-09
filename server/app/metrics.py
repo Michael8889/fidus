@@ -55,6 +55,8 @@ def db() -> sqlite3.Connection:
                             expires REAL NOT NULL, used INTEGER NOT NULL DEFAULT 0);
                         CREATE TABLE IF NOT EXISTS audit (ts REAL NOT NULL, email TEXT, action TEXT, target TEXT);
                         CREATE TABLE IF NOT EXISTS client_info (user_id TEXT PRIMARY KEY, caps TEXT, ts REAL NOT NULL);
+                        CREATE TABLE IF NOT EXISTS stages (ts REAL NOT NULL, stage TEXT NOT NULL, ms INTEGER NOT NULL);
+                        CREATE INDEX IF NOT EXISTS stages_ts ON stages(ts);
                     """)
                 _ready.add(p)
     c = sqlite3.connect(p, timeout=5)
@@ -163,6 +165,22 @@ def nps_due(user_id: str, created_at: str | None) -> bool:
     return used >= 5 and (not last or time.time() - last > 30 * 86400)
 
 
+def record_stage(stage: str, ms: int) -> None:
+    """Tempo de cada etapa (transcricao, ia, voz): mostra no painel onde a voz demora."""
+    _enqueue("INSERT INTO stages(ts,stage,ms) VALUES(?,?,?)", (time.time(), stage[:20], int(ms)))
+
+
+def stage_p50(hours: int = 24) -> dict:
+    flush()
+    out = {}
+    with db() as c:
+        for st in ("transcricao", "ia", "voz"):
+            vals = [r[0] for r in c.execute("SELECT ms FROM stages WHERE stage=? AND ts>? ORDER BY ms",
+                                             (st, time.time() - hours * 3600))]
+            out[st] = {"p50": vals[len(vals) // 2] if vals else None, "n": len(vals)}
+    return out
+
+
 def set_client(user_id: str, caps: str) -> None:
     """O que o app do cliente tem (APK com transcrição no celular, voz, versão): para o painel e para o suporte."""
     import re as _re
@@ -180,7 +198,7 @@ def client_caps() -> dict:
 def purge_old() -> None:
     limit = time.time() - KEEP_DAYS * 86400
     with db() as c:
-        for t in ("requests", "tasks", "errors"):
+        for t in ("requests", "tasks", "errors", "stages"):
             c.execute(f"DELETE FROM {t} WHERE ts<?", (limit,))
         c.execute("DELETE FROM admin_sessions WHERE expires<?", (time.time(),))
         c.execute("DELETE FROM panel_codes WHERE expires<?", (time.time(),))

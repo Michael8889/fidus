@@ -4,7 +4,8 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 
 ## Fase 0 — Agora (esta semana)
 - [x] **Você**: instalar a versão nova (servidor: `deploy-hetzner.ps1`; app: `update-app.ps1`)
-- [ ] **Você**: instalar a v0.9.6 (servidor + `update-app.ps1`) e gerar/instalar o APK novo (`build-apk.ps1`)
+- [ ] **Você**: instalar a v0.10 (servidor + `update-app.ps1`) e gerar/instalar o APK novo (`build-apk.ps1`)
+- [ ] **Você**: no `server\.env`: `FIDUS_COMPANY_ADDRESS`, `FIDUS_SUPPORT_EMAIL`, `FIDUS_MENTOR_BOOKING_URL`
 - [ ] **Você**: Google Cloud: ativar a Cloud Text-to-Speech API, criar chave restrita e pôr `FIDUS_GOOGLE_TTS_KEY` no `server\.env`
 - [ ] **Você**: cadastrar o endereço `/health` do servidor num monitor grátis (UptimeRobot) para alerta se cair
 - [ ] **Você**: convidar sua esposa (menu › Clientes) e usar os dois por 1–2 semanas, anotando o que der errado
@@ -13,34 +14,35 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [ ] **Você**: Google Cloud: ativar a Google Sheets API + escopo de planilhas; todos tocam em Reconectar Google
 
 ## Anotado para a próxima versão (juntar e rodar uma vez só)
-- Velocidade da voz: medir cada etapa (transcrição, IA, voz) no painel e atacar a mais lenta (respostas curtas no
-  modo conversa, começar a falar antes de terminar, modelo leve nos pedidos simples)
-- Política de privacidade e termos de uso (site e app)
-- Parceiros (influenciadores): código próprio por criador (ex. ANA); criador ganha 10% de cada mensalidade paga pelo
-  cliente durante 12 meses, só enquanto o cliente pagar (cancelou, parou); seguidor ganha desconto no 1º mês (20%,
-  ajustável por parceiro; oferta "parceiro" na Play); aba Parceiros no painel com entradas, pagantes e comissão do mês
-- Português de Portugal (pt-PT) como idioma próprio no app, no Fidus e no site
 - Site: página "Membro fundador" (lista de espera com código aplicado) e página "Seja parceiro" (candidatura)
+- Voz ainda mais rápida conforme a medição do painel (começar a falar antes de terminar, etc.)
 
 ## Funil Fidus → mentoria (HARVEST Framework) — discreto, por e-mail (nada de mentoria dentro do app)
 - [ ] **Você**: conteúdo com a sua imagem (@michael.gbd) mostrando o Fidus; CTA para baixar com o código MIKE
-- [ ] **Claude**: no cadastro, UMA caixa desmarcada: "Quero receber dicas de gestão e novidades do Fidus por e-mail"
+- [x] **Claude**: nas boas-vindas, UMA pergunta opcional: "Quero receber dicas de gestão e novidades do Fidus por e-mail"
       (LGPD/GDPR/PECR); tudo sai pelo Fidus, sem citar a HARVEST; a lista fica na Fidus Labs; link de descadastro
-- [ ] **Claude**: newsletter "Notas do Mike" pelo Resend: boas-vindas + sequência automática (dica de gestão +
+- [x] **Claude**: newsletter "Notas do Mike" pelo Resend: boas-vindas + sequência automática (dica de gestão +
       dica de uso do Fidus; a cada 3–4 e-mails, convite para o diagnóstico da mentoria); só para quem marcou a caixa;
       nunca usar e-mails, agenda ou gastos do cliente para segmentar
-- [ ] **Claude**: painel › aba Leads (interna): quem aceitou, quem abriu/clicou, quem agendou
+- [x] **Claude**: painel › aba Leads (interna) + CSV
+- [ ] **Você**: revisar os textos em `server/app/newsletter.json` com a sua voz
 - [x] **Você**: oferta de entrada = diagnóstico gratuito de 30 min; a mentoria é oferecida pelo Fidus (sem citar a HARVEST)
 
 ## Boas-vindas do Fidus (setup em conversa, primeiro uso)
-- [ ] **Claude**: perguntas automáticas no 1º uso (puláveis, por voz ou texto): nome, perfil (autônomo/empresa/
+- [x] **Claude**: perguntas automáticas no 1º uso (puláveis, por voz ou texto): nome, perfil (autônomo/empresa/
       ambos), carteiras e moedas, cidade/fuso, prioridades, estilo de resposta, horário do "bom dia"; depois
       expectativas (o que faz, aprovação antes de enviar, Desfazer, privacidade) e uma primeira tarefa real;
       última pergunta: dicas por e-mail (opt-in). Respostas viram perfil e carteiras automaticamente
-- [ ] **Claude**: as perguntas ADAPTADAS a cada idioma, não traduzidas ao pé da letra: exemplos locais (UK: "£30 of
+- [x] **Claude**: as perguntas ADAPTADAS a cada idioma, não traduzidas ao pé da letra: exemplos locais (UK: "£30 of
       petrol", "HomB in pounds"; PT-PT: "telemóvel", "combustível", euros; BR: reais, "gasolina"), moeda e cidade do
       país do celular como sugestão, tratamento certo (você / tu / you); revisar EN, PT-BR, PT-PT e ES à mão
- Empresa e contas (em paralelo)
+
+## Parceiros (criadores)
+- [x] **Claude**: códigos de criador, desconto no 1º mês, 10% por 12 meses, aba Parceiros no painel (v0.10)
+- [ ] **Você**: na Play, oferta de desconto no 1º mês com a etiqueta `parceiro` em cada assinatura
+- [ ] **Você**: listar 5 a 10 criadores (PT, BR no Reino Unido/Portugal); Claude prepara abordagem e contrato simples
+
+## Fase 1 — Empresa e contas (em paralelo)
 - [ ] **Você**: conta bancária da empresa
 - [ ] **Você**: registro no ICO (proteção de dados, taxa anual pequena)
 - [x] **Você**: busca de marca no Reino Unido (08/10): nenhuma "FIDUS" viva em software (classes 9/42); atenção a
@@ -52,7 +54,7 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [ ] **Você**: conta RevenueCat + assinaturas na Play (passo a passo no README › Assinaturas)
 
 ## Fase 2 — Google libera o Gmail para o público
-- [ ] **Claude**: política de privacidade e termos de uso no site (revisão de um advogado recomendada)
+- [x] **Claude**: política de privacidade e termos de uso (`/privacy`, `/terms`, EN e PT; revisão de advogado recomendada)
 - [ ] **Você**: no Google Cloud, mudar o app para "Externo", preencher a verificação e contratar a avaliação de
       segurança CASA (exigida para Gmail; leva semanas — começar assim que a empresa existir)
 - [ ] **Você + Claude**: enquanto isso, beta pago fechado com até 100 usuários de teste
@@ -73,6 +75,8 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [ ] Lançamento aberto e anúncios
 
 ## Já feito
+- [x] v0.10: boas-vindas em conversa, dicas por e-mail + Leads, parceiros, português de Portugal, privacidade e termos,
+      exportar gastos para o próprio e-mail, medição da voz, cartão de e-mail com o visual de antes
 - [x] v0.9.9: visual limpo (neutros, preto como cor de ação, ícones de linha, resposta sem balão, modo escuro grafite)
 - [x] v0.9.6: transcrição no celular (modo conversa mais rápido) e voz natural do Google (feminina/masculina)
 - [x] v0.9.5: carteiras nos gastos (moeda própria, filtro, exportar por carteira), áudio respondido em voz alta,

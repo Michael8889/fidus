@@ -33,7 +33,7 @@ const SpeechRec: any = opt(() => require("expo-speech-recognition").ExpoSpeechRe
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},js=0.9.9,ota=${UPDATE_ID.slice(0, 8)}`;
+const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},js=0.10.0,ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
 
@@ -61,11 +61,11 @@ function deviceTimezone(): string | null {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; }
 }
 const LANG_CHOICES: [string, string][] = [
-  ["pt", "Português"], ["en", "English"], ["es", "Español"], ["fr", "Français"], ["de", "Deutsch"], ["it", "Italiano"],
+  ["pt", "Português (Brasil)"], ["pt-pt", "Português (Portugal)"], ["en", "English"], ["es", "Español"], ["fr", "Français"], ["de", "Deutsch"], ["it", "Italiano"],
   ["nl", "Nederlands"], ["pl", "Polski"], ["ro", "Română"], ["ms", "Bahasa Melayu"], ["id", "Bahasa Indonesia"],
   ["tr", "Türkçe"], ["ar", "العربية"], ["hi", "हिन्दी"], ["zh", "中文"], ["ja", "日本語"],
 ];
-const TTS_LOCALE: Record<string, string> = { pt: "pt-BR", en: "en-GB", es: "es-ES", fr: "fr-FR", de: "de-DE", it: "it-IT" };
+const TTS_LOCALE: Record<string, string> = { pt: "pt-BR", "pt-pt": "pt-PT", en: "en-GB", es: "es-ES", fr: "fr-FR", de: "de-DE", it: "it-IT" };
 // textos que vêm do servidor em português (planos): listados aqui para entrarem na tradução
 const _SERVER_TEXTS = () => [
   t("Voz e texto sem limite"), t("Agenda, lembretes e bom dia"), t("E-mail com aprovação"), t("Gastos e recibos de 1 carteira"),
@@ -162,7 +162,8 @@ type Item =
   | { id: string; type: "action"; action: Action }
   | { id: string; type: "doc"; doc: Doc }
   | { id: string; type: "upsell"; up: Upsell }
-  | { id: string; type: "nps" };
+  | { id: string; type: "nps" }
+  | { id: string; type: "onb"; q: any };
 type Screen = "chat" | "convs" | "tasks" | "docs" | "meetings" | "expenses" | "booking" | "activity" | "invite" | "admin" | "settings" | "panel";
 
 // Visual limpo: neutros + uma única cor de ação (preto no claro, quase branco no escuro).
@@ -440,8 +441,8 @@ function EmailCard({ a, c, dark, onSend, onCancel, onSave, onCopy, onEditing }: 
           onPress={() => onCopy(`${t("Para")}: ${to}\n${t("Assunto")}: ${subject}\n\n${body.replace(/\*\*/g, "")}`)}>
           <CopyIcon color={c.sub} /></Pressable>
         {pending && !editing && (
-          <Pressable onPress={onSend} accessibilityLabel={t("Enviar")} style={[s.sendBlue, { backgroundColor: NAVY }]}>
-            <ArrowUpIcon color={ON_INK} size={16} /></Pressable>)}
+          <Pressable onPress={onSend} accessibilityLabel={t("Enviar")} style={[s.sendBlue, { backgroundColor: BLUE }]}>
+            <ArrowUpIcon color="#fff" size={16} /></Pressable>)}
         {!!statusText && <Text style={{ color: a.status === "sent" ? GREEN : c.sub, fontSize: 12, fontWeight: "600", marginLeft: 6 }}>{statusText}</Text>}
       </View>
       {editing ? (
@@ -457,9 +458,9 @@ function EmailCard({ a, c, dark, onSend, onCancel, onSave, onCopy, onEditing }: 
             <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => {
               setTo(a.payload.to); setSubject(a.payload.subject); setBody(a.payload.body); setEditing(false); }}>
               <Text style={{ color: c.text }}>{t("Cancelar")}</Text></Pressable>
-            <Pressable style={s.primarySm} onPress={async () => {
+            <Pressable style={[s.primarySm, { backgroundColor: BLUE }]} onPress={async () => {
               if (await onSave({ to, subject, body })) setEditing(false); }}>
-              <Text style={s.primaryText}>{t("Salvar")}</Text></Pressable>
+              <Text style={{ color: "#fff", fontWeight: "600" }}>{t("Salvar")}</Text></Pressable>
           </View>
         </View>
       ) : (<>
@@ -563,6 +564,9 @@ function FidusApp() {
   const [fb, setFb] = useState<Record<string, number>>({});
   const [npsScore, setNpsScore] = useState<number | null>(null);
   const [npsText, setNpsText] = useState("");
+  const [onbQ, setOnbQ] = useState<any>(null);       // pergunta das boas-vindas em andamento
+  const [onbSel, setOnbSel] = useState<string[]>([]); // escolhas da pergunta de várias opções
+  const [mkt, setMkt] = useState<boolean | null>(null); // dicas por e-mail
   const [panel, setPanel] = useState<any>(null);
   const [authOpts, setAuthOpts] = useState<any>(null);
   const [emailMode, setEmailMode] = useState(false);
@@ -592,7 +596,8 @@ function FidusApp() {
 
   // ---------- Idioma ----------
   async function loadLang(lang: string) {
-    LANG = (lang || "pt").split("-")[0].toLowerCase();
+    const raw = (lang || "pt").toLowerCase().replace("_", "-");
+    LANG = raw.startsWith("pt-pt") ? "pt-pt" : raw.split("-")[0];  // português de Portugal tem tradução própria
     if (LANG === "pt") { TR = {}; bump(); return; }
     let cacheFile: any = null;
     try {
@@ -627,6 +632,42 @@ function FidusApp() {
     const hide = Keyboard.addListener("keyboardDidHide", () => setKb(0));
     return () => { show.remove(); hide.remove(); };
   }, []);
+
+  // ---------- Boas-vindas (o Fidus pergunta e já configura) ----------
+  async function startOnboarding(restart = false) {
+    try {
+      const q = restart ? await post("/v1/onboarding/restart", {}, 15000) : await api("/v1/onboarding", {}, 15000);
+      if (!q || q.done) return;
+      if (q.intro) push({ id: uid(), type: "fidus", text: q.intro });
+      showOnb(q);
+    } catch { /* servidor antigo: segue sem boas-vindas */ }
+  }
+
+  function showOnb(q: any) {
+    setOnbQ(q); setOnbSel([]);
+    push({ id: uid(), type: "onb", q });
+  }
+
+  async function onbAnswer(value: any, label?: string, skip = false) {
+    const q = onbQ;
+    if (!q) return;
+    push({ id: uid(), type: "user", text: skip ? q.skip : (label ?? String(value)) });
+    setOnbQ(null);
+    try {
+      const r = await post("/v1/onboarding/answer", { step: q.step, value: skip ? null : value, skip }, 60000);
+      for (const n of r.notes || []) push({ id: uid(), type: "fidus", text: n });
+      if (r.done) {
+        for (const m of r.messages || []) push({ id: uid(), type: "fidus", text: m });
+        try {
+          const m = await api("/v1/me", {}, 15000); setMe(m);
+          if (m.language && m.language !== LANG) loadLang(m.language);
+          await SecureStore.deleteItemAsync("notifV"); setupNotifications(m.profile?.briefing_time);
+        } catch {}
+        return;
+      }
+      showOnb(r);
+    } catch (e: any) { setOnbQ(q); fail(errMsg(e)); }
+  }
 
   async function loadHistory(): Promise<any[] | null> {
     try {
@@ -672,12 +713,17 @@ function FidusApp() {
         }
         catch { await new Promise((r) => setTimeout(r, 3000)); }
       }
-      await loadHistory();
+      const hist = await loadHistory();
       await loadWaitingDrafts();
+      let onb = false;
+      try {
+        const m2 = await api("/v1/me", {}, 15000);
+        if (m2?.onboarding_pending && (!hist || hist.length === 0)) { onb = true; await startOnboarding(); }
+      } catch { /* servidor antigo */ }
       const n = new Date();
       const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
       try {
-        if ((await SecureStore.getItemAsync("lastBrief")) !== today) {
+        if (!onb && (await SecureStore.getItemAsync("lastBrief")) !== today) {
           const b = await api("/v1/briefing", {}, 45000);
           if (b?.text) { push({ id: uid(), type: "fidus", text: b.text }); await SecureStore.setItemAsync("lastBrief", today); }
         }
@@ -825,7 +871,7 @@ function FidusApp() {
   }
 
   // Avisos agendados no próprio celular (não precisa de Firebase): bom dia às 8h e semana na segunda
-  async function setupNotifications() {
+  async function setupNotifications(briefing?: string) {
     if (!Notifications) return;
     try {
       Notifications.setNotificationHandler({
@@ -835,14 +881,18 @@ function FidusApp() {
         await Notifications.setNotificationChannelAsync("fidus", { name: "Fidus", importance: Notifications.AndroidImportance.HIGH });
       const perm = await Notifications.requestPermissionsAsync();
       if (!perm.granted) return;
-      const ver = `2-${LANG}`;  // agenda de novo quando o idioma muda
+      const bt = briefing ?? me?.profile?.briefing_time ?? "08:00";
+      const ver = `3-${LANG}-${bt}`;  // agenda de novo quando o idioma ou o horário mudam
       if ((await SecureStore.getItemAsync("notifV")) === ver) return;
       await Notifications.cancelAllScheduledNotificationsAsync();
       const T = Notifications.SchedulableTriggerInputTypes;
-      await Notifications.scheduleNotificationAsync({
-        content: { title: t("Bom dia ☀️"), body: t("Sua agenda, tarefas e contas de hoje estão prontas no Fidus.") },
-        trigger: { type: T.DAILY, hour: 8, minute: 0, channelId: "fidus" },
-      });
+      if (bt !== "off") {
+        const [hh, mm] = (/^\d{2}:\d{2}$/.test(bt) ? bt : "08:00").split(":").map(Number);
+        await Notifications.scheduleNotificationAsync({
+          content: { title: t("Bom dia ☀️"), body: t("Sua agenda, tarefas e contas de hoje estão prontas no Fidus.") },
+          trigger: { type: T.DAILY, hour: hh, minute: mm, channelId: "fidus" },
+        });
+      }
       await Notifications.scheduleNotificationAsync({
         content: { title: t("Sua semana com o Fidus 📊"), body: t("Veja o que foi resolvido e o que vem pela frente.") },
         trigger: { type: T.WEEKLY, weekday: 2, hour: 8, minute: 5, channelId: "fidus" },
@@ -1034,6 +1084,7 @@ function FidusApp() {
 
   function ttsLanguage() {
     const dev = deviceLocale();
+    if (LANG === "pt-pt") return "pt-PT";
     return dev.split("-")[0].toLowerCase() === LANG ? dev : (TTS_LOCALE[LANG] || LANG);
   }
 
@@ -1513,6 +1564,12 @@ function FidusApp() {
     try {
       const audio_b64 = await new File(uri).base64();
       const ext = (uri.match(/\.[a-z0-9]+$/i)?.[0] || ".m4a").toLowerCase();
+      if (onbQ) {  // boas-vindas: só transcreve e usa como resposta
+        const tr = await post("/v1/voice_b64", { audio_b64, ext, transcribe_only: true }, 120000);
+        setBusy(false); setActiveReq("");
+        if (tr.transcript) await onbAnswer(tr.transcript);
+        return;
+      }
       const r = await post("/v1/voice_b64", { audio_b64, ext, drafts: visibleDrafts(), speak: canSpeak && speakAudio, request_id: rid });
       if (cancelledReqs.current.has(rid)) return;
       showResult(r);
@@ -1583,6 +1640,7 @@ function FidusApp() {
     if (busy) return;
     try { Speech?.stop(); } catch {}
     stopClip();
+    if (onbQ && !preset) { setTyped(""); return onbAnswer(text); }
     if (!preset) setTyped("");
     setBusy(true);
     push({ id: uid(), type: "user", text });  // aparece na hora
@@ -1721,12 +1779,13 @@ function FidusApp() {
     ]);
   }
 
-  async function exportWallet(month: string) {
+  async function exportWallet(month: string, email = false) {
     try {
-      const r = await post("/v1/expenses/export", { month, wallet: expWallet || null }, 60000);
+      const r = await post("/v1/expenses/export", { month, wallet: expWallet || null, email }, 90000);
       if (r.locked) return setExpLock(r);
+      if (email) return Alert.alert(t("Enviado"), t("Mandei o arquivo para {0}.", r.emailed_to));
       await Linking.openURL(r.url);
-    } catch (e: any) { Alert.alert(t("Contador"), errMsg(e)); }
+    } catch (e: any) { Alert.alert(t("Exportar"), errMsg(e)); }
   }
 
   async function loadScreen(sc: Screen, arg?: string) {
@@ -1746,6 +1805,7 @@ function FidusApp() {
         const m = await api("/v1/me", {}, 15000); setMe(m); setNameEdit(m.profile?.name || m.name || "");
         setPendingMeet(await SecureStore.getItemAsync("pendingMeeting"));
         try { setDevice(await api("/v1/auth/device", {}, 10000)); } catch {}
+        try { setMkt((await api("/v1/marketing", {}, 10000)).yes); } catch { setMkt(null); }
       }
     } catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
     finally { setLoadingScreen(false); }
@@ -1858,7 +1918,8 @@ function FidusApp() {
         const pkgs = (off?.current?.availablePackages || []).filter((k: any) => String(k.product?.identifier || "").includes(planId));
         if (pkgs.length) {
           const label = (k: any) => `${k.packageType === "ANNUAL" ? t("Anual") : k.packageType === "MONTHLY" ? t("Mensal") : (k.product?.title || "")} · ${k.product?.priceString || ""}`;
-          return setSheet({ title: t("Plano {0}", t(p.name)) + (billing?.referral_trial ? ` · ${t("convite: dias grátis")}` : ""),
+          return setSheet({ title: t("Plano {0}", t(p.name)) + (billing?.offer_kind === "partner_discount" ? ` · ${t("{0}% de desconto no 1º mês", billing.offer_discount)}`
+            : billing?.referral_trial ? ` · ${t("convite: dias grátis")}` : ""),
             items: pkgs.map((k: any) => [label(k), () => buy(k, planId, p.name)] as [string, () => void]) });
         }
       } catch (e: any) { console.log("[Fidus] ofertas", e?.message ?? e); }
@@ -2193,7 +2254,10 @@ function FidusApp() {
           {!!e && !e.count && !e.bills?.length && <Empty text={t("Nenhum gasto neste mês.\nDiga “paguei 30 libras de gasolina” ou mande a foto do recibo.")} />}
           {!!e?.count && (
             <Pressable style={[s.secondary, { borderColor: c.line, alignItems: "center" }]} onPress={() => exportWallet(month)}>
-              <Text style={{ color: c.text }}>📦 {expWallet ? t("Exportar {0} para o contador", expWallet) : t("Exportar o mês para o contador")}</Text></Pressable>)}
+              <Text style={{ color: c.text }}>{expWallet ? t("Exportar {0} para o contador", expWallet) : t("Exportar o mês para o contador")}</Text></Pressable>)}
+          {!!e?.count && (
+            <Pressable style={[s.secondary, { borderColor: c.line, alignItems: "center" }]} onPress={() => exportWallet(month, true)}>
+              <Text style={{ color: c.text }}>{t("Enviar para o meu e-mail")}</Text></Pressable>)}
           {!!e?.wallets && <Text style={{ color: c.sub, fontSize: 12, textAlign: "center" }}>{t("Toque e segure uma carteira para remover.")}</Text>}
         </ScrollView>
       );
@@ -2321,6 +2385,14 @@ function FidusApp() {
             <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Voz do Fidus")}</Text>
               <Text style={{ color: c.sub, fontSize: 14 }}>{t("Toque para trocar")}</Text></View>
             <Text style={{ color: c.text, fontWeight: "700" }}>{me.voice_gender === "male" ? t("Masculina") : t("Feminina")}</Text></Card>)}
+        {mkt !== null && (
+          <Card c={c} onPress={async () => {
+            try { const r = await post("/v1/marketing", { yes: !mkt }, 15000); setMkt(r.yes); flash(r.yes ? t("Ligado") : t("Desligado")); }
+            catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
+          }}>
+            <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Dicas por e-mail")}</Text>
+              <Text style={{ color: c.sub, fontSize: 14 }}>{t("Dicas de gestão e novidades do Fidus. Sai quando quiser.")}</Text></View>
+            <Text style={{ color: mkt ? GREEN : c.sub, fontWeight: "700" }}>{mkt ? t("Ligado") : t("Ligar")}</Text></Card>)}
         <Card c={c} onPress={toggleSpeakAudio}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Responder áudios em voz alta")}</Text>
             <Text style={{ color: c.sub, fontSize: 14 }}>{!canSpeak ? t("Disponível no app atualizado") : speakAudio ? t("Ligado: quando você manda áudio, o Fidus responde falando") : t("Desligado: respostas só por escrito")}</Text></View>
@@ -2336,9 +2408,17 @@ function FidusApp() {
           <Text style={{ color: c.sub, fontSize: 12, marginTop: 6 }}>
             {SpeechRec ? "✅" : "❌"} {t("Transcrição no celular")}{SpeechRec ? "" : ` (${t("precisa do APK novo")})`}{"\n"}
             {me?.natural_voice ? "✅" : "❌"} {t("Voz natural")}{me?.natural_voice ? "" : ` (${t("falta a chave no servidor")})`}{"\n"}
-            {t("Versão")}: 0.9.9 · {UPDATE_ID.slice(0, 8)}</Text>
+            {t("Versão")}: 0.10.0 · {UPDATE_ID.slice(0, 8)}</Text>
           <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
         </Card>
+        <Card c={c} onPress={() => { setScreen("chat"); startOnboarding(true); }}>
+          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Refazer as boas-vindas")}</Text>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{t("O Fidus pergunta de novo como você trabalha e se ajusta.")}</Text></View>
+          <Text style={{ color: c.sub }}>›</Text></Card>
+        <View style={{ flexDirection: "row", justifyContent: "center", gap: 18, paddingVertical: 4 }}>
+          <Pressable onPress={() => Linking.openURL(`${base()}/privacy?lang=${LANG}`)}><Text style={{ color: c.sub, fontSize: 13 }}>{t("Privacidade")}</Text></Pressable>
+          <Pressable onPress={() => Linking.openURL(`${base()}/terms?lang=${LANG}`)}><Text style={{ color: c.sub, fontSize: 13 }}>{t("Termos de uso")}</Text></Pressable>
+        </View>
         <Card c={c} onPress={reconnectGoogle}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>Google</Text>
             <Text style={{ color: c.sub, fontSize: 14 }}>{me?.google_connected ? t("Conectado · tocar para reconectar") : t("Não conectado · tocar para conectar")}</Text></View>
@@ -2426,6 +2506,37 @@ function FidusApp() {
                       <Text style={{ fontSize: 13 }}>{v > 0 ? "👍" : "👎"}</Text></Pressable>))}
                 </View>
               </View>;
+            if (item.type === "onb") {
+              const q = item.q; const live = onbQ && onbQ.step === q.step;
+              return (
+                <View style={{ gap: 10, paddingHorizontal: 2 }}>
+                  <Text style={{ color: c.sub, fontSize: 12 }}>{q.index}/{q.total}</Text>
+                  <Text style={{ color: c.text, fontSize: 17, lineHeight: 26 }}>{q.text}</Text>
+                  {!!q.hint && live && <Text style={{ color: c.sub, fontSize: 14 }}>{q.hint}</Text>}
+                  {live && q.options?.length > 0 && (
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                      {q.options.map((o: any) => {
+                        const on = onbSel.includes(o.id);
+                        return (
+                          <Pressable key={o.id} onPress={() => {
+                              if (q.kind === "multi") setOnbSel(on ? onbSel.filter((x) => x !== o.id) : onbSel.length >= (q.max || 3) ? onbSel : [...onbSel, o.id]);
+                              else onbAnswer(o.id, o.label);
+                            }}
+                            style={[s.chip, { paddingVertical: 9, paddingHorizontal: 14, borderColor: on ? NAVY : c.line, backgroundColor: on ? NAVY : "transparent" }]}>
+                            <Text style={{ color: on ? ON_INK : c.text, fontSize: 15 }}>{o.label}</Text></Pressable>);
+                      })}
+                    </View>)}
+                  {live && (
+                    <View style={{ flexDirection: "row", gap: 10 }}>
+                      {q.kind === "multi" && (
+                        <Pressable style={[s.primarySm, { opacity: onbSel.length ? 1 : 0.4 }]} disabled={!onbSel.length}
+                          onPress={() => onbAnswer(onbSel, q.options.filter((o: any) => onbSel.includes(o.id)).map((o: any) => o.label).join(", "))}>
+                          <Text style={s.primaryText}>{q.continue}</Text></Pressable>)}
+                      <Pressable style={[s.secondary, { borderColor: c.line }]} onPress={() => onbAnswer(null, undefined, true)}>
+                        <Text style={{ color: c.text }}>{q.skip}</Text></Pressable>
+                    </View>)}
+                </View>);
+            }
             if (item.type === "nps")
               return (
                 <View style={[s.draft, { backgroundColor: c.card, borderColor: c.line }]}>
@@ -2915,6 +3026,8 @@ const I18N_KEYS: string[] = [
   "Carteira salva",
   "Remover esta carteira? Os gastos já lançados nela continuam guardados.",
   "Remover",
+  "Mandei o arquivo para {0}.",
+  "Exportar",
   "Ainda processando…",
   "Idioma do Fidus",
   "Salvo",
@@ -2932,6 +3045,7 @@ const I18N_KEYS: string[] = [
   "Pronto! Você ganhou {0} dias grátis.",
   "Anual",
   "Mensal",
+  "{0}% de desconto no 1º mês",
   "convite: dias grátis",
   "A assinatura pelo app chega em breve. Por enquanto, fale com a gente pelo e-mail de suporte.",
   "Conversas",
@@ -3009,6 +3123,7 @@ const I18N_KEYS: string[] = [
   "Nenhum gasto neste mês.\nDiga “paguei 30 libras de gasolina” ou mande a foto do recibo.",
   "Exportar {0} para o contador",
   "Exportar o mês para o contador",
+  "Enviar para o meu e-mail",
   "Toque e segure uma carteira para remover.",
   "Mande este link para clientes marcarem horário direto na sua agenda, só nos horários livres.",
   "Compartilhar",
@@ -3051,11 +3166,14 @@ const I18N_KEYS: string[] = [
   "Toque para trocar",
   "Masculina",
   "Feminina",
+  "Ligado",
+  "Desligado",
+  "Dicas por e-mail",
+  "Dicas de gestão e novidades do Fidus. Sai quando quiser.",
+  "Ligar",
   "Disponível no app atualizado",
   "Ligado: quando você manda áudio, o Fidus responde falando",
   "Desligado: respostas só por escrito",
-  "Ligado",
-  "Ligar",
   "Trava com digital ou rosto",
   "Ligada: o Fidus pede sua digital ao abrir",
   "Desligada",
@@ -3070,6 +3188,10 @@ const I18N_KEYS: string[] = [
   "falta a chave no servidor",
   "Versão",
   "Sair de todos os aparelhos",
+  "Refazer as boas-vindas",
+  "O Fidus pergunta de novo como você trabalha e se ajusta.",
+  "Privacidade",
+  "Termos de uso",
   "Conectado · tocar para reconectar",
   "Não conectado · tocar para conectar",
   "Reenviar reunião",

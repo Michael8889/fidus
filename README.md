@@ -144,6 +144,25 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
   chirp3 (a mais natural, US$ 30; 1 milhão grátis). O custo entra no uso de cada cliente (painel e uso justo).
 - Configurações › Voz do Fidus: feminina ou masculina.
 
+## Boas-vindas, dicas por e-mail, parceiros, pt-PT e páginas legais (v0.10)
+- **Boas-vindas:** conta nova (sem conversa) recebe 8 perguntas curtas, puláveis, por voz ou texto
+  (`onboarding.py`): nome, perfil, carteiras e moedas, cidade/fuso, prioridades, estilo de resposta, horário do
+  bom dia e, por último, dicas por e-mail. Textos escritos à mão em PT-BR, PT-PT, EN e ES; outros idiomas, adaptados
+  pela IA uma vez. Configurações › Refazer as boas-vindas.
+- **Dicas por e-mail ("Notas do Mike"):** só para quem aceitou (boas-vindas ou Configurações › Dicas por e-mail).
+  Sequência em `server/app/newsletter.json` (editável: dia e texto por idioma), enviada pelo Resend, com
+  descadastro em todo e-mail. O convite do diagnóstico usa `FIDUS_MENTOR_BOOKING_URL`. Painel › Leads (+ CSV).
+- **Parceiros (criadores):** painel › Parceiros › criar código (ex. ANA). Seguidor entra com o código: desconto
+  no 1º mês (oferta com a etiqueta `parceiro` na Play: criar em cada assinatura um plano-base com oferta de
+  desconto no 1º período e etiqueta `parceiro`). Criador ganha 10% de cada cobrança paga por 12 meses (webhook
+  da RevenueCat); reembolso estorna; "Marcar como pago" quando você paga.
+- **Português de Portugal:** idioma próprio (`pt-pt`) no app, no Fidus e na voz.
+- **Privacidade e termos:** `/privacy` e `/terms` (EN e PT), com Fidus Labs Limited nº 17510962. Preencha
+  `FIDUS_COMPANY_ADDRESS` e `FIDUS_SUPPORT_EMAIL`. Use esses links na Play Console e na verificação do Google.
+  Recomendado: revisão de um advogado.
+- **Exportar gastos para o próprio e-mail:** Gastos › Enviar para o meu e-mail (pelo e-mail do Fidus, com anexo).
+- **Velocidade da voz:** painel › Sistema mostra a mediana de transcrição · IA · voz natural.
+
 ## Idiomas e moedas
 - O app abre no idioma do celular (dá para trocar em Configurações). O servidor traduz os textos uma vez por idioma
   e guarda em `/data/i18n/<idioma>.json`; o app guarda uma cópia. O Fidus responde no idioma em que a pessoa fala.

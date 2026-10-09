@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Uplo
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
-from . import account_data, accounts, actions, admin, agent, backup, booking, metrics, web_tools, config, features, google_client, i18n, mailer, meetings, plans, store, tools
+from . import account_data, accounts, newsletter, partners, actions, admin, agent, backup, booking, metrics, web_tools, config, features, google_client, i18n, mailer, meetings, plans, store, tools
 
 app = FastAPI(title="Fidus API", version="0.9.0", docs_url=None, redoc_url=None, openapi_url=None)  # não expõe o mapa da API
 store.init_db()
@@ -55,6 +55,7 @@ def _resume_all_meetings():
 _resume_all_meetings()
 if (os.getenv("FIDUS_BACKUP_AUTO", "1") or "1") not in ("0", "false", "no"):
     backup.start_daily()  # backup todo dia às 03:30 (UTC)
+    newsletter.start_hourly()  # dicas por e-mail: só para quem aceitou
 
 
 def auth(request: Request):
@@ -106,15 +107,57 @@ def health():
 
 
 # ---------- Login e conexão com o Google ----------
+@app.get("/email/sair", response_class=HTMLResponse)
+def email_unsub_page(t: str = ""):
+    """Link do rodapé: confirma com um botão (alguns leitores de e-mail abrem links sozinhos)."""
+    import html as _h
+    return _page("Fidus", "<h1>Parar de receber as dicas?</h1><form method='post' action='/email/sair'>"
+                          f"<input type='hidden' name='t' value='{_h.escape(t)}'><button>Sim, não quero mais receber</button>"
+                          "</form><p>Stop receiving Fidus tips? Press the button above.</p>")
+
+
+@app.post("/email/sair", response_class=HTMLResponse)
+async def email_unsub(request: Request):
+    form = await request.form()
+    newsletter.unsubscribe(str(form.get("t") or request.query_params.get("t") or ""))  # botão ou "one-click" do Gmail
+    return _page("Fidus", "<h1>Pronto ✓</h1><p>Você não vai receber mais as dicas por e-mail. "
+                          "You won't receive Fidus tips any more.</p>")
+
+
 def _page(title: str, body: str) -> HTMLResponse:
     return HTMLResponse(f"""<!doctype html><html lang="pt"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title>
-<style>body{{margin:0;font-family:system-ui,sans-serif;background:#07090D;color:#F2F5F7;display:flex;min-height:100vh;
+<style>body{{margin:0;font-family:system-ui,sans-serif;background:#FFFFFF;color:#111111;display:flex;min-height:100vh;
 align-items:center;justify-content:center}}main{{max-width:420px;padding:32px 24px;text-align:center}}
-h1{{font-size:26px;margin:0 0 12px}}p{{color:#B7C0CC;line-height:1.5}}.code{{font:700 34px ui-monospace,monospace;
-letter-spacing:.12em;background:#11151C;border:1px solid #222A35;border-radius:14px;padding:18px;margin:20px 0;
-user-select:all}}a.b{{display:block;background:#3DDC97;color:#07090D;font-weight:800;text-decoration:none;
-padding:16px;border-radius:14px;margin-top:8px}}</style></head><body><main>{body}</main></body></html>""")
+h1{{font-size:26px;font-weight:600;margin:0 0 12px}}p{{color:#555;line-height:1.5}}.code{{font:600 34px ui-monospace,monospace;
+letter-spacing:.12em;background:#F6F6F5;border:1px solid #E6E6E6;border-radius:14px;padding:18px;margin:20px 0;
+user-select:all}}a.b,button{{display:block;width:100%;background:#111;color:#fff;font-weight:600;text-decoration:none;border:0;
+font-size:16px;padding:16px;border-radius:999px;margin-top:8px;cursor:pointer}}
+@media (prefers-color-scheme: dark){{body{{background:#141414;color:#ECECEC}}p{{color:#AAA}}.code{{background:#1C1C1C;border-color:#2C2C2C}}
+a.b,button{{background:#ECECEC;color:#141414}}}}</style></head><body><main>{body}</main></body></html>""")
+
+
+def _doc(title: str, body: str) -> HTMLResponse:
+    """Página de texto longo (privacidade, termos)."""
+    return HTMLResponse(f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title>
+<style>body{{margin:0;font-family:system-ui,sans-serif;background:#FFFFFF;color:#111;line-height:1.6}}
+main{{max-width:720px;margin:0 auto;padding:32px 20px 64px}}h1{{font-weight:600;font-size:30px}}h2{{font-weight:600;font-size:19px;margin-top:28px}}
+a{{color:#1E5BD8}}.small{{color:#6B6B6B;font-size:14px}}li{{margin:6px 0}}
+@media (prefers-color-scheme: dark){{body{{background:#141414;color:#ECECEC}}a{{color:#7DB3FF}}.small{{color:#9A9A9A}}}}</style>
+</head><body><main>{body}</main></body></html>""")
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy(lang: str = "en"):
+    from . import legal
+    return _doc("Fidus — Privacy", legal.page("privacy", lang))
+
+
+@app.get("/terms", response_class=HTMLResponse)
+def terms(lang: str = "en"):
+    from . import legal
+    return _doc("Fidus — Terms", legal.page("terms", lang))
 
 
 def _oauth_sig(uid: str, exp: int) -> str:
@@ -141,7 +184,7 @@ def google_login(request: Request, cc: str = "", ref: str = ""):
     e, se houver, `ref` = código de convite de um amigo)."""
     import re as _re
     _rate_limit(request, 20, "login")
-    ref = ref if _re.fullmatch(r"[A-Za-z0-9-]{4,14}", ref or "") else ""
+    ref = ref if _re.fullmatch(r"[A-Za-z0-9-]{3,14}", ref or "") else ""
     return _start_google(None, cc.lower() if _re.fullmatch(r"[0-9a-fA-F]{64}", cc or "") else None, ref or None)
 
 
@@ -319,6 +362,7 @@ def account_delete(body: DeleteIn):
     u = store.current()
     lang, name, email = store.user_lang(), store.user_name(), u.get("email")
     r = account_data.delete_account(u["id"])
+    newsletter.forget(u["id"])
     if r.get("error"):
         raise HTTPException(400, r["error"])
     if email:
@@ -350,7 +394,15 @@ def me(request: Request):
             "google_connected": google_client.is_connected(), "profile": store.profile(),
             "language": store.user_lang(), "currency": plans.user_currency(),
             "staff_role": admin.role_for({**u, "email": u.get("email")}),
-            "nps_due": _nps_due(u), "natural_voice": _tts_on(), "voice_gender": store.profile().get("voice_gender") or "female"}
+            "nps_due": _nps_due(u), "natural_voice": _tts_on(), "onboarding_pending": _onb_pending(), "voice_gender": store.profile().get("voice_gender") or "female"}
+
+
+def _onb_pending() -> bool:
+    try:
+        from . import onboarding
+        return onboarding.pending()
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _tts_on() -> bool:
@@ -572,6 +624,53 @@ def tts_phrase(body: TtsIn):
     return {"audio": tts.synthesize(text, lang, cache=True)}
 
 
+# ---------- Boas-vindas (setup em conversa) ----------
+@app.get("/v1/onboarding", dependencies=[Depends(auth)])
+def onboarding_question():
+    from . import onboarding
+    return onboarding.question()
+
+
+class OnbIn(BaseModel):
+    step: str
+    value: str | list[str] | None = None
+    skip: bool = False
+
+
+@app.post("/v1/onboarding/answer", dependencies=[Depends(auth)])
+def onboarding_answer(body: OnbIn):
+    from . import onboarding
+    if isinstance(body.value, str):
+        body.value = body.value[:500]
+    r = onboarding.answer(body.step, body.value, body.skip)
+    if r.get("done") and r.get("messages"):
+        for m in r["messages"]:
+            store.add_message("assistant", m)
+    return r
+
+
+@app.post("/v1/onboarding/restart", dependencies=[Depends(auth)])
+def onboarding_restart():
+    from . import onboarding
+    return onboarding.restart()
+
+
+class MarketingIn(BaseModel):
+    yes: bool
+
+
+@app.get("/v1/marketing", dependencies=[Depends(auth)])
+def marketing_get():
+    return {"yes": newsletter.consent_of(store.current()["id"])}
+
+
+@app.post("/v1/marketing", dependencies=[Depends(auth)])
+def marketing_set(body: MarketingIn):
+    store.save_profile(marketing=body.yes)
+    newsletter.set_consent(store.current(), body.yes, store.profile(), source="configurações")
+    return {"yes": body.yes}
+
+
 class CancelIn(BaseModel):
     request_id: str
 
@@ -618,6 +717,7 @@ class VoiceB64In(BaseModel):
     drafts: list[str] | None = None
     speak: bool = False  # áudio gravado com "responder em voz alta" ligado: devolve também o texto para falar
     request_id: str = ""  # para o botão parar
+    transcribe_only: bool = False
 
 
 @app.post("/v1/voice_b64", dependencies=[Depends(auth)])
@@ -634,11 +734,16 @@ def voice_b64(body: VoiceB64In):
     from .transcribe import prompt_for
     try:
         # modo conversa: transcrição mais rápida (busca simples); áudio gravado: busca mais cuidadosa
+        import time as _tm
+        _t0 = _tm.time()
         text = transcribe(path, prompt_for(store.user_lang()), beam_size=1 if body.mode == "voice" else 5)
+        metrics.record_stage("transcricao", int((_tm.time() - _t0) * 1000))
     finally:
         os.unlink(path)
+    if body.transcribe_only:  # boas-vindas respondidas por voz: só o texto, sem passar pelo assistente
+        return {"transcript": text}
     if agent._cancelled(body.request_id):
-        return {"transcript": text, "reply": agent.CANCELLED_MSG["pt" if store.user_lang() == "pt" else "en"],
+        return {"transcript": text, "reply": agent.CANCELLED_MSG["pt" if store.user_lang().startswith("pt") else "en"],
                 "cancelled": True, "pending_actions": [], "events": []}
     return _after_transcript(text, voice=body.mode == "voice", drafts=body.drafts, speak=body.speak,
                              request_id=body.request_id)
@@ -1123,6 +1228,7 @@ def wallets_remove(body: WalletIn):
 class ExportIn(BaseModel):
     month: str | None = None
     wallet: str | None = None
+    email: bool = False  # manda para o e-mail do próprio cliente (ele usa como quiser)
 
 
 @app.post("/v1/expenses/export", dependencies=[Depends(auth)])
@@ -1138,7 +1244,44 @@ def expenses_export(body: ExportIn):
     if r.get("error"):
         raise HTTPException(400, r["error"])
     agent._record("export_for_accountant", args, r)
-    return {"document_id": r["document_id"], "title": r["title"], "url": features.sign(r["document_id"])}
+    out = {"document_id": r["document_id"], "title": r["title"], "url": features.sign(r["document_id"])}
+    if body.email:
+        out["emailed_to"] = _email_export(r)
+    return out
+
+
+EXPORT_MAIL = {
+    "pt": ("Seus gastos: {title}", "<p>Segue em anexo o pacote dos seus gastos (planilha + fotos dos recibos): <b>{title}</b>.</p><p>Use como quiser: guarde, encaminhe ao contador ou abra no Excel.</p>"),
+    "en": ("Your expenses: {title}", "<p>Attached is your expenses pack (spreadsheet + receipt photos): <b>{title}</b>.</p><p>Use it however you like: keep it, forward it to your accountant or open it in Excel.</p>"),
+    "es": ("Tus gastos: {title}", "<p>Adjunto el paquete de tus gastos (hoja de cálculo + fotos de los recibos): <b>{title}</b>.</p><p>Úsalo como quieras: guárdalo, reenvíalo a tu contable o ábrelo en Excel.</p>"),
+}
+
+
+def _email_export(r: dict) -> str:
+    """O pacote vai para o e-mail da PRÓPRIA conta, pelo e-mail do Fidus (nunca para terceiros, nunca pelo Gmail dele)."""
+    import base64
+    import html as _h
+    u = store.current()
+    to = u.get("email") if u["id"] != store.OWNER_ID else (config.OWNER_EMAIL or u.get("email"))
+    if not mailer.enabled():
+        raise HTTPException(503, "os e-mails do Fidus ainda não estão ligados; baixe o arquivo pelo app")
+    if not to:
+        raise HTTPException(400, "sua conta não tem e-mail")
+    doc = store.select("SELECT path, title FROM documents WHERE id=?", (r["document_id"],))
+    path = doc[0]["path"] if doc else None
+    if not path or not os.path.exists(path):
+        raise HTTPException(500, "arquivo não encontrado")
+    if os.path.getsize(path) > 20 * 1024 * 1024:
+        raise HTTPException(413, "o pacote passou de 20 MB; baixe pelo app ou exporte um período menor")
+    with open(path, "rb") as f:
+        content = base64.b64encode(f.read()).decode()
+    lang = store.user_lang().split("-")[0]
+    subj, body = EXPORT_MAIL.get(lang, EXPORT_MAIL["en"])
+    title = r["title"]
+    mailer.send_raw(to, subj.format(title=title), body.format(title=_h.escape(title)),
+                    attachments=[{"filename": os.path.basename(path), "content": content}], wait=True)
+    store.add_activity("export_emailed", title, to, "feito")
+    return to
 
 
 @app.get("/v1/booking", dependencies=[Depends(auth)])
@@ -1219,8 +1362,13 @@ def billing_config():
     """O que o app precisa para abrir a compra na loja: chave pública da RevenueCat e o id do cliente."""
     uid = store.current()["id"]
     on = bool(config.REVENUECAT_ANDROID_KEY or config.REVENUECAT_IOS_KEY)
+    from . import partners
+    offer = partners.first_month_offer(uid)
     return {"enabled": on, "android_key": config.REVENUECAT_ANDROID_KEY, "ios_key": config.REVENUECAT_IOS_KEY,
-            "app_user_id": uid, "referral_trial": accounts.referral_trial(uid), "trial_offer_tag": "convite",
+            "app_user_id": uid, "referral_trial": accounts.referral_trial(uid) or bool(offer),
+            "trial_offer_tag": offer["tag"] if offer else "convite",
+            "offer_kind": "partner_discount" if offer else ("referral_trial" if accounts.referral_trial(uid) else None),
+            "offer_discount": offer["discount"] if offer else None,
             "subscription": store.kv_get("subscription"), "plan": plans.current()}
 
 
@@ -1271,8 +1419,21 @@ async def billing_webhook(request: Request):
     to = config.OWNER_EMAIL if uid == store.OWNER_ID else user.get("email")
     if mail:
         mailer.send(to, mail[0], mail[1], name=mail[2], plan=mail[3])
+    from . import partners
     if kind == "CANCELLATION" and ev.get("cancel_reason") == "CUSTOMER_SUPPORT":
         accounts.revoke_referral_reward(uid)  # reembolso: o desconto de quem convidou não vale (se ainda não foi usado)
+        partners.on_refund(uid)
+    paid = (kind == "INITIAL_PURCHASE" and ev.get("period_type") != "TRIAL") or kind == "RENEWAL" \
+        or (kind == "NON_RENEWING_PURCHASE")
+    if paid:  # cobrança de verdade: comissão do criador parceiro (se o cliente veio dele e está nos 12 meses)
+        amount = ev.get("price_in_purchased_currency")
+        cur = ev.get("currency") or "USD"
+        if amount is None:
+            amount, cur = ev.get("price"), "USD"
+        try:
+            partners.on_payment(uid, str(ev.get("id") or ""), float(amount or 0), cur)
+        except (TypeError, ValueError):
+            pass
     if kind == "INITIAL_PURCHASE" and ev.get("period_type") != "TRIAL":
         accounts.mark_paid(uid)  # 1º pagamento de verdade: quem convidou ganha o desconto
     elif kind == "RENEWAL" and ev.get("is_trial_conversion"):

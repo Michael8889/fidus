@@ -358,7 +358,8 @@ def user_name() -> str:
 
 def user_lang() -> str:
     """Idioma do usuário (código ISO, ex. 'pt', 'en', 'ms'); 'pt' se ainda não sabemos."""
-    return (profile().get("language") or "pt").split("-")[0].lower()
+    raw = (profile().get("language") or "pt").lower().replace("_", "-")
+    return "pt-pt" if raw.startswith("pt-pt") else raw.split("-")[0]
 
 
 def user_tz() -> str:

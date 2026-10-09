@@ -60,6 +60,25 @@ def system_parts(voice: bool = False) -> tuple[str, str]:
     return RULES + (VOICE_RULES if voice else ""), _context()
 
 
+def _prefs(prof: dict) -> str:
+    """O que a pessoa disse nas boas-vindas e muda o jeito de responder."""
+    out = []
+    if prof.get("reply_style") == "short":
+        out.append("- Estilo: respostas curtas e diretas (1 a 3 frases), sem enrolação")
+    elif prof.get("reply_style") == "detailed":
+        out.append("- Estilo: pode explicar com mais detalhe quando ajudar")
+    if prof.get("work_type"):
+        out.append("- Trabalho: " + {"self": "por conta própria", "company": "tem empresa", "both": "por conta própria e empresa"}
+                   .get(prof["work_type"], prof["work_type"]))
+    if prof.get("priorities"):
+        out.append("- Quer ajuda primeiro com: " + ", ".join(prof["priorities"]))
+    if prof.get("city"):
+        out.append("- Cidade: " + str(prof["city"])[:60])
+    if (prof.get("language") or "").lower().startswith("pt-pt"):
+        out.append("- Escreva em português de Portugal (ex.: telemóvel, ecrã, marcação, “está a fazer”), nunca do Brasil")
+    return ("\n" + "\n".join(out)) if out else ""
+
+
 def _context() -> str:
     prof = store.profile()
     now = datetime.now(ZoneInfo(prof["timezone"]))
@@ -70,7 +89,7 @@ def _context() -> str:
 - Nome: {prof["name"] or "ainda não sabemos (pergunte quando fizer sentido)"}
 - Idioma: {i18n.name(prof.get("language") or "pt")}
 - Carteiras (empresas/contas): {", ".join(f'{w["name"]} ({w["currency"] or "moeda padrão"})' for w in store.wallets())}
-- Moeda padrão: {prof["currency"]}
+- Moeda padrão: {prof["currency"]}{_prefs(prof)}
 
 AGORA são {now.strftime('%H:%M')} ({prof["timezone"]}).
 HOJE é {dias[now.weekday()]}, {now.strftime('%d/%m/%Y')} ({now.strftime('%Y-%m-%d')}).
@@ -356,7 +375,7 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
             receipt_path: str | None = None, voice: bool = False, speak: bool = False,
             request_id: str | None = None) -> dict:
     if over_fair_use():
-        reply = FAIR_USE_MSG["pt" if store.user_lang() == "pt" else "en"]
+        reply = FAIR_USE_MSG["pt" if store.user_lang().startswith("pt") else "en"]
         return {"reply": reply, "speech": reply if speak else None, "pending_actions": [], "events": [], "documents": [],
                 "upsell": None, "fair_use": True}
     tools.CURRENT_RECEIPT["path"] = receipt_path
@@ -381,18 +400,22 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
     def stopped() -> dict:
         """A pessoa tocou em parar: não faz mais nada (o que já foi feito fica na Atividade, com Desfazer)."""
         store.add_message("assistant", "[pedido cancelado pelo usuário; não continue este pedido]" + _action_log(actions))
-        reply = CANCELLED_MSG["pt" if store.user_lang() == "pt" else "en"]
+        reply = CANCELLED_MSG["pt" if store.user_lang().startswith("pt") else "en"]
         if actions:
-            reply += " " + ("O que já tinha feito está na Atividade, com Desfazer." if store.user_lang() == "pt"
+            reply += " " + ("O que já tinha feito está na Atividade, com Desfazer." if store.user_lang().startswith("pt")
                             else "What was already done is in Activity, with Undo.")
         return {"_meta": {"tools": len(actions), "tool_errors": 0}, "reply": reply, "speech": reply if speak else None,
                 "pending_actions": [store.get_pending(p) for p in pending_ids], "events": events, "documents": [],
                 "upsell": None, "cancelled": True}
 
+    import time as _tm
+    from . import metrics as _metrics
     for _ in range(MAX_STEPS):
         if _cancelled(request_id):
             return stopped()
+        _t0 = _tm.time()
         out = llm.chat(system_parts(voice), messages, tools.TOOLS, **({"model": light} if light else {}))
+        _metrics.record_stage("ia", int((_tm.time() - _t0) * 1000))
         if not out["tool_calls"]:
             reply = out["text"].strip()
             if not actions and not nudged and CLAIM.search(reply):
@@ -466,15 +489,20 @@ def _voice(speech: str | None) -> str | None:
     if not speech:
         return None
     try:
-        from . import tts
-        return tts.synthesize(speech)
+        import time as _t
+        from . import metrics, tts
+        t0 = _t.time()
+        audio = tts.synthesize(speech)
+        if audio:
+            metrics.record_stage("voz", int((_t.time() - t0) * 1000))
+        return audio
     except Exception:  # noqa: BLE001
         return None
 
 
 def speechify(text: str, lang: str = "pt") -> str:
     """Deixa a resposta boa de ouvir: sem marcadores, links e siglas de moeda; datas por extenso."""
-    L = _SPEECH.get(lang)
+    L = _SPEECH.get(lang) or _SPEECH.get((lang or "").split("-")[0])
     t = re.sub(r"https?://\S+", L["link"] if L else "", text or "")
     t = re.sub(r"[*_#`>]", "", t)
     t = re.sub(r"^\s*[•\-–]\s*", "", t, flags=re.M)

@@ -21,7 +21,7 @@ API = "https://texttospeech.googleapis.com/v1"
 MAX_CHARS = 1200          # resposta falada longa demais: corta (o texto completo continua na tela)
 TIER_TAG = {"wavenet": "Wavenet", "neural2": "Neural2", "chirp3": "Chirp3-HD", "standard": "Standard"}
 # idioma do Fidus -> idioma da voz (sotaque)
-LOCALE = {"pt": "pt-BR", "en": "en-GB", "es": "es-ES", "fr": "fr-FR", "de": "de-DE", "it": "it-IT", "nl": "nl-NL",
+LOCALE = {"pt": "pt-BR", "pt-pt": "pt-PT", "en": "en-GB", "es": "es-ES", "fr": "fr-FR", "de": "de-DE", "it": "it-IT", "nl": "nl-NL",
           "pl": "pl-PL", "sv": "sv-SE", "da": "da-DK", "nb": "nb-NO", "fi": "fi-FI", "cs": "cs-CZ", "ro": "ro-RO",
           "tr": "tr-TR", "el": "el-GR", "hu": "hu-HU", "uk": "uk-UA", "ru": "ru-RU", "ja": "ja-JP", "ko": "ko-KR",
           "zh": "cmn-CN", "hi": "hi-IN", "id": "id-ID", "ms": "ms-MY", "vi": "vi-VN", "th": "th-TH", "ar": "ar-XA"}
@@ -81,7 +81,8 @@ def synthesize(text: str, lang: str | None = None, gender: str | None = None, ca
     text = (text or "").strip()[:MAX_CHARS]
     if not text or not enabled():
         return None
-    lang = (lang or store.user_lang() or "pt").split("-")[0]
+    lang = (lang or store.user_lang() or "pt").lower()
+    lang = lang if lang in LOCALE else lang.split("-")[0]
     locale = LOCALE.get(lang, "en-GB")
     gender = gender or voice_gender()
     voice = _pick_voice(locale, gender)

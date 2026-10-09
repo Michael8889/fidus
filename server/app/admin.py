@@ -24,8 +24,9 @@ router = APIRouter()
 SESSION_TTL = 12 * 3600
 CODE_TTL = 300
 ROLES = ("admin", "support", "finance")
-SCREENS = {"owner": {"system", "heart", "business", "clients", "team"}, "admin": {"system", "heart", "business", "clients", "team"},
-           "support": {"system", "heart", "clients"}, "finance": {"business", "clients"}}
+SCREENS = {"owner": {"system", "heart", "business", "clients", "partners", "leads", "team"},
+           "admin": {"system", "heart", "business", "clients", "partners", "leads", "team"},
+           "support": {"system", "heart", "clients"}, "finance": {"business", "clients", "partners"}}
 FX_TO_USD = {"USD": 1.0, "GBP": 1.27, "EUR": 1.08}  # aproximado, só para estimar margem no painel
 _tries: dict = {}
 
@@ -247,7 +248,8 @@ def system(s: Session = Depends(need("system"))):
     if tasks24 >= 10 and _pct(failed, tasks24) > 10:
         problems.append("tasks_failing")
     return {"ok": not problems, "problems": problems, "uptime_s": int(time.time() - metrics.STARTED),
-            "version": "0.9.9", "llm": config.LLM_PROVIDER, "model": config.LLM_MODEL,
+            "version": "0.10.0", "llm": config.LLM_PROVIDER, "model": config.LLM_MODEL,
+            "voice_stages": metrics.stage_p50(),
             "backup": {"age_hours": round(age, 1) if age is not None else None, **backup.last()},
             "disk_free_gb": free, "requests_24h": len(last24), "asks_24h": len(asks),
             "errors_24h": sum(1 for r in last24 if r["status"] >= 500),
@@ -488,6 +490,85 @@ def remove_staff(email: str, s: Session = Depends(manager)):
 def run_backup(s: Session = Depends(manager)):
     audit(s["email"], "backup.run")
     return backup.run()
+
+
+# ---------- parceiros (criadores) ----------
+@router.get("/admin/api/partners")
+def partners_list(s: Session = Depends(need("partners"))):
+    from . import partners
+    audit(s["email"], "partners.view")
+    return {"partners": partners.report(), "can_manage": s["role"] in ("owner", "admin")}
+
+
+class PartnerIn(BaseModel):
+    code: str
+    name: str
+    email: str = ""
+    percent: int = 10
+    discount: int = 20
+    months: int = 12
+
+
+@router.post("/admin/api/partners")
+def partners_add(body: PartnerIn, s: Session = Depends(manager)):
+    from . import partners
+    try:
+        p = partners.create(body.code, body.name, body.email, body.percent, body.discount, body.months)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    audit(s["email"], "partners.add", p["code"])
+    return {"ok": True, "partner": p}
+
+
+@router.post("/admin/api/partners/{code}/paid")
+def partners_paid(code: str, s: Session = Depends(need("partners"))):
+    from . import partners
+    if s["role"] not in ("owner", "admin", "finance"):
+        raise HTTPException(403, "sem permissão")
+    n = partners.mark_paid_out(code)
+    audit(s["email"], "partners.paid", code)
+    return {"ok": True, "marked": n}
+
+
+class ActiveIn(BaseModel):
+    active: bool
+
+
+@router.post("/admin/api/partners/{code}/active")
+def partners_active(code: str, body: ActiveIn, s: Session = Depends(manager)):
+    from . import partners
+    partners.set_active(code, body.active)
+    audit(s["email"], "partners.active", f"{code} -> {body.active}")
+    return {"ok": True}
+
+
+# ---------- leads (quem aceitou receber dicas por e-mail) ----------
+@router.get("/admin/api/leads")
+def leads_list(s: Session = Depends(need("leads"))):
+    from . import newsletter
+    audit(s["email"], "leads.view")
+    rows = newsletter.leads()
+    seq = len(newsletter.sequence())
+    return {"leads": rows, "sequence_len": seq,
+            "active": sum(1 for r in rows if r["consent"]), "unsubscribed": sum(1 for r in rows if not r["consent"])}
+
+
+@router.get("/admin/api/leads.csv")
+def leads_csv(s: Session = Depends(need("leads"))):
+    import csv
+    import io
+    from fastapi.responses import Response
+    from . import newsletter
+    audit(s["email"], "leads.export")
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["email", "name", "lang", "country", "work_type", "priorities", "subscribed", "consent_at", "emails_sent"])
+    for r in newsletter.leads():
+        if r["consent"]:
+            w.writerow([r["email"], r["name"], r["lang"], r["country"], r["work_type"], r["priorities"], 1,
+                        r["consent_at"], r["step"]])
+    return Response(buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=fidus-leads.csv"})
 
 
 # ---------- a página ----------

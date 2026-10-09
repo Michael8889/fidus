@@ -1,0 +1,47 @@
+{
+  "_como_editar": "Cada e-mail tem 'day' (dias depois de a pessoa aceitar) e o texto por idioma (pt, en; outros usam en). {name} = primeiro nome, {booking} = link do diagnóstico (FIDUS_MENTOR_BOOKING_URL). Tudo depois de <!--cta--> some se o link não estiver configurado. Rascunho para o Mike revisar com a voz dele.",
+  "emails": [
+    {
+      "day": 0,
+      "pt": {"subject": "Notas do Mike #1: por que eu criei o Fidus",
+             "body": "<p>Oi {name},</p><p>Aqui é o Mike, fundador do Fidus. Eu toco empresas no Reino Unido, em Portugal e no Brasil, e por muito tempo a minha agenda, os meus e-mails e os meus recibos viviam espalhados entre três países e duas moedas.</p><p>O Fidus nasceu para resolver isso para mim. Nestes e-mails eu vou dividir o que aprendi tocando negócios: um pouco de gestão, um pouco de como deixar o Fidus trabalhar por você.</p><p><b>Dica de hoje:</b> no fim do dia, diga ao Fidus <i>“o que ficou pendente hoje?”</i>. Em 10 segundos você fecha o dia sem levar nada na cabeça para casa.</p><p>Até a próxima,<br>Mike</p>"},
+      "en": {"subject": "Mike's Notes #1: why I built Fidus",
+             "body": "<p>Hi {name},</p><p>Mike here, founder of Fidus. I run businesses in the UK, Portugal and Brazil, and for a long time my diary, emails and receipts were scattered across three countries and two currencies.</p><p>Fidus started as my fix for that. In these emails I'll share what I've learned running businesses: a bit of management, and a bit of how to let Fidus do the work for you.</p><p><b>Today's tip:</b> at the end of the day, ask Fidus <i>“what's still open today?”</i>. Ten seconds and you close the day without taking it home with you.</p><p>Speak soon,<br>Mike</p>"}
+    },
+    {
+      "day": 3,
+      "pt": {"subject": "Notas do Mike #2: separe o dinheiro da empresa do seu",
+             "body": "<p>{name},</p><p>O erro que eu mais vejo em pequenos negócios: o dinheiro da empresa e o pessoal misturados. No fim do mês ninguém sabe se o negócio deu lucro ou se foi o cartão pessoal que pagou a conta.</p><p><b>No Fidus:</b> crie uma carteira para cada empresa e uma pessoal (em Gastos, “+ Carteira”). Quando mandar a foto de um recibo, diga de qual é. No fim do mês você exporta só a da empresa para o contador.</p><p>Mike</p>"},
+      "en": {"subject": "Mike's Notes #2: keep the business money apart from yours",
+             "body": "<p>{name},</p><p>The mistake I see most in small businesses: company money and personal money mixed together. At the end of the month nobody knows whether the business made a profit or the personal card paid the bills.</p><p><b>In Fidus:</b> create one wallet per business and one personal (Expenses, “+ Wallet”). When you send a receipt photo, say which one it's for. At month end you export only the business one to your accountant.</p><p>Mike</p>"}
+    },
+    {
+      "day": 7,
+      "pt": {"subject": "Notas do Mike #3: a regra dos 2 minutos, por voz",
+             "body": "<p>{name},</p><p>Se uma tarefa leva menos de 2 minutos, faça agora. Se leva mais, ela precisa ir para algum lugar que não seja a sua cabeça.</p><p><b>No Fidus:</b> dirigindo ou entre um cliente e outro, só fale: <i>“me lembra de ligar para o fornecedor amanhã às 9”</i>. Ele marca, e no dia seguinte o bom dia já traz isso.</p><p>Mike</p>"},
+      "en": {"subject": "Mike's Notes #3: the 2-minute rule, by voice",
+             "body": "<p>{name},</p><p>If a task takes less than 2 minutes, do it now. If it takes longer, it needs to live somewhere other than your head.</p><p><b>In Fidus:</b> driving or between clients, just say: <i>“remind me to call the supplier tomorrow at 9”</i>. It's booked, and your morning summary will show it.</p><p>Mike</p>"}
+    },
+    {
+      "day": 12,
+      "pt": {"subject": "Notas do Mike #4: 30 minutos sobre o seu negócio",
+             "body": "<p>{name},</p><p>Já vendi uma empresa de logística, trabalhei num banco internacional e hoje toco negócios em três países. Uma coisa que aprendi: quase todo negócio pequeno trava nos mesmos 3 ou 4 pontos, e quem está dentro não enxerga.</p><p>Toda semana eu abro alguns horários para um <b>diagnóstico gratuito de 30 minutos</b>: você me conta como o negócio funciona hoje e eu te digo onde eu mexeria primeiro. Sem compromisso.</p><!--cta--><p><a href='{booking}' style='display:inline-block;background:#111;color:#fff;padding:12px 20px;border-radius:999px;text-decoration:none'>Marcar meu diagnóstico</a></p><p>Mike</p>"},
+      "en": {"subject": "Mike's Notes #4: 30 minutes on your business",
+             "body": "<p>{name},</p><p>I sold a logistics company, worked at an international bank, and today run businesses in three countries. One thing I've learned: almost every small business gets stuck on the same 3 or 4 things, and it's hard to see them from the inside.</p><p>Each week I open a few slots for a <b>free 30-minute diagnosis</b>: you tell me how the business runs today and I tell you where I'd start. No strings attached.</p><!--cta--><p><a href='{booking}' style='display:inline-block;background:#111;color:#fff;padding:12px 20px;border-radius:999px;text-decoration:none'>Book my diagnosis</a></p><p>Mike</p>"}
+    },
+    {
+      "day": 19,
+      "pt": {"subject": "Notas do Mike #5: o resumo da semana que ninguém faz",
+             "body": "<p>{name},</p><p>Toda segunda eu olho a semana anterior por 5 minutos: o que entrou, o que saiu, o que ficou para trás. É o hábito que mais me salvou de surpresas.</p><p><b>No Fidus:</b> pergunte <i>“como foi minha semana?”</i>. Ele junta agenda, tarefas e gastos num resumo só.</p><p>Mike</p>"},
+      "en": {"subject": "Mike's Notes #5: the weekly review nobody does",
+             "body": "<p>{name},</p><p>Every Monday I spend 5 minutes on the week before: what came in, what went out, what slipped. It's the habit that has saved me from the most surprises.</p><p><b>In Fidus:</b> ask <i>“how was my week?”</i>. It pulls your diary, tasks and spending into one summary.</p><p>Mike</p>"}
+    },
+    {
+      "day": 26,
+      "pt": {"subject": "Notas do Mike #6: ainda dá tempo",
+             "body": "<p>{name},</p><p>Abri mais alguns horários do <b>diagnóstico gratuito de 30 minutos</b> para este mês. Se o seu negócio está crescendo mais devagar do que você gostaria, ou se você sente que está apagando incêndio o dia inteiro, vale a conversa.</p><!--cta--><p><a href='{booking}' style='display:inline-block;background:#111;color:#fff;padding:12px 20px;border-radius:999px;text-decoration:none'>Ver horários</a></p><p>Mike</p>"},
+      "en": {"subject": "Mike's Notes #6: there's still time",
+             "body": "<p>{name},</p><p>I've opened a few more slots for the <b>free 30-minute diagnosis</b> this month. If your business is growing slower than you'd like, or you feel you spend all day putting out fires, it's worth a chat.</p><!--cta--><p><a href='{booking}' style='display:inline-block;background:#111;color:#fff;padding:12px 20px;border-radius:999px;text-decoration:none'>See available times</a></p><p>Mike</p>"}
+    }
+  ]
+}
