@@ -16,6 +16,9 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - Velocidade da voz: medir cada etapa (transcrição, IA, voz) no painel e atacar a mais lenta (respostas curtas no
   modo conversa, começar a falar antes de terminar, modelo leve nos pedidos simples)
 - Política de privacidade e termos de uso (site e app)
+- Visual limpo (proposta no canvas "Fidus — novo visual"): branco/cinza neutro + preto como cor de ação, ícones de
+  linha no lugar de emojis, resposta do Fidus sem balão, cartões com borda fina, modo escuro neutro; ícones com
+  react-native-svg (APK novo; sem ele, os ícones atuais)
 - Parceiros (influenciadores): código próprio por criador (ex. ANA); criador ganha 10% de cada mensalidade paga pelo
   cliente durante 12 meses, só enquanto o cliente pagar (cancelou, parou); seguidor ganha desconto no 1º mês (20%,
   ajustável por parceiro; oferta "parceiro" na Play); aba Parceiros no painel com entradas, pagantes e comissão do mês
