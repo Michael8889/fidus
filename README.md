@@ -1,5 +1,7 @@
 # Fidus
 
+Produto da **Fidus Labs Limited** (Inglaterra e País de Gales, empresa nº 17510962).
+
 Assistente pessoal por voz: agenda, e-mail, gastos, recibos, documentos, tarefas, atas de reunião e link de
 agendamento. O usuário fala ou digita no app; o servidor transcreve (Whisper local), a IA decide e usa
 ferramentas (Google Agenda, Gmail, banco de dados próprio). Nada sai em nome do usuário sem o toque dele.
