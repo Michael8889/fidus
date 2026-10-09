@@ -22,17 +22,15 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - Português de Portugal (pt-PT) como idioma próprio no app, no Fidus e no site
 - Site: página "Membro fundador" (lista de espera com código aplicado) e página "Seja parceiro" (candidatura)
 
-## Funil Fidus → mentoria (HARVEST Framework)
-- [ ] **Você**: conteúdo com a sua imagem (@michael.gbd): "como eu toco empresas em 3 países com um assessor de IA",
-      mostrando o Fidus de verdade; CTA para baixar o Fidus (código do Mike = desconto no 1º mês)
-- [ ] **Claude**: no app, pergunta opcional no cadastro (tem empresa? quantas pessoas? faturamento aproximado) e
-      consentimento SEPARADO para receber convites da mentoria (LGPD/GDPR); nunca usar e-mails, agenda ou gastos do
-      cliente para marketing
-- [ ] **Claude**: cartão "Quer crescer o seu negócio? Diagnóstico gratuito com o Mike" só para quem aceitou, depois de
-      2–4 semanas de uso (relatório mensal do Fidus como gancho); vai para formulário de aplicação + agenda (link de
-      agendamento do próprio Fidus)
-- [ ] **Claude**: painel › aba Leads (quem aceitou, perfil, origem, status: novo, conversa, cliente)
-- [ ] **Você**: oferta de mentoria com Fidus Premium incluso (o app vira parte do método)
+## Funil Fidus → mentoria (HARVEST Framework) — discreto, por e-mail (nada de mentoria dentro do app)
+- [ ] **Você**: conteúdo com a sua imagem (@michael.gbd) mostrando o Fidus; CTA para baixar com o código MIKE
+- [ ] **Claude**: no cadastro, UMA caixa desmarcada e neutra: "Quero receber dicas de gestão e novidades por e-mail"
+      (exigência da LGPD/GDPR/PECR para e-mail de marketing de outro produto); link de descadastro em todo e-mail
+- [ ] **Claude**: newsletter "Notas do Mike" pelo Resend: boas-vindas + sequência automática (dica de gestão +
+      dica de uso do Fidus; a cada 3–4 e-mails, convite para o diagnóstico da mentoria); só para quem marcou a caixa;
+      nunca usar e-mails, agenda ou gastos do cliente para segmentar
+- [ ] **Claude**: painel › aba Leads (interna): quem aceitou, quem abriu/clicou, quem agendou
+- [ ] **Você**: oferta de entrada da mentoria (ex. diagnóstico de 30 min) e se a mentoria fica em outra empresa
 
 ## Fase 1 — Empresa e contas (em paralelo)
 - [ ] **Você**: conta bancária da empresa
