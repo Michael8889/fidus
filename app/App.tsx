@@ -33,7 +33,7 @@ const SpeechRec: any = opt(() => require("expo-speech-recognition").ExpoSpeechRe
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},js=0.9.8,ota=${UPDATE_ID.slice(0, 8)}`;
+const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},js=0.9.9,ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
 
@@ -165,9 +165,46 @@ type Item =
   | { id: string; type: "nps" };
 type Screen = "chat" | "convs" | "tasks" | "docs" | "meetings" | "expenses" | "booking" | "activity" | "invite" | "admin" | "settings" | "panel";
 
-const NAVY = "#0E1E3A";
-const MINT = "#3DDC97";
+// Visual limpo: neutros + uma única cor de ação (preto no claro, quase branco no escuro).
+// São trocadas a cada render conforme o tema do celular (ver FidusApp).
+let NAVY = "#111111";   // cor de ação (botões, seleção)
+let MINT = "#111111";   // destaque (bordas de cartões importantes)
+let ON_INK = "#FFFFFF"; // texto/ícone sobre a cor de ação
 const BLUE = "#2F6BFF";
+const SvgXml: any = opt(() => require("react-native-svg").SvgXml);
+const ICON_PATHS: Record<string, string> = {
+  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/>',
+  task: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+  doc: '<path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4M9 13h6M9 17h6"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  wallet: '<rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18M16 15h2"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  activity: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/>',
+  gift: '<rect x="3" y="8" width="18" height="5"/><path d="M5 13v8h14v-8M12 8v13M12 8c-2-4-6-3-5 0M12 8c2-4 6-3 5 0"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6"/>',
+  chart: '<path d="M4 20V4M4 20h16M8 15l3-4 3 2 5-6"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+  trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/>',
+  check: '<circle cx="12" cy="12" r="8.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+  repeat: '<path d="M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5"/>',
+  video: '<rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/>',
+  box: '<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
+  sheet: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 9h16M4 15h16M10 3v18"/>',
+};
+function Icon({ name, color, size = 20 }: { name: string; color: string; size?: number }) {
+  const body = ICON_PATHS[name];
+  if (!SvgXml || !body) return null;
+  const xml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+  return <SvgXml xml={xml} width={size} height={size} />;
+}
+const ACT_ICON: Record<string, string> = {
+  event_created: "calendar", event_deleted: "trash", email_draft: "mail", expense_added: "wallet", expense_deleted: "trash",
+  reminder_created: "clock", task_added: "task", task_done: "check", document_saved: "doc", bill_added: "repeat",
+  bill_deleted: "trash", meet_added: "video", invite_draft: "users", meeting_summarized: "mic", booking_received: "calendar",
+  export_created: "box", sheet_changed: "sheet", wallet_added: "wallet", wallet_removed: "trash", wallet_changed: "wallet",
+};
 const ICON: Record<string, string> = {
   event_created: "📅", event_deleted: "🗑", email_draft: "✉️", expense_added: "💷", expense_deleted: "🗑",
   reminder_created: "⏰", task_added: "📝", task_done: "✅", document_saved: "📄", bill_added: "🔁",
@@ -374,7 +411,7 @@ function FormattedText({ text, color }: { text: string; color: string }) {
 }
 
 function Card({ c, children, onPress, style }: any) {
-  return <Pressable onPress={onPress} disabled={!onPress} style={[s.actCard, { backgroundColor: c.card }, style]}>{children}</Pressable>;
+  return <Pressable onPress={onPress} disabled={!onPress} style={[s.actCard, { backgroundColor: c.card, borderWidth: 1, borderColor: c.line }, style]}>{children}</Pressable>;
 }
 
 // Cartão de e-mail no estilo do Claude: cabeçalho com editar, copiar e enviar; destinatário, assunto e texto formatado
@@ -403,8 +440,8 @@ function EmailCard({ a, c, dark, onSend, onCancel, onSave, onCopy, onEditing }: 
           onPress={() => onCopy(`${t("Para")}: ${to}\n${t("Assunto")}: ${subject}\n\n${body.replace(/\*\*/g, "")}`)}>
           <CopyIcon color={c.sub} /></Pressable>
         {pending && !editing && (
-          <Pressable onPress={onSend} accessibilityLabel={t("Enviar")} style={[s.sendBlue, { backgroundColor: BLUE }]}>
-            <ArrowUpIcon color="#fff" size={16} /></Pressable>)}
+          <Pressable onPress={onSend} accessibilityLabel={t("Enviar")} style={[s.sendBlue, { backgroundColor: NAVY }]}>
+            <ArrowUpIcon color={ON_INK} size={16} /></Pressable>)}
         {!!statusText && <Text style={{ color: a.status === "sent" ? GREEN : c.sub, fontSize: 12, fontWeight: "600", marginLeft: 6 }}>{statusText}</Text>}
       </View>
       {editing ? (
@@ -420,7 +457,7 @@ function EmailCard({ a, c, dark, onSend, onCancel, onSave, onCopy, onEditing }: 
             <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => {
               setTo(a.payload.to); setSubject(a.payload.subject); setBody(a.payload.body); setEditing(false); }}>
               <Text style={{ color: c.text }}>{t("Cancelar")}</Text></Pressable>
-            <Pressable style={[s.primarySm, { backgroundColor: BLUE }]} onPress={async () => {
+            <Pressable style={s.primarySm} onPress={async () => {
               if (await onSave({ to, subject, body })) setEditing(false); }}>
               <Text style={s.primaryText}>{t("Salvar")}</Text></Pressable>
           </View>
@@ -451,8 +488,10 @@ export default function App() {
 
 function FidusApp() {
   const dark = useColorScheme() === "dark";
-  const c = dark ? { bg: "#0B1426", card: "#14223F", text: "#EEF2F8", sub: "#9AA8C0", line: "#24365A" }
-                 : { bg: "#F5F7FB", card: "#FFFFFF", text: NAVY, sub: "#5B6B85", line: "#DDE3EC" };
+  const c = dark ? { bg: "#141414", card: "#1C1C1C", text: "#ECECEC", sub: "#9A9A9A", line: "#2C2C2C", soft: "#262626" }
+                 : { bg: "#FFFFFF", card: "#FFFFFF", text: "#111111", sub: "#6B6B6B", line: "#ECECEC", soft: "#F3F3F2" };
+  NAVY = dark ? "#ECECEC" : "#111111"; MINT = NAVY; ON_INK = dark ? "#141414" : "#FFFFFF";
+  s = dark ? sDark : sLight;
 
   const [, setTrVer] = useState(0);
   const [server, setServer] = useState(DEFAULT_SERVER);
@@ -1903,16 +1942,16 @@ function FidusApp() {
       <UpsellCard u={r.upsell} />
     </View>) : null;
   const UpsellCard = ({ u, onClose }: { u: Upsell; onClose?: () => void }) => (
-    <View style={[s.draft, { backgroundColor: NAVY, borderColor: MINT }]}>
-      <Text style={{ color: MINT, fontSize: 12, fontWeight: "700", letterSpacing: 0.5 }}>{t("PLANO {0}", t(u.name).toUpperCase())}</Text>
-      <Text style={{ color: "#fff", fontSize: 22, fontWeight: "800", marginTop: 4 }}>{money(u.month, u.symbol)}<Text style={{ fontSize: 13, fontWeight: "400", color: "#B9C6DD" }}> {t("/mês · ou {0}/ano", money(u.year, u.symbol))}</Text></Text>
-      <Text style={{ color: "#DDE5F2", marginTop: 6 }}>{t("Libera {0} e mais:", t(u.feature_label))}</Text>
-      {u.highlights.slice(0, 4).map((h) => <Text key={h} style={{ color: "#fff", marginTop: 3 }}>✓ {t(h)}</Text>)}
-      <View style={[s.row, { marginTop: 12 }]}>
-        {onClose && <Pressable style={[s.secondary, { borderColor: "#5B6B85" }]} onPress={onClose}>
-          <Text style={{ color: "#DDE5F2" }}>{t("Agora não")}</Text></Pressable>}
-        <Pressable style={[s.primarySm, { backgroundColor: MINT }]} onPress={() => subscribe(u)}>
-          <Text style={{ color: NAVY, fontWeight: "700" }}>{t("Conhecer o {0}", t(u.name))}</Text></Pressable>
+    <View style={[s.draft, { backgroundColor: c.card, borderColor: c.line }]}>
+      <Text style={{ color: c.sub, fontSize: 12, fontWeight: "600", letterSpacing: 0.5 }}>{t("PLANO {0}", t(u.name).toUpperCase())}</Text>
+      <Text style={{ color: c.text, fontSize: 24, fontWeight: "600", marginTop: 4 }}>{money(u.month, u.symbol)}<Text style={{ fontSize: 14, fontWeight: "400", color: c.sub }}> {t("/mês · ou {0}/ano", money(u.year, u.symbol))}</Text></Text>
+      <Text style={{ color: c.sub, marginTop: 6, fontSize: 15 }}>{t("Libera {0} e mais:", t(u.feature_label))}</Text>
+      {u.highlights.slice(0, 4).map((h) => <Text key={h} style={{ color: c.text, marginTop: 4, fontSize: 15 }}>✓  {t(h)}</Text>)}
+      <View style={[s.row, { marginTop: 14 }]}>
+        {onClose && <Pressable style={[s.secondary, { borderColor: c.line }]} onPress={onClose}>
+          <Text style={{ color: c.text }}>{t("Agora não")}</Text></Pressable>}
+        <Pressable style={s.primarySm} onPress={() => subscribe(u)}>
+          <Text style={s.primaryText}>{t("Conhecer o {0}", t(u.name))}</Text></Pressable>
       </View>
     </View>);
 
@@ -1964,7 +2003,7 @@ function FidusApp() {
             placeholder={t("Nova tarefa…")} placeholderTextColor={c.sub} value={newTask} onChangeText={setNewTask}
             onSubmitEditing={addTaskQuick} returnKeyType="done" />
           <Pressable onPress={addTaskQuick} style={[s.sendBtn2, { backgroundColor: NAVY, width: 48, height: 48, borderRadius: 24 }]}>
-            <PlusIcon color="#fff" /></Pressable>
+            <PlusIcon color={ON_INK} /></Pressable>
         </View>
         <FlatList
           data={tasks} keyExtractor={(x) => String(x.id)} contentContainerStyle={{ padding: 16, gap: 8 }}
@@ -1992,10 +2031,10 @@ function FidusApp() {
         data={acts} keyExtractor={(a) => String(a.id)} contentContainerStyle={{ padding: 16, gap: 10 }}
         refreshing={actsLoading} onRefresh={loadActivity}
         ListHeaderComponent={stats && stats.actions_this_month > 0 ? (
-          <View style={[s.statCard, { backgroundColor: NAVY }]}>
-            <Text style={{ color: MINT, fontSize: 28, fontWeight: "800" }}>{stats.actions_this_month}</Text>
-            <Text style={{ color: "#fff", flex: 1 }}>{t("coisas que o Fidus resolveu por você este mês")}{"\n"}
-              <Text style={{ color: "#B9C6DD", fontSize: 12 }}>≈ {stats.minutes_saved_estimate >= 60
+          <View style={[s.statCard, { backgroundColor: c.card, borderWidth: 1, borderColor: c.line }]}>
+            <Text style={{ color: c.text, fontSize: 30, fontWeight: "600" }}>{stats.actions_this_month}</Text>
+            <Text style={{ color: c.text, flex: 1, fontSize: 15 }}>{t("coisas que o Fidus resolveu por você este mês")}{"\n"}
+              <Text style={{ color: c.sub, fontSize: 13 }}>≈ {stats.minutes_saved_estimate >= 60
                 ? `${Math.round(stats.minutes_saved_estimate / 6) / 10} h` : `${stats.minutes_saved_estimate} min`} {t("poupados (estimativa)")}</Text></Text>
           </View>) : null}
         ListEmptyComponent={<Text style={[s.empty, { color: c.sub }]}>
@@ -2005,7 +2044,7 @@ function FidusApp() {
           const faded = a.status === "desfeito" || a.status === "cancelado";
           return (
             <View style={[s.actCard, { backgroundColor: c.card, opacity: faded ? 0.55 : 1 }]}>
-              <Text style={s.actIcon}>{ICON[a.kind] ?? "•"}</Text>
+              {SvgXml ? <Icon name={ACT_ICON[a.kind] || "check"} color={c.sub} size={20} /> : <Text style={s.actIcon}>{ICON[a.kind] ?? "•"}</Text>}
               <View style={{ flex: 1 }}>
                 <View style={[s.pill, { backgroundColor: p.color + "22", borderColor: p.color }]}>
                   <Text style={{ color: p.color, fontSize: 11, fontWeight: "700" }}>{p.text.toUpperCase()}</Text>
@@ -2048,12 +2087,12 @@ function FidusApp() {
           ListEmptyComponent={<Empty text={t("Nenhum documento guardado.\nMande a foto de um seguro, contrato ou carta e o Fidus guarda aqui.")} />}
           renderItem={({ item: d }) => (
             <Card c={c} onPress={() => openDoc(d)}>
-              <Text style={s.actIcon}>📄</Text>
+              {SvgXml ? <Icon name="doc" color={c.sub} size={20} /> : <Text style={s.actIcon}>📄</Text>}
               <View style={{ flex: 1 }}>
                 <Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{d.title}</Text>
                 {!!d.expires_on && <Text style={{ color: c.sub, fontSize: 12 }}>{t("vence {0}", `${fmtDay(d.expires_on)}/${d.expires_on.slice(0, 4)}`)}</Text>}
               </View>
-              <Text style={{ color: MINT, fontWeight: "700" }}>{t("Abrir")}</Text>
+              <Text style={{ color: c.text, fontWeight: "600" }}>{t("Abrir")}</Text>
             </Card>)} />
       </View>
     );
@@ -2065,7 +2104,7 @@ function FidusApp() {
         ListEmptyComponent={<Empty text={t("Nenhuma reunião gravada ainda.")} />}
         renderItem={({ item: m }) => (
           <Card c={c} onPress={() => openMeeting(m)}>
-            <Text style={s.actIcon}>🎙</Text>
+            {SvgXml ? <Icon name="mic" color={c.sub} size={20} /> : <Text style={s.actIcon}>🎙</Text>}
             <View style={{ flex: 1 }}>
               <Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{m.title || t("Reunião")}</Text>
               <Text style={{ color: c.sub, fontSize: 12 }}>{fmtDay(m.date)}/{(m.date || "").slice(0, 4)} · {m.status === "pronta" ? t("ata pronta") : m.status === "erro" ? t("erro") : t("processando")}</Text>
@@ -2078,16 +2117,19 @@ function FidusApp() {
       const month = e?.month || expMonth;
       return (
         <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
-          <View style={[s.actCard, { backgroundColor: NAVY, justifyContent: "space-between" }]}>
-            <Pressable hitSlop={10} onPress={() => { const m = shiftMonth(month, -1); setExpMonth(m); loadScreen("expenses", m); }}>
-              <Text style={{ color: "#fff", fontSize: 22 }}>‹</Text></Pressable>
-            <View style={{ alignItems: "center" }}>
-              <Text style={{ color: "#B9C6DD", fontSize: 12 }}>{month ? `${month.slice(5)}/${month.slice(0, 4)}` : ""}</Text>
-              <Text style={{ color: "#fff", fontSize: 20, fontWeight: "800" }}>{e ? (sumLine(e.totals_by_currency) || "0.00") : "…"}</Text>
-              <Text style={{ color: "#B9C6DD", fontSize: 12 }}>{e ? t("{0} lançamentos", e.count) : ""}</Text>
-            </View>
-            <Pressable hitSlop={10} onPress={() => { const m = shiftMonth(month, 1); setExpMonth(m); loadScreen("expenses", m); }}>
-              <Text style={{ color: "#fff", fontSize: 22 }}>›</Text></Pressable>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Pressable hitSlop={10} accessibilityLabel={t("Mês anterior")} onPress={() => { const m = shiftMonth(month, -1); setExpMonth(m); loadScreen("expenses", m); }}
+              style={[s.iconBtn, { borderWidth: 1, borderColor: c.line, width: 36, height: 36 }]}>
+              <Text style={{ color: c.text, fontSize: 18 }}>‹</Text></Pressable>
+            <Text style={{ color: c.text, fontSize: 15, fontWeight: "500" }}>{month ? `${month.slice(5)}/${month.slice(0, 4)}` : ""}</Text>
+            <Pressable hitSlop={10} accessibilityLabel={t("Próximo mês")} onPress={() => { const m = shiftMonth(month, 1); setExpMonth(m); loadScreen("expenses", m); }}
+              style={[s.iconBtn, { borderWidth: 1, borderColor: c.line, width: 36, height: 36 }]}>
+              <Text style={{ color: c.text, fontSize: 18 }}>›</Text></Pressable>
+          </View>
+          <View style={{ gap: 2, paddingVertical: 6 }}>
+            <Text style={{ color: c.sub, fontSize: 13 }}>{t("Total do mês")}</Text>
+            <Text style={{ color: c.text, fontSize: 30, fontWeight: "600" }}>{e ? (sumLine(e.totals_by_currency) || "0.00") : "…"}</Text>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{e ? t("{0} lançamentos", e.count) : ""}</Text>
           </View>
           {!!e?.wallets && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
@@ -2097,7 +2139,7 @@ function FidusApp() {
                   return (
                     <Pressable key={w.name || "_all"} onPress={() => pickWallet(w.name)} onLongPress={() => w.name && !w.archived && walletMenu(w.name)}
                       style={[s.chip, { paddingVertical: 8, paddingHorizontal: 14, borderColor: on ? NAVY : c.line, backgroundColor: on ? NAVY : c.card }]}>
-                      <Text style={{ color: on ? "#fff" : c.text, fontSize: 15, fontWeight: on ? "700" : "400" }}>{w.label}</Text>
+                      <Text style={{ color: on ? ON_INK : c.text, fontSize: 15, fontWeight: on ? "600" : "400" }}>{w.label}</Text>
                     </Pressable>);
                 })}
               <Pressable onPress={() => setNewWallet({ name: "", currency: "" })} accessibilityLabel={t("Nova carteira")}
@@ -2180,20 +2222,20 @@ function FidusApp() {
     );
     if (screen === "invite") return (
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-        <View style={[s.draft, { backgroundColor: NAVY, borderColor: MINT }]}>
-          <Text style={{ color: MINT, fontWeight: "800", fontSize: 13 }}>{t("CONVIDE E GANHE")}</Text>
-          <Text style={{ color: "#fff", fontSize: 20, fontWeight: "800", marginTop: 6 }}>
+        <View style={[s.draft, { backgroundColor: c.card, borderColor: c.line }]}>
+          <Text style={{ color: c.sub, fontWeight: "600", fontSize: 12, letterSpacing: 0.5 }}>{t("CONVIDE E GANHE")}</Text>
+          <Text style={{ color: c.text, fontSize: 20, fontWeight: "600", marginTop: 6 }}>
             {t("{0}% de desconto na sua próxima cobrança", referral?.percent ?? 10)}</Text>
-          <Text style={{ color: "#DDE5F2", marginTop: 6 }}>
+          <Text style={{ color: c.sub, marginTop: 6, fontSize: 15 }}>
             {t("Para cada amigo que assinar o Fidus. Seu amigo ganha {0} dias grátis.", referral?.trial_days ?? 7)}</Text>
           {!!referral && (<>
-            <Text selectable style={{ color: "#fff", fontSize: 28, fontWeight: "800", letterSpacing: 4, marginTop: 14 }}>{referral.code}</Text>
-            <Text selectable style={{ color: "#B9C6DD", fontSize: 12 }}>{referral.link}</Text>
+            <Text selectable style={{ color: c.text, fontSize: 28, fontWeight: "600", letterSpacing: 4, marginTop: 14 }}>{referral.code}</Text>
+            <Text selectable style={{ color: c.sub, fontSize: 13 }}>{referral.link}</Text>
             <View style={[s.row, { marginTop: 12, justifyContent: "flex-start" }]}>
-              <Pressable style={[s.primarySm, { backgroundColor: MINT }]} onPress={shareInvite}>
-                <Text style={{ color: NAVY, fontWeight: "700" }}>{t("Enviar convite")}</Text></Pressable>
-              <Pressable style={[s.secondary, { borderColor: "#5B6B85" }]} onPress={() => copyText(referral.link)}>
-                <Text style={{ color: "#DDE5F2" }}>{t("Copiar link")}</Text></Pressable>
+              <Pressable style={s.primarySm} onPress={shareInvite}>
+                <Text style={s.primaryText}>{t("Enviar convite")}</Text></Pressable>
+              <Pressable style={[s.secondary, { borderColor: c.line }]} onPress={() => copyText(referral.link)}>
+                <Text style={{ color: c.text }}>{t("Copiar link")}</Text></Pressable>
             </View>
           </>)}
         </View>
@@ -2225,7 +2267,7 @@ function FidusApp() {
         <Pressable style={s.primary} onPress={panelCode}><Text style={s.primaryText}>{t("Gerar código de acesso")}</Text></Pressable>
         {!!panel && (
           <Card c={c} style={{ flexDirection: "column", alignItems: "center", gap: 8 }}>
-            <Text selectable style={{ color: c.text, fontSize: 34, fontWeight: "800", letterSpacing: 6 }}>{panel.code}</Text>
+            <Text selectable style={{ color: c.text, fontSize: 34, fontWeight: "600", letterSpacing: 6 }}>{panel.code}</Text>
             <Text style={{ color: c.sub, fontSize: 14 }}>{t("Vale 5 minutos e só uma vez.")}</Text>
             <Text selectable style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{panel.url}</Text>
             <View style={[s.row, { justifyContent: "center", flexWrap: "wrap" }]}>
@@ -2251,7 +2293,7 @@ function FidusApp() {
           <Text style={{ color: c.sub }}>›</Text></Card>
         <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
           <Text style={{ color: c.sub, fontSize: 12 }}>{t("SEU PLANO")}</Text>
-          <Text style={{ color: c.text, fontSize: 18, fontWeight: "800" }}>{plan ? t(plan.name) : "…"}</Text>
+          <Text style={{ color: c.text, fontSize: 18, fontWeight: "600" }}>{plan ? t(plan.name) : "…"}</Text>
           {(plan?.plans || []).map((p: any) => (
             <View key={p.id} style={[s.planRow, { borderColor: p.id === plan.plan ? MINT : c.line }]}>
               <View style={{ flex: 1 }}>
@@ -2294,7 +2336,7 @@ function FidusApp() {
           <Text style={{ color: c.sub, fontSize: 12, marginTop: 6 }}>
             {SpeechRec ? "✅" : "❌"} {t("Transcrição no celular")}{SpeechRec ? "" : ` (${t("precisa do APK novo")})`}{"\n"}
             {me?.natural_voice ? "✅" : "❌"} {t("Voz natural")}{me?.natural_voice ? "" : ` (${t("falta a chave no servidor")})`}{"\n"}
-            {t("Versão")}: 0.9.8 · {UPDATE_ID.slice(0, 8)}</Text>
+            {t("Versão")}: 0.9.9 · {UPDATE_ID.slice(0, 8)}</Text>
           <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
         </Card>
         <Card c={c} onPress={reconnectGoogle}>
@@ -2346,7 +2388,7 @@ function FidusApp() {
             <Pressable style={[s.chip, meeting ? { backgroundColor: RED, borderColor: RED } : { borderColor: c.line }]} onPress={meetingMenu}
               accessibilityLabel={t("Gravar reunião")}>
               <Text style={{ color: meeting ? "#fff" : c.text, fontSize: 13, fontWeight: meeting ? "700" : "400" }}>
-                {meeting ? `● ${fmtClock(meetSecs)}` : `🎙 ${t("Reunião")}`}</Text></Pressable>
+                {meeting ? `● ${fmtClock(meetSecs)}` : t("Reunião")}</Text></Pressable>
             <Pressable onPress={newChat} hitSlop={10} style={s.iconBtn} accessibilityLabel={t("Nova conversa")}>
               <ComposeIcon color={c.text} /></Pressable>
           </>) : (
@@ -2372,10 +2414,10 @@ function FidusApp() {
           </Text>}
           renderItem={({ item }) => {
             if (item.type === "user")
-              return <View style={[s.bubble, s.userBubble]}><LinkText text={item.text} style={s.userText} linkColor={MINT} /></View>;
+              return <View style={[s.bubble, s.userBubble]}><LinkText text={item.text} style={s.userText} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} /></View>;
             if (item.type === "fidus")
               return <View style={{ alignSelf: "flex-start", maxWidth: "85%" }}>
-                <View style={[s.bubble, { backgroundColor: c.card, maxWidth: "100%" }]}>
+                <View style={[s.bubble, { backgroundColor: "transparent", maxWidth: "100%", paddingHorizontal: 2 }]}>
                   <LinkText text={item.text} style={{ color: c.text, fontSize: 17, lineHeight: 26 }} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} /></View>
                 <View style={{ flexDirection: "row", gap: 2, marginTop: 2, marginLeft: 4 }}>
                   {[1, -1].map((v) => (
@@ -2386,14 +2428,14 @@ function FidusApp() {
               </View>;
             if (item.type === "nps")
               return (
-                <View style={[s.draft, { backgroundColor: c.card, borderColor: MINT }]}>
+                <View style={[s.draft, { backgroundColor: c.card, borderColor: c.line }]}>
                   <Text style={{ color: c.text, fontWeight: "700" }}>{t("De 0 a 10, quanto você indicaria o Fidus a um amigo?")}</Text>
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
                     {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
                       <Pressable key={n} onPress={() => setNpsScore(n)} accessibilityLabel={String(n)}
                         style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1,
-                          borderColor: npsScore === n ? MINT : c.line, backgroundColor: npsScore === n ? MINT : "transparent" }}>
-                        <Text style={{ color: npsScore === n ? NAVY : c.text, fontWeight: "700" }}>{n}</Text></Pressable>))}
+                          borderColor: npsScore === n ? NAVY : c.line, backgroundColor: npsScore === n ? NAVY : "transparent" }}>
+                        <Text style={{ color: npsScore === n ? ON_INK : c.text, fontWeight: "600" }}>{n}</Text></Pressable>))}
                   </View>
                   {npsScore != null && (
                     <TextInput style={[s.input, { color: c.text, backgroundColor: c.bg, marginTop: 10, marginBottom: 0 }]} value={npsText} onChangeText={setNpsText}
@@ -2409,20 +2451,20 @@ function FidusApp() {
             if (item.type === "doc") {
               const d = item.doc;
               return (
-                <Pressable onPress={() => openDoc(d)} style={[s.actCard, { backgroundColor: c.card, borderWidth: 1, borderColor: MINT }]}>
-                  <Text style={s.actIcon}>📄</Text>
+                <Pressable onPress={() => openDoc(d)} style={[s.actCard, { backgroundColor: c.card, borderWidth: 1, borderColor: c.line }]}>
+                  {SvgXml ? <Icon name="doc" color={c.sub} size={20} /> : <Text style={s.actIcon}>📄</Text>}
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{d.title}</Text>
                     {!!d.expires_on && <Text style={{ color: c.sub, fontSize: 12 }}>{t("vence {0}", `${fmtDay(d.expires_on)}/${d.expires_on.slice(0, 4)}`)}</Text>}
                   </View>
-                  <Text style={{ color: MINT, fontWeight: "700" }}>{t("Abrir")}</Text>
+                  <Text style={{ color: c.text, fontWeight: "600" }}>{t("Abrir")}</Text>
                 </Pressable>
               );
             }
             const a = item.action;
             if (a.kind === "calendar_invite") {
               return (
-                <View style={[s.draft, { backgroundColor: c.card, borderColor: MINT }]}>
+                <View style={[s.draft, { backgroundColor: c.card, borderColor: c.line }]}>
                   <Text style={[s.draftLabel, { color: c.sub }]}>{t("Convite")} · {a.status === "pending" ? t("aguardando você") : a.status === "sending" ? t("enviando…") : a.status === "sent" ? t("enviado ✓") : t("cancelado")}</Text>
                   <Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{a.payload.title}</Text>
                   {!!a.payload.start && <Text style={{ color: c.sub }}>{fmtDate(a.payload.start)}</Text>}
@@ -2453,7 +2495,7 @@ function FidusApp() {
         </View>
         {meeting && (
           <Pressable onPress={finishMeeting} style={[s.meetBar, { backgroundColor: c.card, borderColor: RED }]}>
-            <Text style={{ color: RED, fontWeight: "800" }}>● REC {fmtClock(meetSecs)}</Text>
+            <Text style={{ color: RED, fontWeight: "600" }}>● REC {fmtClock(meetSecs)}</Text>
             <Text style={{ color: c.text, flex: 1, fontSize: 15 }}>{t("Gravando a reunião. Mantenha o Fidus aberto.")}</Text>
             <Text style={{ color: c.text, fontWeight: "700" }}>{t("Encerrar")}</Text>
           </Pressable>
@@ -2483,7 +2525,7 @@ function FidusApp() {
                 <Text style={{ color: c.sub, fontSize: 14 }} numberOfLines={1}>{t("Gravando…")}</Text>
               </View>
               <Pressable onPress={stopRec} accessibilityLabel={t("Enviar áudio")} style={[s.sendBtn2, { backgroundColor: NAVY }]}>
-                <ArrowUpIcon color="#fff" />
+                <ArrowUpIcon color={ON_INK} />
               </Pressable>
             </>) : (<>
               <Pressable onPress={photoMenu} disabled={busy} accessibilityLabel={t("Adicionar foto ou arquivo")} hitSlop={6}
@@ -2496,12 +2538,12 @@ function FidusApp() {
               {activeReq ? (
                 <Pressable onPress={stopRequest} accessibilityLabel={t("Parar")} hitSlop={6}
                   style={[s.sendBtn2, { backgroundColor: NAVY }]}>
-                  <View style={{ width: 13, height: 13, borderRadius: 2, backgroundColor: "#fff" }} />
+                  <View style={{ width: 13, height: 13, borderRadius: 2, backgroundColor: {ON_INK} }} />
                 </Pressable>
               ) : typed.trim().length > 0 ? (
                 <Pressable onPress={() => sendText()} disabled={busy} accessibilityLabel={t("Enviar")}
                   style={[s.sendBtn2, { backgroundColor: busy ? c.sub : NAVY }]}>
-                  <ArrowUpIcon color="#fff" />
+                  <ArrowUpIcon color={ON_INK} />
                 </Pressable>
               ) : (
                 <>
@@ -2511,7 +2553,7 @@ function FidusApp() {
                   </Pressable>
                   <Pressable onPress={openVoice} disabled={busy || meeting} accessibilityLabel={t("Modo conversa")}
                     style={[s.sendBtn2, { backgroundColor: NAVY, opacity: busy || meeting ? 0.4 : 1 }]}>
-                    <WaveIcon color="#fff" />
+                    <WaveIcon color={ON_INK} />
                   </Pressable>
                 </>
               )}
@@ -2524,23 +2566,23 @@ function FidusApp() {
       {/* Menu lateral (como no Claude) */}
       <Modal visible={drawer} transparent animationType="none" onRequestClose={() => closeDrawer()} statusBarTranslucent>
         <View style={{ flex: 1, flexDirection: "row" }}>
-          <Animated.View style={[s.drawer, { backgroundColor: c.bg, paddingTop: insets.top + 10, paddingBottom: insets.bottom + 10,
+          <Animated.View style={[s.drawer, { backgroundColor: dark ? "#181818" : "#F9F9F8", paddingTop: insets.top + 10, paddingBottom: insets.bottom + 10,
             transform: [{ translateX: drawerX }] }]}>
             <Text style={[s.logo, { color: c.text, fontSize: 26, paddingHorizontal: 18, marginBottom: 8 }]}>Fidus</Text>
-            <Pressable onPress={newChat} style={[s.drawerNew, { backgroundColor: c.card, borderColor: c.line }]}>
-              <ComposeIcon color={c.text} size={20} /><Text style={{ color: c.text, fontWeight: "700", fontSize: 15 }}>{t("Nova conversa")}</Text>
+            <Pressable onPress={newChat} style={[s.drawerNew, { backgroundColor: "transparent", borderColor: "transparent" }]}>
+              <ComposeIcon color={c.text} size={20} /><Text style={{ color: c.text, fontWeight: "600", fontSize: 15 }}>{t("Nova conversa")}</Text>
             </Pressable>
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 12 }}>
               {([
-                ["convs", "💬", t("Conversas")], ["tasks", "📝", t("Tarefas")], ["docs", "📄", t("Documentos")],
-                ["meetings", "🎙", t("Reuniões e atas")], ["expenses", "💷", t("Gastos e contas")],
-                ["booking", "🔗", t("Link de agendamento")], ["activity", "✅", t("Atividade")],
-                ["invite", "🎁", t("Convide e ganhe")],
-                ...(me?.is_owner ? [["admin", "👥", t("Clientes")]] : []),
-                ...(me?.staff_role ? [["panel", "📈", t("Painel da empresa")]] : []),
+                ["convs", "chat", t("Conversas")], ["tasks", "task", t("Tarefas")], ["docs", "doc", t("Documentos")],
+                ["meetings", "mic", t("Reuniões e atas")], ["expenses", "wallet", t("Gastos e contas")],
+                ["booking", "link", t("Link de agendamento")], ["activity", "activity", t("Atividade")],
+                ["invite", "gift", t("Convide e ganhe")],
+                ...(me?.is_owner ? [["admin", "users", t("Clientes")]] : []),
+                ...(me?.staff_role ? [["panel", "chart", t("Painel da empresa")]] : []),
               ] as [Screen, string, string][]).map(([sc, ic, label]) => (
-                <Pressable key={sc} onPress={() => go(sc)} style={[s.drawerItem, screen === sc && { backgroundColor: c.card }]}>
-                  <Text style={{ fontSize: 17, width: 28 }}>{ic}</Text>
+                <Pressable key={sc} onPress={() => go(sc)} style={[s.drawerItem, screen === sc && { backgroundColor: c.soft }]}>
+                  <Icon name={ic} color={c.sub} size={20} />
                   <Text style={{ color: c.text, fontSize: 15 }}>{label}</Text>
                 </Pressable>
               ))}
@@ -2554,7 +2596,7 @@ function FidusApp() {
               </>)}
             </ScrollView>
             <Pressable onPress={() => go("settings")} style={[s.drawerUser, { borderTopColor: c.line }]}>
-              <View style={[s.avatar, { backgroundColor: NAVY }]}><Text style={{ color: "#fff", fontWeight: "800" }}>{userInitial}</Text></View>
+              <View style={[s.avatar, { backgroundColor: NAVY }]}><Text style={{ color: ON_INK, fontWeight: "600" }}>{userInitial}</Text></View>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: c.text, fontWeight: "700" }} numberOfLines={1}>{me?.name || me?.email || "Fidus"}</Text>
                 <Text style={{ color: c.sub, fontSize: 12 }}>{t("Plano {0}", t(me?.plan_name || PLAN_NAMES[me?.plan] || ""))}</Text>
@@ -2567,28 +2609,28 @@ function FidusApp() {
       </Modal>
 
       <Modal visible={voiceOpen} animationType="fade" onRequestClose={closeVoice} statusBarTranslucent>
-        <View style={{ flex: 1, backgroundColor: "#07090D", paddingTop: insets.top + 12, paddingBottom: insets.bottom + 20, paddingHorizontal: 24 }}>
+        <View style={{ flex: 1, backgroundColor: "#0F0F0F", paddingTop: insets.top + 12, paddingBottom: insets.bottom + 20, paddingHorizontal: 24 }}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Text style={{ color: "#F2F5F7", fontSize: 18, fontWeight: "700", flex: 1 }}>{t("Modo conversa")}</Text>
             <Pressable onPress={closeVoice} accessibilityLabel={t("Fechar modo conversa")} hitSlop={10}
-              style={[s.iconBtn, { backgroundColor: "#161B23" }]}><CloseIcon color="#F2F5F7" /></Pressable>
+              style={[s.iconBtn, { backgroundColor: "#1F1F1F" }]}><CloseIcon color="#F2F5F7" /></Pressable>
           </View>
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 28 }}>
             <Pressable onPress={tapVoiceCircle} accessibilityLabel={t("Enviar agora ou interromper")}>
               <Animated.View style={{ width: 190, height: 190, borderRadius: 95, alignItems: "center", justifyContent: "center",
-                backgroundColor: vState === "thinking" ? "#1E2530" : vState === "speaking" ? "#2F5BD8" : MINT,
+                backgroundColor: vState === "thinking" ? "#262626" : vState === "speaking" ? "#FFFFFF" : "#E8E8E8",
                 transform: [{ scale: pulse }] }}>
-                {vState === "thinking" ? <ActivityIndicator color="#F2F5F7" size="large" /> : <WaveIcon color="#07090D" size={56} />}
+                {vState === "thinking" ? <ActivityIndicator color="#F2F5F7" size="large" /> : <WaveIcon color="#0F0F0F" size={56} />}
               </Animated.View>
             </Pressable>
             <Text style={{ color: "#F2F5F7", fontSize: 22, fontWeight: "700" }}>
               {vState === "listening" ? t("Ouvindo…") : vState === "thinking" ? t("Pensando…") : vState === "speaking" ? t("Falando…") : ""}</Text>
-            {!!vHeard && <Text style={{ color: "#8D98A8", fontSize: 16, textAlign: "center" }} numberOfLines={3}>“{vHeard}”</Text>}
+            {!!vHeard && <Text style={{ color: "#8A8A8A", fontSize: 16, textAlign: "center" }} numberOfLines={3}>“{vHeard}”</Text>}
             {!!vReply && <Text style={{ color: "#F2F5F7", fontSize: 20, lineHeight: 28, textAlign: "center" }} numberOfLines={7}>{vReply}</Text>}
           </View>
-          <Text style={{ color: "#6F7B8C", textAlign: "center", marginBottom: 14 }}>
+          <Text style={{ color: "#7A7A7A", textAlign: "center", marginBottom: 14 }}>
             {t("Fale normalmente: quando você parar, eu respondo. Toque no círculo para enviar na hora ou para me interromper. Diga “tchau” para sair.")}</Text>
-          <Pressable onPress={closeVoice} style={{ backgroundColor: "#161B23", borderRadius: 18, paddingVertical: 18, alignItems: "center" }}>
+          <Pressable onPress={closeVoice} style={{ backgroundColor: "#1F1F1F", borderRadius: 18, paddingVertical: 18, alignItems: "center" }}>
             <Text style={{ color: "#F2F5F7", fontSize: 18, fontWeight: "700" }}>{t("Encerrar")}</Text></Pressable>
         </View>
       </Modal>
@@ -2950,6 +2992,9 @@ const I18N_KEYS: string[] = [
   "Nenhuma reunião gravada ainda.",
   "ata pronta",
   "processando",
+  "Mês anterior",
+  "Próximo mês",
+  "Total do mês",
   "{0} lançamentos",
   "Todas",
   "Nova carteira",
@@ -3073,7 +3118,7 @@ const I18N_KEYS: string[] = [
 ];
 // @i18n-keys-end
 
-const s = StyleSheet.create({
+const makeStyles = (ink: string, onInk: string, soft: string, text: string, line: string) => ({
   composer: { flex: 1, flexDirection: "row", alignItems: "flex-end", gap: 6, borderWidth: 1, borderRadius: 26,
     paddingHorizontal: 8, paddingVertical: 7, minHeight: 54 },
   composerInput: { flex: 1, fontSize: 17, paddingHorizontal: 6, paddingTop: 9, paddingBottom: 9, maxHeight: 130 },
@@ -3085,25 +3130,25 @@ const s = StyleSheet.create({
   sheetBtn: { paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },
   flex: { flex: 1 },
   setup: { flexGrow: 1, justifyContent: "center", padding: 24 },
-  logo: { fontSize: 40, fontWeight: "700", marginBottom: 4 },
+  logo: { fontSize: 36, fontWeight: "600", letterSpacing: -0.5, marginBottom: 4 },
   actCard: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, padding: 14 },
-  actIcon: { fontSize: 22 },
+  actIcon: { fontSize: 20, width: 24, textAlign: "center" },
   check: { width: 24, height: 24, borderRadius: 12, borderWidth: 2 },
   statCard: { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 14, padding: 16, marginBottom: 6 },
   pill: { alignSelf: "flex-start", borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, marginBottom: 4 },
   topbar: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingTop: 6, paddingBottom: 4 },
   chip: { borderWidth: 1, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 10 },
-  header: { fontSize: 20, fontWeight: "700" },
+  header: { fontSize: 20, fontWeight: "600" },
   empty: { textAlign: "center", marginTop: 80, lineHeight: 22 },
-  input: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 12, fontSize: 16 },
-  primary: { backgroundColor: NAVY, borderRadius: 12, padding: 14, alignItems: "center" },
-  primarySm: { backgroundColor: NAVY, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 20 },
-  primaryText: { color: "#fff", fontWeight: "600" },
-  secondary: { borderWidth: 1, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16 },
+  input: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 12, fontSize: 16, borderWidth: 1, borderColor: line },
+  primary: { backgroundColor: ink, borderRadius: 999, padding: 14, alignItems: "center" },
+  primarySm: { backgroundColor: ink, borderRadius: 999, paddingVertical: 10, paddingHorizontal: 20 },
+  primaryText: { color: onInk, fontWeight: "600" },
+  secondary: { borderWidth: 1, borderRadius: 999, paddingVertical: 10, paddingHorizontal: 16 },
   bubble: { borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, maxWidth: "88%" },
-  userBubble: { backgroundColor: NAVY, alignSelf: "flex-end" },
-  userText: { color: "#fff", fontSize: 17, lineHeight: 26 },
-  draft: { borderRadius: 14, padding: 14, borderWidth: 1.5 },
+  userBubble: { backgroundColor: soft, alignSelf: "flex-end", borderRadius: 20, paddingHorizontal: 16 },
+  userText: { color: text, fontSize: 17, lineHeight: 26 },
+  draft: { borderRadius: 14, padding: 14, borderWidth: 1 },
   draftLabel: { fontSize: 12, marginBottom: 6 },
   row: { flexDirection: "row", justifyContent: "flex-end", gap: 10 },
   bottom: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12 },
@@ -3122,11 +3167,14 @@ const s = StyleSheet.create({
   drawer: { width: 300, maxWidth: "84%", height: "100%", elevation: 12 },
   drawerNew: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 12, marginBottom: 10, paddingHorizontal: 14,
     paddingVertical: 12, borderRadius: 14, borderWidth: 1 },
-  drawerItem: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 18, paddingVertical: 12, marginHorizontal: 6, borderRadius: 12 },
+  drawerItem: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 11, marginHorizontal: 8, borderRadius: 10 },
   drawerRecent: { paddingHorizontal: 18, paddingVertical: 9 },
   drawerUser: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   avatar: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   kv: { flexDirection: "row", justifyContent: "space-between", gap: 10, paddingVertical: 4 },
   planRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, padding: 12 },
-  toast: { position: "absolute", alignSelf: "center", backgroundColor: "#000C", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999 },
+  toast: { position: "absolute", alignSelf: "center", backgroundColor: "#111111EE", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999 },
 });
+const sLight = StyleSheet.create(makeStyles("#111111", "#FFFFFF", "#F3F3F2", "#111111", "#E6E6E6") as any);
+const sDark = StyleSheet.create(makeStyles("#ECECEC", "#141414", "#262626", "#ECECEC", "#2E2E2E") as any);
+let s: any = sLight;  // trocado a cada render pelo tema do celular

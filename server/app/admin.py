@@ -247,7 +247,7 @@ def system(s: Session = Depends(need("system"))):
     if tasks24 >= 10 and _pct(failed, tasks24) > 10:
         problems.append("tasks_failing")
     return {"ok": not problems, "problems": problems, "uptime_s": int(time.time() - metrics.STARTED),
-            "version": "0.9.8", "llm": config.LLM_PROVIDER, "model": config.LLM_MODEL,
+            "version": "0.9.9", "llm": config.LLM_PROVIDER, "model": config.LLM_MODEL,
             "backup": {"age_hours": round(age, 1) if age is not None else None, **backup.last()},
             "disk_free_gb": free, "requests_24h": len(last24), "asks_24h": len(asks),
             "errors_24h": sum(1 for r in last24 if r["status"] >= 500),
