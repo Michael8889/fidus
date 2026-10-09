@@ -22,6 +22,18 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - Português de Portugal (pt-PT) como idioma próprio no app, no Fidus e no site
 - Site: página "Membro fundador" (lista de espera com código aplicado) e página "Seja parceiro" (candidatura)
 
+## Funil Fidus → mentoria (HARVEST Framework)
+- [ ] **Você**: conteúdo com a sua imagem (@michael.gbd): "como eu toco empresas em 3 países com um assessor de IA",
+      mostrando o Fidus de verdade; CTA para baixar o Fidus (código do Mike = desconto no 1º mês)
+- [ ] **Claude**: no app, pergunta opcional no cadastro (tem empresa? quantas pessoas? faturamento aproximado) e
+      consentimento SEPARADO para receber convites da mentoria (LGPD/GDPR); nunca usar e-mails, agenda ou gastos do
+      cliente para marketing
+- [ ] **Claude**: cartão "Quer crescer o seu negócio? Diagnóstico gratuito com o Mike" só para quem aceitou, depois de
+      2–4 semanas de uso (relatório mensal do Fidus como gancho); vai para formulário de aplicação + agenda (link de
+      agendamento do próprio Fidus)
+- [ ] **Claude**: painel › aba Leads (quem aceitou, perfil, origem, status: novo, conversa, cliente)
+- [ ] **Você**: oferta de mentoria com Fidus Premium incluso (o app vira parte do método)
+
 ## Fase 1 — Empresa e contas (em paralelo)
 - [ ] **Você**: conta bancária da empresa
 - [ ] **Você**: registro no ICO (proteção de dados, taxa anual pequena)
