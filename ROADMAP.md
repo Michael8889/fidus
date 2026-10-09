@@ -37,6 +37,9 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
       ambos), carteiras e moedas, cidade/fuso, prioridades, estilo de resposta, horário do "bom dia"; depois
       expectativas (o que faz, aprovação antes de enviar, Desfazer, privacidade) e uma primeira tarefa real;
       última pergunta: dicas por e-mail (opt-in). Respostas viram perfil e carteiras automaticamente
+- [ ] **Claude**: as perguntas ADAPTADAS a cada idioma, não traduzidas ao pé da letra: exemplos locais (UK: "£30 of
+      petrol", "HomB in pounds"; PT-PT: "telemóvel", "combustível", euros; BR: reais, "gasolina"), moeda e cidade do
+      país do celular como sugestão, tratamento certo (você / tu / you); revisar EN, PT-BR, PT-PT e ES à mão
  Empresa e contas (em paralelo)
 - [ ] **Você**: conta bancária da empresa
 - [ ] **Você**: registro no ICO (proteção de dados, taxa anual pequena)
