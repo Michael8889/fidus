@@ -33,7 +33,7 @@ const SpeechRec: any = opt(() => require("expo-speech-recognition").ExpoSpeechRe
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},js=0.9.7,ota=${UPDATE_ID.slice(0, 8)}`;
+const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},js=0.9.8,ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
 
@@ -534,7 +534,7 @@ function FidusApp() {
   const [lockOn, setLockOn] = useState(false);
   const [activeReq, setActiveReq] = useState("");  // pedido em andamento que pode ser parado
   const cancelledReqs = useRef(new Set<string>());
-  const [speakAudio, setSpeakAudio] = useState(true);  // áudio gravado: o Fidus responde também em voz alta
+  const [speakAudio, setSpeakAudio] = useState(false);  // áudio gravado: responder também em voz alta (desligado por padrão; só o modo conversa fala sempre)
   const [locked, setLocked] = useState(false);
   const bgAt = useRef(0);
   const kicked = useRef(false);
@@ -1245,7 +1245,7 @@ function FidusApp() {
   useEffect(() => {
     (async () => {
       try { setLockAvail(!!LocalAuth && (await LocalAuth.hasHardwareAsync()) && (await LocalAuth.isEnrolledAsync())); } catch { setLockAvail(false); }
-      try { setSpeakAudio((await SecureStore.getItemAsync("speakAudio")) !== "0"); } catch {}
+      try { setSpeakAudio((await SecureStore.getItemAsync("speakAudio2")) === "1"); } catch {}
       const on = (await SecureStore.getItemAsync("lock")) === "1";
       setLockOn(on);
       if (on) { setLocked(true); unlock(); }
@@ -1274,7 +1274,7 @@ function FidusApp() {
   async function toggleSpeakAudio() {
     if (!canSpeak) return Alert.alert(t("Responder áudios em voz alta"), t("Instale o APK novo para o Fidus falar."));
     const on = !speakAudio;
-    try { await SecureStore.setItemAsync("speakAudio", on ? "1" : "0"); } catch {}
+    try { await SecureStore.setItemAsync("speakAudio2", on ? "1" : "0"); } catch {}
     setSpeakAudio(on); if (!on) { try { Speech.stop(); } catch {} }
     flash(on ? t("O Fidus vai responder seus áudios falando") : t("Respostas aos áudios só por escrito"));
   }
@@ -2294,7 +2294,7 @@ function FidusApp() {
           <Text style={{ color: c.sub, fontSize: 12, marginTop: 6 }}>
             {SpeechRec ? "✅" : "❌"} {t("Transcrição no celular")}{SpeechRec ? "" : ` (${t("precisa do APK novo")})`}{"\n"}
             {me?.natural_voice ? "✅" : "❌"} {t("Voz natural")}{me?.natural_voice ? "" : ` (${t("falta a chave no servidor")})`}{"\n"}
-            {t("Versão")}: 0.9.7 · {UPDATE_ID.slice(0, 8)}</Text>
+            {t("Versão")}: 0.9.8 · {UPDATE_ID.slice(0, 8)}</Text>
           <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
         </Card>
         <Card c={c} onPress={reconnectGoogle}>

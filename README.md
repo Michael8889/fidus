@@ -125,7 +125,7 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
 - Carteiras: cada empresa/conta tem nome e moeda (ex. "Pessoal BR" em BRL). Tela de gastos com filtro por carteira,
   totais na moeda de cada uma e exportação para o contador por carteira. Criar: no app (+ Carteira) ou pedindo ao
   Fidus. Tocar e segurar remove (os gastos antigos ficam guardados). Mais de uma carteira: plano Negócio.
-- Áudio gravado é respondido também em voz alta (Configurações › Responder áudios em voz alta; precisa do APK com
+- Áudio gravado pode ser respondido também em voz alta (desligado por padrão; Configurações › Responder áudios em voz alta; precisa do APK com
   expo-speech). No modo conversa, se demorar, o Fidus diz "um instante".
 - Cumprimentos e agradecimentos vão para o modelo leve (mais rápido e barato).
 - Enter na caixa de texto só pula linha; envia pelo botão. Enquanto o Fidus pensa, o botão vira "parar"
