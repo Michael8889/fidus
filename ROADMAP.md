@@ -24,13 +24,15 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 
 ## Funil Fidus → mentoria (HARVEST Framework) — discreto, por e-mail (nada de mentoria dentro do app)
 - [ ] **Você**: conteúdo com a sua imagem (@michael.gbd) mostrando o Fidus; CTA para baixar com o código MIKE
-- [ ] **Claude**: no cadastro, UMA caixa desmarcada e neutra: "Quero receber dicas de gestão e novidades por e-mail"
-      (exigência da LGPD/GDPR/PECR para e-mail de marketing de outro produto); link de descadastro em todo e-mail
+- [ ] **Claude**: no cadastro, UMA caixa desmarcada: "Quero receber por e-mail dicas de gestão do Mike e convites da
+      HARVEST, parceira do Fidus" (a mentoria é outra empresa: precisa ser nomeada; LGPD/GDPR/PECR); só o nome e o
+      e-mail de quem marcou vão para a HARVEST; link de descadastro em todo e-mail; política de privacidade cita isso
 - [ ] **Claude**: newsletter "Notas do Mike" pelo Resend: boas-vindas + sequência automática (dica de gestão +
       dica de uso do Fidus; a cada 3–4 e-mails, convite para o diagnóstico da mentoria); só para quem marcou a caixa;
       nunca usar e-mails, agenda ou gastos do cliente para segmentar
 - [ ] **Claude**: painel › aba Leads (interna): quem aceitou, quem abriu/clicou, quem agendou
-- [ ] **Você**: oferta de entrada da mentoria (ex. diagnóstico de 30 min) e se a mentoria fica em outra empresa
+- [x] **Você**: oferta de entrada = diagnóstico gratuito de 30 min; a mentoria fica na HARVEST (empresa separada)
+- [ ] **Você**: nome jurídico e país da HARVEST (para a política de privacidade e o rodapé dos e-mails)
 
 ## Fase 1 — Empresa e contas (em paralelo)
 - [ ] **Você**: conta bancária da empresa
