@@ -4,7 +4,7 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 
 ## Fase 0 — Agora (esta semana)
 - [x] **Você**: instalar a versão nova (servidor: `deploy-hetzner.ps1`; app: `update-app.ps1`)
-- [ ] **Você**: instalar a v0.10 (servidor + `update-app.ps1`) e gerar/instalar o APK novo (`build-apk.ps1`)
+- [x] **Você**: instalar a v0.10 (servidor + `update-app.ps1`) e gerar/instalar o APK novo (`build-apk.ps1`)
 - [ ] **Você**: no `server\.env`: `FIDUS_COMPANY_ADDRESS`, `FIDUS_SUPPORT_EMAIL`, `FIDUS_MENTOR_BOOKING_URL`
 - [ ] **Você**: Google Cloud: ativar a Cloud Text-to-Speech API, criar chave restrita e pôr `FIDUS_GOOGLE_TTS_KEY` no `server\.env`
 - [ ] **Você**: cadastrar o endereço `/health` do servidor num monitor grátis (UptimeRobot) para alerta se cair
@@ -53,7 +53,8 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [ ] **Você**: listar 5 a 10 criadores (PT, BR no Reino Unido/Portugal); Claude prepara abordagem e contrato simples
 
 ## Fase 1 — Empresa e contas (em paralelo)
-- [ ] **Você**: conta bancária da empresa
+- [x] **Você**: conta bancária da empresa (Revolut Business)
+- [ ] **Você**: D-U-N-S grátis pela ferramenta da Apple (developer.apple.com/enroll/duns-lookup), nome e endereço iguais ao Companies House
 - [ ] **Você**: registro no ICO (proteção de dados, taxa anual pequena)
 - [x] **Você**: busca de marca no Reino Unido (08/10): nenhuma "FIDUS" viva em software (classes 9/42); atenção a
       "FEEDUS" (classes 35/42, parecida no som)
