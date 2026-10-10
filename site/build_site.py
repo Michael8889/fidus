@@ -126,6 +126,9 @@ def main() -> None:
 <meta property="og:title" content="Fidus · Fale. O Fidus resolve.">
 <meta property="og:description" content="Assessor pessoal por voz para quem vive entre empresas, países e moedas.">
 <meta name="theme-color" content="#07090D">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 {helmet}
 </head>
 <body>

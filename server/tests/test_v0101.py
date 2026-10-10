@@ -53,3 +53,12 @@ def test_app_points_to_new_domain_and_migrates_old():
     assert "LEGACY_SERVERS" in src and "fidus.148-230-123-44.sslip.io" in src
     assert 'SUPPORT_EMAIL = "suporte@heyfidus.com"' in src
     assert 'screen === "plan"' in src
+
+
+def test_favicons_and_pages_still_route():
+    for path, ctype in (("/favicon.ico", "image/x-icon"), ("/favicon-32.png", "image/png"), ("/apple-touch-icon.png", "image/png")):
+        r = client.get(path)
+        assert r.status_code == 200 and r.headers["content-type"].startswith(ctype)
+    assert client.get("/privacy").status_code == 200 and "favicon.ico" in client.get("/privacy").text
+    assert "favicon.ico" in client.get("/").text
+    assert client.get("/nada.png").status_code == 404

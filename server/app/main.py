@@ -126,7 +126,7 @@ async def email_unsub(request: Request):
 
 def _page(title: str, body: str) -> HTMLResponse:
     return HTMLResponse(f"""<!doctype html><html lang="pt"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title>{ICON_LINKS}
 <style>body{{margin:0;font-family:system-ui,sans-serif;background:#FFFFFF;color:#111111;display:flex;min-height:100vh;
 align-items:center;justify-content:center}}main{{max-width:420px;padding:32px 24px;text-align:center}}
 h1{{font-size:26px;font-weight:600;margin:0 0 12px}}p{{color:#555;line-height:1.5}}.code{{font:600 34px ui-monospace,monospace;
@@ -140,7 +140,7 @@ a.b,button{{background:#ECECEC;color:#141414}}}}</style></head><body><main>{body
 def _doc(title: str, body: str) -> HTMLResponse:
     """Página de texto longo (privacidade, termos)."""
     return HTMLResponse(f"""<!doctype html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title>{ICON_LINKS}
 <style>body{{margin:0;font-family:system-ui,sans-serif;background:#FFFFFF;color:#111;line-height:1.6}}
 main{{max-width:720px;margin:0 auto;padding:32px 20px 64px}}h1{{font-weight:600;font-size:30px}}h2{{font-weight:600;font-size:19px;margin-top:28px}}
 a{{color:#1E5BD8}}.small{{color:#6B6B6B;font-size:14px}}li{{margin:6px 0}}
@@ -168,7 +168,26 @@ HOME_TEXT = {
 }
 
 
-_SITE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "site.html")
+_STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+_SITE = os.path.join(_STATIC, "site.html")
+ICON_LINKS = ('<link rel="icon" href="/favicon.ico" sizes="any"><link rel="icon" type="image/png" href="/favicon-32.png">'
+              '<link rel="apple-touch-icon" href="/apple-touch-icon.png">')
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return FileResponse(os.path.join(_STATIC, "favicon.ico"), media_type="image/x-icon",
+                        headers={"Cache-Control": "public, max-age=86400"})
+
+
+def _icon(name: str):
+    return FileResponse(os.path.join(_STATIC, name), media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+# ícones do site (aba do navegador, atalho na tela do celular); rotas fixas, nada de caminho livre
+app.get("/favicon-32.png", include_in_schema=False)(lambda: _icon("favicon-32.png"))
+app.get("/apple-touch-icon.png", include_in_schema=False)(lambda: _icon("apple-touch-icon.png"))
+app.get("/icon-192.png", include_in_schema=False)(lambda: _icon("icon-192.png"))
 
 
 @app.get("/", response_class=HTMLResponse)
