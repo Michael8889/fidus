@@ -58,7 +58,12 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [ ] **Você**: registro no ICO (proteção de dados, taxa anual pequena)
 - [x] **Você**: busca de marca no Reino Unido (08/10): nenhuma "FIDUS" viva em software (classes 9/42); atenção a
       "FEEDUS" (classes 35/42, parecida no som)
-- [ ] **Você**: busca na União Europeia (TMview), pedir registro da marca FIDUS (UK, classes 9 e 42) e comprar o domínio
+- [ ] **Você**: busca na União Europeia (TMview), pedir registro da marca FIDUS (UK, classes 9 e 42)
+- [x] **Você**: domínio **heyfidus.com** comprado (10/10). fidus.ai, fidus.app já têm dono
+- [ ] **Você**: DNS: `app` e `@` → 148.230.123.44, `www` → heyfidus.com (de preferência com o DNS no Cloudflare,
+      que dá o encaminhamento grátis de suporte@heyfidus.com para o seu e-mail)
+- [ ] **Claude**: próxima versão passa a usar app.heyfidus.com (servidor, painel, e-mails) e heyfidus.com (site),
+      mantendo o endereço antigo funcionando até todos os celulares atualizarem
 - [x] **Você**: abrir a empresa: **Fidus Labs Limited** (número 17510962, registrada na Companies House em 09/10/2026)
 - [ ] **Você**: conta Google Play Console no nome da empresa (US$ 25)
 - [ ] **Você**: conta Resend + verificar o domínio → liga os e-mails e a entrada por e-mail (`.env`)
