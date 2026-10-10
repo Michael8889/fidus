@@ -43,7 +43,7 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=0.11.2,ota=${UPDATE_ID.slice(0, 8)}`;
+const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=0.11.5,ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
 
@@ -2711,7 +2711,7 @@ function FidusApp() {
             {SpeechRec ? "✅" : "❌"} {t("Transcrição no celular")}{SpeechRec ? "" : ` (${t("precisa do APK novo")})`}{"\n"}
             {me?.natural_voice ? "✅" : "❌"} {t("Voz natural")}{me?.natural_voice ? "" : ` (${t("falta a chave no servidor")})`}{"\n"}
             {RTC && me?.realtime && !rtErr ? "✅" : "❌"} {t("Conversa em tempo real")}{!RTC ? ` (${t("precisa do APK novo")})` : !me?.realtime ? ` (${t("desligada no servidor")})` : rtErr ? ` (${rtErr})` : ""}{"\n"}
-            {t("Versão")}: 0.11.2 · {UPDATE_ID.slice(0, 8)}</Text>
+            {t("Versão")}: 0.11.5 · {UPDATE_ID.slice(0, 8)}</Text>
           <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
         </Card>
         <Card c={c} onPress={() => { setScreen("chat"); startOnboarding(true); }}>
@@ -2802,12 +2802,6 @@ function FidusApp() {
               return <View style={{ alignSelf: "flex-start", maxWidth: "85%" }}>
                 <View style={[s.bubble, { backgroundColor: "transparent", maxWidth: "100%", paddingHorizontal: 2 }]}>
                   <LinkText text={item.text} style={{ color: c.text, fontSize: 17, lineHeight: 26 }} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} /></View>
-                <View style={{ flexDirection: "row", gap: 2, marginTop: 2, marginLeft: 4 }}>
-                  {[1, -1].map((v) => (
-                    <Pressable key={v} hitSlop={6} onPress={() => sendFeedback(item.id, v)} accessibilityLabel={v > 0 ? t("Resposta boa") : t("Resposta ruim")}
-                      style={{ paddingHorizontal: 6, paddingVertical: 2, opacity: fb[item.id] === undefined ? 0.45 : fb[item.id] === v ? 1 : 0.2 }}>
-                      <Text style={{ fontSize: 13 }}>{v > 0 ? "👍" : "👎"}</Text></Pressable>))}
-                </View>
               </View>;
             if (item.type === "onb") {
               const q = item.q; const live = onbQ && onbQ.step === q.step;
@@ -2957,17 +2951,6 @@ function FidusApp() {
             <Text style={{ color: c.text, flex: 1, fontSize: 15 }}>{t("Gravando a reunião. Mantenha o Fidus aberto.")}</Text>
             <Text style={{ color: c.text, fontWeight: "700" }}>{t("Encerrar")}</Text>
           </Pressable>
-        )}
-        {!meeting && !recording && typed.length === 0 && kb === 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 6, gap: 8, alignItems: "center" }}
-            style={{ flexGrow: 0, flexShrink: 0, height: 54 }}>
-            {SUGGESTIONS().map(([label, q]) => (
-              <Pressable key={label} disabled={busy} onPress={() => sendText(q)}
-                style={[s.chip, { borderColor: c.sub, backgroundColor: c.card, paddingVertical: 9, paddingHorizontal: 14 }]}>
-                <Text style={{ color: c.text, fontSize: 14, lineHeight: 18 }} numberOfLines={1}>{label}</Text></Pressable>
-            ))}
-          </ScrollView>
         )}
         <View style={[s.bottom, Platform.OS === "android" && kb > 0 ? { marginBottom: Math.max(kb - insets.bottom, 0) + 56 } : null]}>
           <View style={[s.composer, { backgroundColor: c.card, borderColor: recording ? RED : c.line }]}>
@@ -3577,8 +3560,6 @@ const I18N_KEYS: string[] = [
   "Nova conversa",
   "Fidus está pensando…",
   "Toque no microfone, fale e toque de novo para enviar.\nEx.: “Marca visita técnica dia 12 às 4pm”,\n“Me lembra de pagar o IVA dia 5”,\n“Paguei 60 libras de gasolina, HomB” ou\n📷 mande a foto de um recibo ou documento.\n\n🎙 Reunião no topo grava e gera a ata.",
-  "Resposta boa",
-  "Resposta ruim",
   "De 0 a 10, quanto você indicaria o Fidus a um amigo?",
   "O que faria o Fidus ser ainda melhor? (opcional)",
   "Transferência",

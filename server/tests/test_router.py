@@ -139,3 +139,27 @@ def test_gemini_extra_fields_round_trip(monkeypatch):
                                {"role": "tool", "tool_call_id": "abc", "content": "{}"}], [], "gemini-3.8-flash", "u", "k")
     back = sent[1]["messages"][2]["tool_calls"][0]
     assert back["extra_content"]["google"]["thought_signature"] == "SIG" and back["id"] == "abc"
+
+
+def test_route_distance_with_mocked_maps(monkeypatch):
+    import requests
+    from app import tools
+
+    class R:
+        def __init__(self, j):
+            self.j = j
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self.j
+
+    def fake_get(url, params=None, timeout=None, headers=None):
+        if "nominatim" in url:
+            return R([{"lat": "40.2", "lon": "-8.26", "display_name": params["q"]}])
+        return R({"routes": [{"distance": 2512000, "duration": 88200}]})
+    monkeypatch.setattr(requests, "get", fake_get)
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    out = tools._route_distance("Vila Nova de Poiares", "Roma")
+    assert out["km"] == 2512 and out["drive_time"] == "24 h 30 min" and "google.com/maps/dir" in out["maps_link"]

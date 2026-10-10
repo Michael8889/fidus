@@ -98,6 +98,16 @@ TOOLS = [
         },
     },
     {
+        "name": "route_distance",
+        "description": "Distância e tempo de viagem de carro entre dois lugares (endereços ou cidades, qualquer "
+                       "país). Use para 'quantos km dá de X até Y', 'quanto tempo leva', combustível da viagem.",
+        "parameters": {
+            "type": "object",
+            "properties": {"origin": {"type": "string"}, "destination": {"type": "string"}},
+            "required": ["origin", "destination"],
+        },
+    },
+    {
         "name": "delete_calendar_event",
         "description": "Apaga um compromisso pelo event_id (obtido em list_calendar_events). Use só quando o "
                        "usuário pedir para apagar/cancelar, ou para remover cópias duplicadas que ele pediu para limpar.",
@@ -184,6 +194,7 @@ def run(name: str, args: dict) -> dict:
         "list_calendar_events": _list_events,
         "delete_calendar_event": _delete_event,
         "find_place": _find_place,
+        "route_distance": _route_distance,
         "add_expense": _add_expense,
         "update_profile": _update_profile,
         "summarize_expenses": _summarize_expenses,
@@ -256,6 +267,44 @@ def _list_events(time_min, time_max):
                         "start": e["start"].get("dateTime", e["start"].get("date")),
                         "end": e.get("end", {}).get("dateTime", e.get("end", {}).get("date")),
                         "location": e.get("location")} for e in res.get("items", [])]}
+
+
+def _geocode(q: str):
+    import requests
+    r = requests.get("https://nominatim.openstreetmap.org/search", params={"q": q, "format": "jsonv2", "limit": 1},
+                     timeout=10, headers={"User-Agent": "Fidus/0.1 (assistente pessoal; contato via app)",
+                                          "Accept-Language": "pt,en"})
+    r.raise_for_status()
+    j = r.json()
+    return (float(j[0]["lat"]), float(j[0]["lon"]), j[0].get("display_name")) if j else None
+
+
+def _route_distance(origin, destination):
+    """Rota de carro (OpenStreetMap/OSRM, grátis). Sem rota: distância em linha reta, avisando."""
+    import math
+    import time as _t
+    import urllib.parse as _u
+    import requests
+
+    a = _geocode(origin)
+    _t.sleep(1.0)  # Nominatim: 1 busca por segundo
+    b = _geocode(destination)
+    if not a or not b:
+        return {"error": f"não achei {'a origem' if not a else 'o destino'}; peça a cidade ou o endereço completo"}
+    link = ("https://www.google.com/maps/dir/?api=1&origin=" + _u.quote(origin) + "&destination=" + _u.quote(destination))
+    try:
+        r = requests.get(f"https://router.project-osrm.org/route/v1/driving/{a[1]},{a[0]};{b[1]},{b[0]}",
+                         params={"overview": "false"}, timeout=12, headers={"User-Agent": "Fidus/0.1"})
+        r.raise_for_status()
+        rt = r.json()["routes"][0]
+        mins = round(rt["duration"] / 60)
+        return {"from": a[2], "to": b[2], "km": round(rt["distance"] / 1000), "drive_time": f"{mins // 60} h {mins % 60:02d} min",
+                "maps_link": link, "note": "estimativa de rota de carro sem trânsito"}
+    except Exception:  # noqa: BLE001
+        la1, lo1, la2, lo2 = map(math.radians, (a[0], a[1], b[0], b[1]))
+        d = 2 * 6371 * math.asin(math.sqrt(math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2))
+        return {"from": a[2], "to": b[2], "km_straight_line": round(d), "maps_link": link,
+                "note": "rota indisponível agora: distância em linha reta (a de carro é maior)"}
 
 
 def _find_place(query):
