@@ -657,6 +657,8 @@ def tts_phrase(body: TtsIn):
 @app.post("/v1/realtime/session", dependencies=[Depends(auth)])
 def realtime_session():
     from . import realtime
+    if not plans.allows("voice_conversation"):
+        raise HTTPException(402, "modo conversa faz parte do plano Negócio")
     r = realtime.session()
     if r.get("error") == "fair_use":
         lang = "pt" if store.user_lang().startswith("pt") else "en"

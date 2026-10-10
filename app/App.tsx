@@ -1089,6 +1089,11 @@ function FidusApp() {
 
   async function openVoice() {
     if (busy || recording || meeting) return;
+    if (plan?.locked_features?.includes("voice_conversation")) {  // Essencial: mostra o que ganha no Negócio
+      push({ id: uid(), type: "fidus", text: t("O modo conversa (falar com o Fidus como numa ligação) faz parte do plano Negócio.") });
+      upsellCard("modo conversa por voz");
+      return;
+    }
     const perm = await AudioModule.requestRecordingPermissionsAsync();
     if (!perm.granted) return fail(t("permissão do microfone negada."));
     if (SpeechRec && !sr.current.failed) {
@@ -3191,6 +3196,7 @@ const I18N_KEYS: string[] = [
   "Deixa eu ver.",
   "Já vejo isso.",
   "Feito.",
+  "O modo conversa (falar com o Fidus como numa ligação) faz parte do plano Negócio.",
   "A conversa em tempo real não abriu agora. Seguindo no modo normal.",
   "Pode falar. Eu escuto e respondo em voz alta.",
   "Pode falar. (Para ouvir as respostas em voz alta, instale o APK novo.)",

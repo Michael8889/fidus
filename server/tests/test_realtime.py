@@ -77,3 +77,10 @@ def test_usage_recorded_with_bounds(monkeypatch):
     realtime.record_usage({"input_tokens": "x", "output_tokens": 10**9})
     assert calls[0]["input"] == 800 and calls[0]["cache_read"] == 200 and calls[0]["output"] == 500
     assert calls[1]["input"] == 0 and calls[1]["output"] == 500_000
+
+
+def test_conversation_mode_is_negocio_and_up():
+    from app import plans
+    assert not plans.allows("voice_conversation", "essencial")
+    assert plans.allows("voice_conversation", "negocio") and plans.allows("voice_conversation", "premium")
+    assert "Modo conversa" in plans.PLANS["negocio"]["highlights"][0]

@@ -20,7 +20,8 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
   fim da fala mais rápido (0,85 s de silêncio), começa a falar a 1ª frase enquanto busca o resto, vibração leve
 - [x] v0.11.0 (etapa 2 da voz, APK novo): conversa em tempo real com a OpenAI (gpt-realtime-2.1-mini, ~US$ 0,02/min),
   interromper falando, ferramentas do Fidus, "envia" só pelo servidor. **Você**: `FIDUS_OPENAI_API_KEY` no `.env`
-- Depois de testar: comparar com Gemini Live (mais barato?) e decidir se fica para todos os planos ou só pagos
+- [x] Modo conversa (normal e tempo real) só nos planos Negócio e Premium; no Essencial o botão mostra a oferta de upgrade
+- Depois de testar: comparar com Gemini Live (mais barato?)
 - **Você**: testar a voz mais natural: `FIDUS_TTS_TIER=chirp3` no `.env` (1 milhão de letras grátis/mês)
 - [x] v0.10.1: Configurações mostram só "Meu plano: X"; tocar abre a tela do plano (trocar ou cancelar)
 - Open banking no Premium (importar gastos do banco sozinho):

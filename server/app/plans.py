@@ -15,7 +15,8 @@ PLANS = {
     },
     "negocio": {
         "rank": 2, "name": "Negócio", "month": 49.90,
-        "highlights": ["Empresas e moedas ilimitadas", "Link de agendamento para clientes",
+        "highlights": ["Modo conversa: fale com o Fidus como numa ligação", "Empresas e moedas ilimitadas",
+                       "Link de agendamento para clientes",
                        "Ata de reunião automática", "Pacote do contador", "Alerta de assinaturas",
                        "Resumo da semana"],
     },
@@ -69,6 +70,7 @@ FEATURE_MIN = {
     "list_subscriptions": "negocio",
     "weekly_review": "negocio",
     "extra_business": "negocio",
+    "voice_conversation": "negocio",
     "bank_connection": "premium",
     "client_invoices": "premium",
     "extra_user": "premium",
@@ -79,7 +81,8 @@ FEATURE_LABEL = {
     "list_meetings": "atas de reunião", "get_meeting": "atas de reunião", "prepare_minutes_email": "atas de reunião",
     "meetings_record": "gravar reuniões e gerar a ata", "export_for_accountant": "pacote do contador",
     "list_subscriptions": "alerta de assinaturas", "weekly_review": "resumo da semana",
-    "extra_business": "gastos de mais de uma empresa", "bank_connection": "banco conectado",
+    "extra_business": "gastos de mais de uma empresa",
+    "voice_conversation": "modo conversa por voz", "bank_connection": "banco conectado",
     "client_invoices": "cobrança e fatura para clientes", "extra_user": "mais uma pessoa na conta",
 }
 
