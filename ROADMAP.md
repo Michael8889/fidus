@@ -60,13 +60,13 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
       "FEEDUS" (classes 35/42, parecida no som)
 - [ ] **Você**: busca na União Europeia (TMview), pedir registro da marca FIDUS (UK, classes 9 e 42)
 - [x] **Você**: domínio **heyfidus.com** comprado (10/10). fidus.ai, fidus.app já têm dono
-- [ ] **Você**: DNS: `app` e `@` → 148.230.123.44, `www` → heyfidus.com (de preferência com o DNS no Cloudflare,
-      que dá o encaminhamento grátis de suporte@heyfidus.com para o seu e-mail)
+- [x] DNS no Cloudflare (ativo): `app` e `@` → 148.230.123.44, `www` → heyfidus.com; suporte@ e qualquer outro
+      endereço @heyfidus.com encaminham para michael@homb.io
 - [ ] **Claude**: próxima versão passa a usar app.heyfidus.com (servidor, painel, e-mails) e heyfidus.com (site),
       mantendo o endereço antigo funcionando até todos os celulares atualizarem
 - [x] **Você**: abrir a empresa: **Fidus Labs Limited** (número 17510962, registrada na Companies House em 09/10/2026)
 - [ ] **Você**: conta Google Play Console no nome da empresa (US$ 25)
-- [ ] **Você**: conta Resend + verificar o domínio → liga os e-mails e a entrada por e-mail (`.env`)
+- [x] **Você**: conta Resend + domínio verificado (Irlanda), chave no `.env` (falta só o deploy) → liga os e-mails e a entrada por e-mail (`.env`)
 - [ ] **Você**: conta RevenueCat + assinaturas na Play (passo a passo no README › Assinaturas)
 
 ## iPhone (em paralelo com a Play)
