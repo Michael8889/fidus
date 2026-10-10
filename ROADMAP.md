@@ -53,6 +53,14 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [ ] **Você**: conta Resend + verificar o domínio → liga os e-mails e a entrada por e-mail (`.env`)
 - [ ] **Você**: conta RevenueCat + assinaturas na Play (passo a passo no README › Assinaturas)
 
+## iPhone (em paralelo com a Play)
+- [ ] **Você**: Apple Developer Program como empresa (US$ 99/ano; usa o MESMO D-U-N-S da Play; leva de dias a ~2 semanas)
+- [ ] **Claude**: ajustes de iPhone: entrar com a Apple (exigido pela Apple quando há entrar com Google), gravação
+      de reunião com a tela apagada, permissões e textos, chave da RevenueCat para iOS, build pela nuvem da Expo
+      (não precisa de Mac)
+- [ ] **Você**: App Store Connect: criar o app e as 3 assinaturas (mesmos ids da Play), TestFlight para testar
+- [ ] **Você + Claude**: revisão da Apple (1–3 dias; costuma pedir conta de teste e vídeo das funções)
+
 ## Fase 2 — Google libera o Gmail para o público
 - [x] **Claude**: política de privacidade e termos de uso (`/privacy`, `/terms`, EN e PT; revisão de advogado recomendada)
 - [ ] **Você**: no Google Cloud, mudar o app para "Externo", preencher a verificação e contratar a avaliação de
@@ -69,7 +77,6 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [ ] **Você**: colocar os links das lojas no site (Tweaks) e o domínio no lugar do endereço provisório
 
 ## Fase 4 — Crescer
-- [ ] iPhone (Apple Developer, US$ 99/ano) e App Store
 - [ ] Outlook / Microsoft 365 (muitas empresas no Reino Unido usam)
 - [ ] Página de agendamento em vários idiomas
 - [ ] Lançamento aberto e anúncios
