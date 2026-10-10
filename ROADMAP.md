@@ -15,7 +15,7 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 
 ## Anotado para a próxima versão (juntar e rodar uma vez só)
 - [x] v0.10.2: roteador de IA (simples no barato, complexo no Sonnet, um é reserva do outro). **Você**: chave do
-  Gemini (aistudio.google.com, com faturamento) + `FIDUS_LLM_MODEL_CHEAP=gemini:gemini-2.5-flash` no `.env`
+  Gemini (aistudio.google.com, com faturamento) + `FIDUS_LLM_MODEL_CHEAP=gemini:gemini-3.8-flash` no `.env`
 - [x] v0.10.3 (etapa 1 da voz): tela no estilo ChatGPT (bolinha que reage à voz, botões microfone e fechar),
   fim da fala mais rápido (0,85 s de silêncio), começa a falar a 1ª frase enquanto busca o resto, vibração leve
 - [x] v0.11.0 (etapa 2 da voz, APK novo): conversa em tempo real com a OpenAI (gpt-realtime-2.1-mini, ~US$ 0,02/min),

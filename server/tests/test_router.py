@@ -109,3 +109,33 @@ def test_voice_parts_sends_rest_only_with_audio(monkeypatch):
     assert out["speech_audio"] == "MP3:Pronto, ma" and out["speech_rest"].startswith("Também")
     monkeypatch.setattr(agent, "_voice", lambda s: None)
     assert agent._voice_parts(long) == {"speech_audio": None}
+
+
+def test_gemini_extra_fields_round_trip(monkeypatch):
+    import importlib
+    import types
+    importlib.reload(llm)
+    sent = []
+
+    class TC:
+        id = "abc"
+        function = types.SimpleNamespace(name="add_expense", arguments='{"amount": 1}')
+        model_extra = {"extra_content": {"google": {"thought_signature": "SIG"}}}
+
+    class Client:
+        def __init__(self, **kw):
+            self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self.create))
+
+        def create(self, **kw):
+            sent.append(kw)
+            msg = types.SimpleNamespace(content="", tool_calls=[TC()])
+            return types.SimpleNamespace(choices=[types.SimpleNamespace(message=msg)], usage=None)
+    import openai
+    monkeypatch.setattr(openai, "OpenAI", Client)
+    out = llm._openai_compat("sys", [{"role": "user", "content": "x"}], [], "gemini-3.8-flash", "u", "k")
+    assert out["tool_calls"][0]["extra"]["extra_content"]["google"]["thought_signature"] == "SIG"
+    llm._openai_compat("sys", [{"role": "user", "content": "x"},
+                               {"role": "assistant", "content": "", "tool_calls": out["tool_calls"]},
+                               {"role": "tool", "tool_call_id": "abc", "content": "{}"}], [], "gemini-3.8-flash", "u", "k")
+    back = sent[1]["messages"][2]["tool_calls"][0]
+    assert back["extra_content"]["google"]["thought_signature"] == "SIG" and back["id"] == "abc"

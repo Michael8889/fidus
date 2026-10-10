@@ -199,7 +199,7 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
   EAS: nunca recriar). Extrair cada zip novo em `Downloads\fidus-v0.2\fidus` com `Expand-Archive ... -Force`.
 
 ## Roteador de IA (custo)
-- `FIDUS_LLM_MODEL_CHEAP` (ex. `gemini:gemini-2.5-flash`): agenda, gasto, lembrete, tarefa e consultas curtas vão
+- `FIDUS_LLM_MODEL_CHEAP` (ex. `gemini:gemini-3.8-flash`): agenda, gasto, lembrete, tarefa e consultas curtas vão
   nele; e-mail, várias ações, foto, pesquisa, textos longos e conversa com rascunho aberto ficam no
   `FIDUS_LLM_MODEL` (Sonnet). Se o barato erra uma ferramenta, "inventa" que fez ou dá voltas, o forte assume
   no mesmo pedido. Se um modelo falha (ex. crédito acabou), o outro responde. Teste: `docker exec fidus_server

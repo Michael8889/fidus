@@ -28,6 +28,12 @@ def check(label: str, spec: str | None) -> None:
         tc = out.get("tool_calls") or []
         if tc:
             print(f"{label}: {spec} -> OK em {ms} ms, chamou {tc[0]['name']} {tc[0]['input']}")
+            # 2ª volta: devolve o resultado da ferramenta (é aí que alguns provedores exigem campos extras)
+            msgs = [{"role": "user", "content": "paguei 45 euros de gasolina na Galp"},
+                    {"role": "assistant", "content": out.get("text") or "", "tool_calls": tc, "raw": out.get("raw")},
+                    {"role": "tool", "tool_call_id": tc[0]["id"], "content": '{"ok": true, "expense_id": 1}'}]
+            out2 = llm._call(spec, SYSTEM, msgs, [TOOL], False)
+            print(f"   2ª volta OK: {(out2.get('text') or '').strip()[:100]}")
         else:
             print(f"{label}: {spec} -> respondeu sem usar a ferramenta ({ms} ms): {out.get('text', '')[:120]}")
         print(f"   custo desta chamada: US$ {llm.cost_usd(out.get('usage') or {}):.5f}")

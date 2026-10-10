@@ -77,6 +77,7 @@ def chat(system, messages: list[dict], tools: list[dict], web_search: bool = Tru
 PRICES = {"claude-sonnet-5-5": (2.0, 10.0, 2.5, 0.2), "claude-haiku-4-5": (1.0, 5.0, 1.25, 0.1),
           # Google (preço padrão, set/2026) e OpenAI; o cache automático deles não é descontado aqui
           "gemini-2.5-flash-lite": (0.10, 0.40, 0, 0), "gemini-2.5-flash": (0.25, 1.50, 0, 0),
+          "gemini-3.8-flash": (0.75, 3.75, 0, 0.075),
           "gpt-5-mini": (0.25, 2.0, 0, 0),
           # voz em tempo real (preço do áudio, que é o que pesa; set/2026)
           "realtime-gpt-realtime-2.1-mini": (10.0, 20.0, 0, 0.30), "realtime-gpt-realtime": (32.0, 64.0, 0, 0.40),
@@ -194,7 +195,7 @@ def _openai_compat(system, messages, tools, model=None, base_url=None, api_key=N
             msgs.append({"role": "tool", "tool_call_id": m["tool_call_id"], "content": m["content"]})
         elif m["role"] == "assistant" and m.get("tool_calls"):
             msgs.append({"role": "assistant", "content": m.get("content") or None, "tool_calls": [
-                {"id": t["id"], "type": "function",
+                {"id": t["id"], "type": "function", **(t.get("extra") or {}),
                  "function": {"name": t["name"], "arguments": json.dumps(t["input"])}} for t in m["tool_calls"]]})
         elif isinstance(m["content"], list):
             msgs.append({"role": m["role"], "content": [
@@ -208,8 +209,10 @@ def _openai_compat(system, messages, tools, model=None, base_url=None, api_key=N
     resp = client.chat.completions.create(model=model or config.LLM_MODEL, messages=msgs, **extra)
     choice = resp.choices[0].message
     import uuid
+    # campos extras do provedor (ex. a "assinatura do raciocínio" do Gemini 3) voltam iguais na próxima chamada
     calls = [{"id": (c.id if c.id and all(ch.isalnum() or ch in "_-" for ch in c.id) else f"call_{uuid.uuid4().hex[:20]}"),
-              "name": c.function.name, "input": json.loads(c.function.arguments or "{}")}
+              "name": c.function.name, "input": json.loads(c.function.arguments or "{}"),
+              **({"extra": dict(c.model_extra)} if getattr(c, "model_extra", None) else {})}
              for c in (choice.tool_calls or [])]
     u = getattr(resp, "usage", None)
     usage = {"model": model, "calls": 1, "input": getattr(u, "prompt_tokens", 0) or 0,
