@@ -43,7 +43,7 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=0.11.5,ota=${UPDATE_ID.slice(0, 8)}`;
+const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=0.12.0,ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
 
@@ -583,8 +583,11 @@ function FidusApp() {
   const [loadingScreen, setLoadingScreen] = useState(false);
   const [reader, setReader] = useState<{ title: string; text: string } | null>(null);
   const [toast, setToast] = useState("");
+  const [live, setLive] = useState<{ text: string; status: string }>({ text: "", status: "" });  // resposta sendo escrita
   const [payIn, setPayIn] = useState<Record<string, { key: string; type: string }>>({});  // chave digitada no cartão
   const [atBottom, setAtBottom] = useState(true);
+  // enquanto o Fidus escreve, acompanha o texto (só se a pessoa já está no fim da conversa)
+  useEffect(() => { if (live.text && atBottom) listRef.current?.scrollToEnd({ animated: false }); }, [live.text]);
   const [nameEdit, setNameEdit] = useState("");
   const [pendingMeet, setPendingMeet] = useState<string | null>(null);
   const [billing, setBilling] = useState<any>(null);
@@ -1889,12 +1892,22 @@ function FidusApp() {
     push({ id: uid(), type: "user", text });  // aparece na hora
     const before = historyCount();
     const rid = uid(); setActiveReq(rid);
+    // enquanto o Fidus trabalha: mostra o que ele está fazendo e o texto aparecendo, como no ChatGPT
+    setLive({ text: "", status: "" });
+    let inflight = false, stop = false;
+    const poll = setInterval(async () => {
+      if (inflight || stop) return; inflight = true;
+      try { const p = await api(`/v1/partial/${rid}`, {}, 4000); if (!stop) setLive({ text: p.text || "", status: p.status || "" }); }
+      catch { /* servidor antigo ou rede: segue com o "pensando" */ }
+      inflight = false;
+    }, 300);
     try {
       const r = await post("/v1/message", { text, drafts: visibleDrafts(), request_id: rid });
+      stop = true; clearInterval(poll); setLive({ text: "", status: "" });
       if (!cancelledReqs.current.has(rid)) showResult(r, false);
     }
-    catch (e: any) { if (!cancelledReqs.current.has(rid)) await recover(e, before); }
-    finally { if (!cancelledReqs.current.has(rid)) setBusy(false); setActiveReq((x) => (x === rid ? "" : x)); }
+    catch (e: any) { stop = true; clearInterval(poll); setLive({ text: "", status: "" }); if (!cancelledReqs.current.has(rid)) await recover(e, before); }
+    finally { stop = true; clearInterval(poll); if (!cancelledReqs.current.has(rid)) setBusy(false); setActiveReq((x) => (x === rid ? "" : x)); }
   }
 
   // botão parar: o Fidus não faz mais nada desse pedido (o que já fez fica na Atividade, com Desfazer)
@@ -2711,7 +2724,7 @@ function FidusApp() {
             {SpeechRec ? "✅" : "❌"} {t("Transcrição no celular")}{SpeechRec ? "" : ` (${t("precisa do APK novo")})`}{"\n"}
             {me?.natural_voice ? "✅" : "❌"} {t("Voz natural")}{me?.natural_voice ? "" : ` (${t("falta a chave no servidor")})`}{"\n"}
             {RTC && me?.realtime && !rtErr ? "✅" : "❌"} {t("Conversa em tempo real")}{!RTC ? ` (${t("precisa do APK novo")})` : !me?.realtime ? ` (${t("desligada no servidor")})` : rtErr ? ` (${rtErr})` : ""}{"\n"}
-            {t("Versão")}: 0.11.5 · {UPDATE_ID.slice(0, 8)}</Text>
+            {t("Versão")}: 0.12.0 · {UPDATE_ID.slice(0, 8)}</Text>
           <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
         </Card>
         <Card c={c} onPress={() => { setScreen("chat"); startOnboarding(true); }}>
@@ -2788,10 +2801,14 @@ function FidusApp() {
             const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
             setAtBottom(contentSize.height - (contentOffset.y + layoutMeasurement.height) < 250);
           }}
-          ListFooterComponent={busy ? (
+          ListFooterComponent={busy ? (live.text ? (
+            <View style={{ alignSelf: "flex-start", maxWidth: "85%" }}>
+              <View style={[s.bubble, { backgroundColor: "transparent", maxWidth: "100%", paddingHorizontal: 2 }]}>
+                <Text style={{ color: c.text, fontSize: 17, lineHeight: 26 }}>{live.text}<Text style={{ color: c.sub }}> ▍</Text></Text></View>
+            </View>) : (
             <View style={[s.bubble, { backgroundColor: c.card, flexDirection: "row", alignItems: "center", gap: 8 }]}>
-              <ActivityIndicator color={c.sub} /><Text style={{ color: c.sub }}>{t("Fidus está pensando…")}</Text>
-            </View>) : null}
+              <ActivityIndicator color={c.sub} /><Text style={{ color: c.sub }}>{live.status || t("Fidus está pensando…")}</Text>
+            </View>)) : null}
           ListEmptyComponent={<Text style={[s.empty, { color: c.sub }]}>
             {t("Toque no microfone, fale e toque de novo para enviar.\nEx.: “Marca visita técnica dia 12 às 4pm”,\n“Me lembra de pagar o IVA dia 5”,\n“Paguei 60 libras de gasolina, HomB” ou\n📷 mande a foto de um recibo ou documento.\n\n🎙 Reunião no topo grava e gera a ata.")}
           </Text>}

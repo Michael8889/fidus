@@ -101,20 +101,9 @@ def main() -> None:
     # dados reais da empresa e links que o desenho deixou para preencher
     for ph in ("[EMPRESA LTD]", "[COMPANY LTD]", "[AZIENDA LTD]", "[FIRMA LTD]", "[SOCIÉTÉ LTD]", "[SYARIKAT LTD]"):
         logic = logic.replace(ph, "Fidus Labs Limited")
-    body = body.replace('href="mailto:[CONTATO]"', 'href="mailto:suporte@heyfidus.com"')
-    body = body.replace('<a href="#perguntas" style="color: #8D98A8">{{t.privacy}}</a>',
-                        '<a href="/privacy?lang={{x.lang}}" style="color: #8D98A8">{{t.privacy}}</a>')
-    body = body.replace('<a href="#perguntas" style="color: #8D98A8">{{t.terms}}</a>',
-                        '<a href="/terms?lang={{x.lang}}" style="color: #8D98A8">{{t.terms}}</a>')
-    # lista de espera: grava no servidor (antes era só demonstração)
-    logic = logic.replace(
-        "join: function (e) { if (e && e.preventDefault) e.preventDefault(); self.setState({ joined: true }); }",
-        "join: function (e) { if (e && e.preventDefault) e.preventDefault(); var f = e && e.target; "
-        "var em = f && f.querySelector ? (f.querySelector('input[type=email]') || {}).value : ''; "
-        "try { fetch('/v1/site/waitlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, "
-        "body: JSON.stringify({ email: em || '', lang: lang, platform: self.state.platform }) }); } catch (x) {} "
-        "self.setState({ joined: true }); }")
-    logic = logic.replace("x: { toast2s: f(T.toast2s),", "x: { lang: lang, toast2s: f(T.toast2s),")
+    # links reais (privacidade, termos, contato, parceiros) e a lista de espera de verdade já estão no desenho
+    for must in ("/v1/site/waitlist", "/privacy?lang=", "mailto:suporte@heyfidus.com", "partnerHref"):
+        assert must in body + logic, f"o desenho perdeu: {must}"
 
     html = f"""<!doctype html>
 <html lang="pt">

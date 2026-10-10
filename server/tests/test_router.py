@@ -163,3 +163,58 @@ def test_route_distance_with_mocked_maps(monkeypatch):
     monkeypatch.setattr("time.sleep", lambda s: None)
     out = tools._route_distance("Vila Nova de Poiares", "Roma")
     assert out["km"] == 2512 and out["drive_time"] == "24 h 30 min" and "google.com/maps/dir" in out["maps_link"]
+
+
+def test_partial_text_and_status_while_answering(monkeypatch):
+    importlib = __import__("importlib")
+    importlib.reload(llm)
+    monkeypatch.setattr(config, "LLM_MODEL_CHEAP", None)
+    monkeypatch.setattr(store, "recent_pending", lambda hours=2: 0)
+    seen_status = []
+    calls = {"n": 0}
+
+    def fake_chat(system, messages, tools_, web_search=True, model=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return {"text": "", "tool_calls": [{"id": "t1", "name": "list_calendar_events",
+                                               "input": {"time_min": "a", "time_max": "b"}}], "usage": {}}
+        llm._emit("Amanhã você ")
+        llm._emit("tem dentista às 10.")
+        return {"text": "Amanhã você tem dentista às 10.", "tool_calls": [], "usage": {}}
+
+    def fake_run(name, args):
+        seen_status.append(agent.partial("rq1")["status"])
+        return {"events": []}
+    monkeypatch.setattr(agent.llm, "chat", fake_chat)
+    monkeypatch.setattr(agent.tools, "run", fake_run)
+    out = agent.handle("o que tenho amanhã?", request_id="rq1")
+    p = agent.partial("rq1")
+    assert seen_status == ["Vendo sua agenda…"]
+    assert p["done"] and p["text"] == "Amanhã você tem dentista às 10." and out["reply"].startswith("Amanhã")
+    assert agent.partial("nao-existe") == {"text": "", "status": "", "done": False}
+
+
+def test_openai_stream_assembles_text_and_tool_calls(monkeypatch):
+    import importlib
+    import types
+    importlib.reload(llm)
+    got = []
+    tok = llm.STREAM.set(lambda p: got.append(p))
+    NS = types.SimpleNamespace
+
+    def ch(content=None, tcs=None, usage=None):
+        return NS(usage=usage, choices=[NS(delta=NS(content=content, tool_calls=tcs))] if (content or tcs) else [])
+    chunks = [ch("Vou "), ch("ver."),
+              ch(tcs=[NS(index=0, id="c1", function=NS(name="add_", arguments='{"amo'), model_extra={"extra_content": {"g": 1}})]),
+              ch(tcs=[NS(index=0, id=None, function=NS(name="expense", arguments='unt": 5}'), model_extra=None)]),
+              ch(usage=NS(prompt_tokens=10, completion_tokens=3))]
+
+    class Client:
+        chat = NS(completions=NS(create=lambda **kw: iter(chunks)))
+    try:
+        out = llm._openai_stream(Client(), "gemini-3.8-flash", [], {})
+    finally:
+        llm.STREAM.reset(tok)
+    assert out["text"] == "Vou ver." and got == ["Vou ", "ver."]
+    assert out["tool_calls"][0]["name"] == "add_expense" and out["tool_calls"][0]["input"] == {"amount": 5}
+    assert out["tool_calls"][0]["extra"] == {"extra_content": {"g": 1}} and out["usage"]["input"] == 10

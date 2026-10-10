@@ -220,6 +220,13 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
 - `site/landing.dc.html` (cópia do site no Claude Design). Idioma e moeda do visitante; botões da Google Play e da
   App Store conforme o celular (os links entram nas Tweaks do site: `playStoreUrl`, `appStoreUrl`). Loja sem link =
   lista de espera. O cadastro acontece no app.
+- Backend do site (`server/app/site_forms.py`): lista de espera manda 1 e-mail de confirmação (pt/en/es) com link
+  para sair (`/lista/sair`, pede um toque antes de apagar); guarda o plano clicado e o código de parceiro da URL
+  (`heyfidus.com/?ref=ANA`). Página `/parceiros` (`/partners`) com formulário: o pedido vai para o painel e para o
+  e-mail de suporte. Painel › Site: lista, CSV, pedidos de parceria (aprovar/recusar) e o botão "Avisar a lista que o
+  app chegou na loja" (um e-mail por pessoa, só para a loja do celular dela, nunca repete).
+- Streaming ("Fidus escreve"): o app mostra a resposta sendo escrita e o que o Fidus está fazendo
+  (`GET /v1/partial/{request_id}`, alimentado por `llm.STREAM`).
 
 ## Configuração
 Tudo no `server/.env` (modelo em `server/.env.example`). Trocar de IA = mudar `FIDUS_LLM_PROVIDER`.

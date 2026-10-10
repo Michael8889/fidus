@@ -217,26 +217,86 @@ class WaitlistIn(BaseModel):
     email: str
     lang: str | None = None
     platform: str | None = None
+    plan: str | None = None
+    ref: str | None = None
 
 
-_WAIT_HITS: dict[str, list[float]] = {}
+def _client_ip(request: Request) -> str:
+    return request.headers.get("x-real-ip") or (request.client.host if request.client else "") or "?"
 
 
 @app.post("/v1/site/waitlist")
 def site_waitlist(body: WaitlistIn, request: Request):
     """Lista de espera do site (só para avisar quando o app chegar na loja do celular da pessoa)."""
-    import re as _re
-    import time as _time
-    ip = (request.headers.get("x-real-ip") or (request.client.host if request.client else "") or "?")
-    hits = [t for t in _WAIT_HITS.get(ip, []) if _time.time() - t < 3600]
-    if len(hits) >= 5:
+    from . import site_forms
+    if site_forms.limited("wait", _client_ip(request), 5):
         raise HTTPException(429, "muitas tentativas")
-    _WAIT_HITS[ip] = hits + [_time.time()]
-    email = (body.email or "").strip().lower()[:200]
-    if not _re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+    r = site_forms.join(body.email, body.lang or "", body.platform or "", body.plan or "", body.ref or "")
+    if r.get("error"):
         raise HTTPException(400, "e-mail inválido")
-    accounts.add_waitlist(email, (body.lang or "")[:8], (body.platform or "")[:12])
     return {"ok": True}
+
+
+@app.get("/lista/sair", response_class=HTMLResponse)
+def waitlist_leave_ask(t: str = "", lang: str = ""):
+    """Link "sair da lista" dos e-mails: pede um toque (leitores de e-mail abrem links sozinhos)."""
+    import html as _html
+    from . import site_forms
+    T = site_forms.LEAVE_TEXT[site_forms._lang(lang or "pt")]
+    return _doc("Fidus", f"<h1>{T[2]}</h1><p>{T[3]}</p><form method='post'><input type='hidden' name='t' "
+                         f"value='{_html.escape(t)}'><input type='hidden' name='lang' value='{_html.escape(lang)}'>"
+                         f"<button style='font:inherit;padding:12px 20px;border-radius:12px;border:0;background:#111;"
+                         f"color:#fff;cursor:pointer'>{T[4]}</button></form>")
+
+
+@app.post("/lista/sair", response_class=HTMLResponse)
+async def waitlist_leave(request: Request):
+    from . import site_forms
+    form = {}
+    try:
+        from urllib.parse import parse_qs
+        form = {k: v[0] for k, v in parse_qs((await request.body()).decode("utf-8", "ignore")).items()}
+    except Exception:  # noqa: BLE001
+        pass
+    token = form.get("t") or request.query_params.get("t", "")  # one-click do List-Unsubscribe manda na URL
+    accounts.leave_waitlist(token)
+    T = site_forms.LEAVE_TEXT[site_forms._lang(form.get("lang") or request.query_params.get("lang") or "pt")]
+    return _doc("Fidus", f"<h1>{T[0]}</h1><p>{T[1]}</p><p><a href='/'>heyfidus.com</a></p>")
+
+
+class PartnerApplyIn(BaseModel):
+    name: str = ""
+    email: str = ""
+    kind: str = ""
+    link: str = ""
+    audience: str = ""
+    country: str = ""
+    message: str = ""
+    lang: str = ""
+    website: str = ""  # campo escondido contra robôs
+
+
+@app.post("/v1/site/partner")
+def site_partner(body: PartnerApplyIn, request: Request):
+    from . import site_forms
+    if site_forms.limited("partner", _client_ip(request), 3):
+        raise HTTPException(429, "muitas tentativas")
+    r = site_forms.apply(body.model_dump())
+    if r.get("error"):
+        raise HTTPException(400, "dados inválidos")
+    return {"ok": True}
+
+
+@app.get("/parceiros", response_class=HTMLResponse)
+def partner_page_pt(lang: str = "pt"):
+    from . import site_forms
+    return HTMLResponse(site_forms.partner_page(lang))
+
+
+@app.get("/partners", response_class=HTMLResponse)
+def partner_page_en(lang: str = "en"):
+    from . import site_forms
+    return HTMLResponse(site_forms.partner_page(lang))
 
 
 @app.get("/privacy", response_class=HTMLResponse)
@@ -696,6 +756,12 @@ def message(body: TextIn):
         metrics.record_task(store.current()["id"], "envio", bool(sent.get("sent_actions")))
         return {"transcript": body.text, **sent}
     return {"transcript": body.text, **agent.handle(body.text, voice=body.mode == "voice", request_id=body.request_id)}
+
+
+@app.get("/v1/partial/{rid}", dependencies=[Depends(auth)])
+def message_partial(rid: str):
+    """O que o Fidus já escreveu (ou está fazendo) neste pedido: o app mostra enquanto espera a resposta."""
+    return agent.partial(rid[:64])
 
 
 # frases fixas que o app fala (modo conversa); só estas podem ser pedidas avulsas, para ninguém gerar áudio à toa

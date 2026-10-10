@@ -60,7 +60,15 @@ def init() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, hash TEXT NOT NULL, expires REAL NOT NULL,
                 app_challenge TEXT, ref TEXT, used INTEGER NOT NULL DEFAULT 0);
             CREATE TABLE IF NOT EXISTS email_login_failures (email TEXT NOT NULL, at REAL NOT NULL);
+            CREATE TABLE IF NOT EXISTS partner_applications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL, kind TEXT,
+                link TEXT, audience TEXT, country TEXT, message TEXT, lang TEXT,
+                status TEXT NOT NULL DEFAULT 'nova', created_at TEXT NOT NULL);
             """)
+        wcols = {r[1] for r in c.execute("PRAGMA table_info(waitlist)").fetchall()}
+        for col in ("plan", "ref", "token", "notified_at"):
+            if col not in wcols:
+                c.execute(f"ALTER TABLE waitlist ADD COLUMN {col} TEXT")
         dcols = {r[1] for r in c.execute("PRAGMA table_info(device_logins)").fetchall()}
         if "ip" not in dcols:
             c.execute("ALTER TABLE device_logins ADD COLUMN ip TEXT")
@@ -609,15 +617,57 @@ def forget_user(uid: str, email: str | None) -> None:
             c.execute("DELETE FROM email_login_codes WHERE email=?", (email.lower(),))
 
 
-def add_waitlist(email: str, lang: str = "", platform: str = "") -> None:
-    """Lista de espera do site (aviso quando o app chegar na loja). Repetir o e-mail só atualiza."""
+def add_waitlist(email: str, lang: str = "", platform: str = "", plan: str = "", ref: str = "") -> dict:
+    """Lista de espera do site (aviso quando o app chegar na loja). Repetir o e-mail só atualiza.
+    Devolve {"new": True/False, "token": ...}: novo e-mail recebe a confirmação uma vez só; o token é o link de saída."""
+    import secrets
     from datetime import datetime, timezone
     with _db() as c:
-        c.execute("INSERT INTO waitlist(email,lang,platform,created_at) VALUES(?,?,?,?) "
-                  "ON CONFLICT(email) DO UPDATE SET lang=excluded.lang, platform=excluded.platform",
-                  (email, lang, platform, datetime.now(timezone.utc).isoformat()))
+        row = c.execute("SELECT token FROM waitlist WHERE email=?", (email,)).fetchone()
+        token = (row["token"] if row else None) or secrets.token_urlsafe(18)
+        c.execute("INSERT INTO waitlist(email,lang,platform,plan,ref,token,created_at) VALUES(?,?,?,?,?,?,?) "
+                  "ON CONFLICT(email) DO UPDATE SET lang=excluded.lang, platform=excluded.platform, token=excluded.token, "
+                  "plan=COALESCE(NULLIF(excluded.plan,''), waitlist.plan), ref=COALESCE(NULLIF(waitlist.ref,''), excluded.ref)",
+                  (email, lang, platform, plan, ref, token, datetime.now(timezone.utc).isoformat()))
+    return {"new": row is None, "token": token}
 
 
 def waitlist() -> list[dict]:
     with _db() as c:
         return [dict(r) for r in c.execute("SELECT * FROM waitlist ORDER BY created_at DESC").fetchall()]
+
+
+def mark_waitlist_notified(email: str) -> None:
+    from datetime import datetime, timezone
+    with _db() as c:
+        c.execute("UPDATE waitlist SET notified_at=? WHERE email=?", (datetime.now(timezone.utc).isoformat(), email))
+
+
+def leave_waitlist(token: str) -> bool:
+    """Link "sair da lista" do e-mail: apaga o registro (não guardamos quem saiu)."""
+    if not token:
+        return False
+    with _db() as c:
+        return c.execute("DELETE FROM waitlist WHERE token=?", (token,)).rowcount > 0
+
+
+def add_partner_application(d: dict) -> int:
+    """Pedido de parceria feito no site (criador, consultor, empresa). A equipe responde por e-mail."""
+    from datetime import datetime, timezone
+    with _db() as c:
+        cur = c.execute("INSERT INTO partner_applications(name,email,kind,link,audience,country,message,lang,created_at) "
+                        "VALUES(?,?,?,?,?,?,?,?,?)",
+                        (d["name"], d["email"], d.get("kind", ""), d.get("link", ""), d.get("audience", ""),
+                         d.get("country", ""), d.get("message", ""), d.get("lang", ""),
+                         datetime.now(timezone.utc).isoformat()))
+        return int(cur.lastrowid)
+
+
+def partner_applications() -> list[dict]:
+    with _db() as c:
+        return [dict(r) for r in c.execute("SELECT * FROM partner_applications ORDER BY id DESC").fetchall()]
+
+
+def set_partner_application_status(app_id: int, status: str) -> bool:
+    with _db() as c:
+        return c.execute("UPDATE partner_applications SET status=? WHERE id=?", (status, app_id)).rowcount > 0

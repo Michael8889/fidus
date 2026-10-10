@@ -24,8 +24,8 @@ router = APIRouter()
 SESSION_TTL = 12 * 3600
 CODE_TTL = 300
 ROLES = ("admin", "support", "finance")
-SCREENS = {"owner": {"system", "heart", "business", "clients", "partners", "leads", "team"},
-           "admin": {"system", "heart", "business", "clients", "partners", "leads", "team"},
+SCREENS = {"owner": {"system", "heart", "business", "clients", "partners", "leads", "site", "team"},
+           "admin": {"system", "heart", "business", "clients", "partners", "leads", "site", "team"},
            "support": {"system", "heart", "clients"}, "finance": {"business", "clients", "partners"}}
 FX_TO_USD = {"USD": 1.0, "GBP": 1.27, "EUR": 1.08}  # aproximado, só para estimar margem no painel
 _tries: dict = {}
@@ -248,7 +248,7 @@ def system(s: Session = Depends(need("system"))):
     if tasks24 >= 10 and _pct(failed, tasks24) > 10:
         problems.append("tasks_failing")
     return {"ok": not problems, "problems": problems, "uptime_s": int(time.time() - metrics.STARTED),
-            "version": "0.11.5", "llm": config.LLM_PROVIDER, "model": config.LLM_MODEL,
+            "version": "0.12.0", "llm": config.LLM_PROVIDER, "model": config.LLM_MODEL,
             "voice_stages": metrics.stage_p50(),
             "backup": {"age_hours": round(age, 1) if age is not None else None, **backup.last()},
             "disk_free_gb": free, "requests_24h": len(last24), "asks_24h": len(asks),
@@ -569,6 +569,63 @@ def leads_csv(s: Session = Depends(need("leads"))):
                         r["consent_at"], r["step"]])
     return Response(buf.getvalue(), media_type="text/csv",
                     headers={"Content-Disposition": "attachment; filename=fidus-leads.csv"})
+
+
+# ---------- site (lista de espera e pedidos de parceria) ----------
+@router.get("/admin/api/site")
+def site_view(s: Session = Depends(need("site"))):
+    audit(s["email"], "site.view")
+    rows = accounts.waitlist()
+    def count(key):
+        out: dict = {}
+        for r in rows:
+            k = r.get(key) or "—"
+            out[k] = out.get(k, 0) + 1
+        return out
+    return {"waitlist": rows, "total": len(rows), "by_platform": count("platform"), "by_plan": count("plan"),
+            "notified": sum(1 for r in rows if r.get("notified_at")),
+            "stores": {"play": bool(config.PLAY_STORE_URL), "apple": bool(config.APP_STORE_URL)},
+            "applications": accounts.partner_applications(), "can_manage": s["role"] in ("owner", "admin")}
+
+
+@router.get("/admin/api/waitlist.csv")
+def waitlist_csv(s: Session = Depends(need("site"))):
+    import csv
+    import io
+    from fastapi.responses import Response
+    audit(s["email"], "site.export")
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["email", "lang", "platform", "plan", "ref", "created_at", "notified_at"])
+    for r in accounts.waitlist():
+        w.writerow([r.get(k) or "" for k in ("email", "lang", "platform", "plan", "ref", "created_at", "notified_at")])
+    return Response(buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=fidus-waitlist.csv"})
+
+
+@router.post("/admin/api/waitlist/notify")
+def waitlist_notify(s: Session = Depends(manager)):
+    """Avisa a lista que o app chegou na loja (uma vez por pessoa; só quem tem loja com link)."""
+    from . import site_forms
+    if not (config.PLAY_STORE_URL or config.APP_STORE_URL):
+        raise HTTPException(400, "nenhuma loja configurada (FIDUS_PLAY_STORE_URL / FIDUS_APP_STORE_URL)")
+    r = site_forms.notify_store_ready()
+    audit(s["email"], "site.notify", f"{r['sent']} enviados")
+    return r
+
+
+class AppStatusIn(BaseModel):
+    status: str
+
+
+@router.post("/admin/api/partner-apps/{app_id}/status")
+def partner_app_status(app_id: int, body: AppStatusIn, s: Session = Depends(need("site"))):
+    if body.status not in ("nova", "aprovada", "recusada"):
+        raise HTTPException(400, "status inválido")
+    if not accounts.set_partner_application_status(app_id, body.status):
+        raise HTTPException(404, "pedido não encontrado")
+    audit(s["email"], "site.application", f"#{app_id} -> {body.status}")
+    return {"ok": True}
 
 
 # ---------- a página ----------

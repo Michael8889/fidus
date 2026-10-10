@@ -90,6 +90,12 @@ const T = {
   p_month:"This month", p_due:"To pay", p_mark:"Mark as paid", p_active:"Active", p_pause:"Pause", p_resume:"Resume", p_confirm:"Mark everything owed to {0} as paid?",
   l_title:"Email tips list", l_help:"Only people who ticked “send me tips by email”. Never their emails, diary or spending.", l_active:"Subscribed", l_unsub:"Unsubscribed",
   l_sent:"Emails sent", l_since:"Since", l_work:"Profile", l_prio:"Priorities", l_csv:"Download CSV",
+  site:"Site", s_wait:"Waiting list (heyfidus.com)", s_help:"People who asked to be told when the app reaches their phone's store. They get one confirmation email and can leave at any time.",
+  s_total:"On the list", s_notified:"Already told", s_platform:"Phone", s_plan:"Plan", s_ref:"Partner code", s_notify:"Tell the list the app is in the store",
+  s_notify_help:"Sends one email per person with their store's link (Android → Google Play, iPhone → App Store). Nobody gets it twice.",
+  s_no_store:"Add FIDUS_PLAY_STORE_URL / FIDUS_APP_STORE_URL to .env to enable.", s_confirm:"Email everyone on the list who has not been told yet?", s_sent:"Sent: {0}. Waiting for their store: {1}.",
+  s_apps:"Partner applications", s_kind:"Type", s_link:"Link", s_aud:"Audience", s_msg:"Message", s_approve:"Approve", s_reject:"Reject",
+  st_nova:"New", st_aprovada:"Approved", st_recusada:"Rejected", s_approve_help:"After approving, create the code in Partners and reply to the person by email.",
   voice_speed:"Voice speed (median, 24 h)", voice_stages_help:"transcription · AI thinking · natural voice"},
  pt: {title:"Painel do Fidus", language:"Idioma", logout:"Sair", system:"Sistema", heart:"HEART", business:"Negócio",
   clients:"Clientes", team:"Equipe", signin:"Entrar no painel", signin_help:"No app do Fidus, abra o menu › Painel da empresa e digite aqui o código de 8 letras. Ele vale 5 minutos.",
@@ -120,6 +126,12 @@ const T = {
   p_month:"Este mês", p_due:"A pagar", p_mark:"Marcar como pago", p_active:"Ativo", p_pause:"Pausar", p_resume:"Reativar", p_confirm:"Marcar tudo o que se deve a {0} como pago?",
   l_title:"Lista de dicas por e-mail", l_help:"Só quem marcou “quero receber dicas por e-mail”. Nunca os e-mails, a agenda ou os gastos da pessoa.", l_active:"Inscritos", l_unsub:"Saíram",
   l_sent:"E-mails enviados", l_since:"Desde", l_work:"Perfil", l_prio:"Prioridades", l_csv:"Baixar CSV",
+  site:"Site", s_wait:"Lista de espera (heyfidus.com)", s_help:"Quem pediu para ser avisado quando o app chegar na loja do celular. Recebe um e-mail de confirmação e pode sair quando quiser.",
+  s_total:"Na lista", s_notified:"Já avisados", s_platform:"Celular", s_plan:"Plano", s_ref:"Código de parceiro", s_notify:"Avisar a lista que o app chegou na loja",
+  s_notify_help:"Manda um e-mail por pessoa com o link da loja dela (Android → Google Play, iPhone → App Store). Ninguém recebe duas vezes.",
+  s_no_store:"Coloque FIDUS_PLAY_STORE_URL / FIDUS_APP_STORE_URL no .env para liberar.", s_confirm:"Mandar o e-mail para todos da lista que ainda não foram avisados?", s_sent:"Enviados: {0}. Esperando a loja deles: {1}.",
+  s_apps:"Pedidos de parceria", s_kind:"Tipo", s_link:"Link", s_aud:"Público", s_msg:"Mensagem", s_approve:"Aprovar", s_reject:"Recusar",
+  st_nova:"Novo", st_aprovada:"Aprovado", st_recusada:"Recusado", s_approve_help:"Depois de aprovar, crie o código em Parceiros e responda a pessoa por e-mail.",
   voice_speed:"Velocidade da voz (mediana, 24 h)", voice_stages_help:"transcrição · IA pensando · voz natural"}
 };
 let L = "en";
@@ -183,12 +195,12 @@ function render() {
       catch (err) { $("#lerr").textContent = /inválido|expir/.test(err.message) ? t("code_bad") : err.message; } };
     return;
   }
-  const order = ["system", "heart", "business", "clients", "partners", "leads", "team"].filter((s) => ME.screens.includes(s));
+  const order = ["system", "heart", "business", "clients", "partners", "leads", "site", "team"].filter((s) => ME.screens.includes(s));
   if (!TAB || !order.includes(TAB)) TAB = order[0];
   tabs.innerHTML = order.map((s) => `<button data-s="${s}" ${s === TAB ? 'aria-current="page"' : ""}>${esc(t(s))}</button>`).join("");
   tabs.querySelectorAll("button").forEach((b) => b.onclick = () => { TAB = b.dataset.s; render(); });
   $("#main").innerHTML = `<p class="muted">${esc(t("loading"))}</p>`;
-  ({system: showSystem, heart: showHeart, business: showBusiness, clients: showClients, partners: showPartners, leads: showLeads, team: showTeam})[TAB]().catch((e) => {
+  ({system: showSystem, heart: showHeart, business: showBusiness, clients: showClients, partners: showPartners, leads: showLeads, site: showSite, team: showTeam})[TAB]().catch((e) => {
     $("#main").innerHTML = `<div class="banner bad">${esc(e.message)}</div>`; });
 }
 
@@ -341,6 +353,45 @@ async function showLeads() {
         <td>${num(l.step)} / ${num(d.sequence_len)}</td><td>${l.consent ? `<span class="pill green">${esc(t("l_active"))}</span>` : `<span class="pill">${esc(t("l_unsub"))}</span>`}</td></tr>`).join("")
         || `<tr><td colspan="6" class="muted">${esc(t("none"))}</td></tr>`}
     </tbody></table></div>`;
+}
+
+async function showSite() {
+  const d = await api("site");
+  const anyStore = d.stores.play || d.stores.apple;
+  const dist = (o) => Object.entries(o || {}).map(([k, v]) => `${esc(k)}: <b>${num(v)}</b>`).join(" · ") || "—";
+  $("#main").innerHTML = `<div class="sec" style="margin-top:0">${esc(t("s_wait"))}</div>
+    <p class="small muted">${esc(t("s_help"))}</p>
+    <div class="grid">${card(t("s_total"), num(d.total))}${card(t("s_notified"), num(d.notified))}</div>
+    <p class="small">${esc(t("s_platform"))}: ${dist(d.by_platform)}<br>${esc(t("s_plan"))}: ${dist(d.by_plan)}</p>
+    <p class="row"><a class="btn ghost" href="/admin/api/waitlist.csv">${esc(t("l_csv"))}</a>
+      ${d.can_manage ? `<button class="btn" id="snotify" ${anyStore ? "" : "disabled"}>${esc(t("s_notify"))}</button>` : ""}</p>
+    ${d.can_manage ? `<p class="small muted">${esc(anyStore ? t("s_notify_help") : t("s_no_store"))}</p><p id="sres" class="small"></p>` : ""}
+    <div class="card tablebox"><table><thead><tr><th>${esc(t("email"))}</th><th>${esc(t("s_platform"))}</th><th>${esc(t("s_plan"))}</th>
+      <th>${esc(t("s_ref"))}</th><th>${esc(t("l_since"))}</th><th>${esc(t("s_notified"))}</th></tr></thead><tbody>
+      ${d.waitlist.map((w) => `<tr><td>${esc(w.email)}<div class="small">${esc(w.lang || "")}</div></td><td>${esc(w.platform || "—")}</td>
+        <td>${esc(w.plan || "—")}</td><td>${esc(w.ref || "—")}</td><td>${dateIso(w.created_at)}</td><td>${w.notified_at ? dateIso(w.notified_at) : "—"}</td></tr>`).join("")
+        || `<tr><td colspan="6" class="muted">${esc(t("none"))}</td></tr>`}
+    </tbody></table></div>
+    <div class="sec">${esc(t("s_apps"))}</div><p class="small muted">${esc(t("s_approve_help"))}</p>
+    <div class="card tablebox"><table><thead><tr><th>${esc(t("p_name"))}</th><th>${esc(t("s_kind"))}</th><th>${esc(t("s_link"))}</th>
+      <th>${esc(t("s_aud"))}</th><th>${esc(t("s_msg"))}</th><th>${esc(t("status"))}</th><th></th></tr></thead><tbody>
+      ${d.applications.map((a) => `<tr><td>${esc(a.name)}<div class="small"><a href="mailto:${esc(a.email)}">${esc(a.email)}</a> ${esc(a.country || "")}</div><div class="small">${dateIso(a.created_at)}</div></td>
+        <td>${esc(a.kind || "—")}</td><td class="small">${/^https?:\/\//.test(a.link || "") ? `<a href="${esc(a.link)}" target="_blank" rel="noopener noreferrer">${esc(a.link)}</a>` : esc(a.link || "—")}</td>
+        <td>${esc(a.audience || "—")}</td><td class="small">${esc(a.message || "—")}</td>
+        <td><span class="pill ${a.status === "aprovada" ? "green" : a.status === "recusada" ? "red" : ""}">${esc(t("st_" + a.status))}</span></td>
+        <td>${a.status === "nova" ? `<button class="btn ghost" data-app="${a.id}" data-to="aprovada">${esc(t("s_approve"))}</button>
+          <button class="btn ghost" data-app="${a.id}" data-to="recusada">${esc(t("s_reject"))}</button>` : ""}</td></tr>`).join("")
+        || `<tr><td colspan="7" class="muted">${esc(t("none"))}</td></tr>`}
+    </tbody></table></div>`;
+  const nb = $("#snotify");
+  if (nb) nb.onclick = async () => {
+    if (!confirm(t("s_confirm"))) return;
+    nb.disabled = true;
+    try { const r = await api("waitlist/notify", {method: "POST"}); $("#sres").textContent = t("s_sent", r.sent, r.waiting_store); }
+    catch (e) { $("#sres").textContent = e.message; nb.disabled = false; }
+  };
+  document.querySelectorAll("[data-app]").forEach((b) => b.onclick = async () => {
+    await api(`partner-apps/${b.dataset.app}/status`, {method: "POST", body: JSON.stringify({status: b.dataset.to})}); showSite(); });
 }
 
 async function showTeam() {

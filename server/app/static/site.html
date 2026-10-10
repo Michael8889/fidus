@@ -105,8 +105,14 @@ input::placeholder{color:#6F7B8C}
 <form style="display: flex; flex-wrap: wrap; gap: 10px; max-width: 540px" onSubmit="{{join}}">
 <label for="email-hero" style="position: absolute; left: -9999px">{{t.emailLabel}}</label>
 <input id="email-hero" type="email" required placeholder="{{t.emailPh}}" style="flex: 1 1 240px; min-width: 0; padding: 17px 18px; border-radius: 14px; border: 1px solid #2A3341; background: #0E1218; color: #F2F5F7; font: inherit; font-size: 16px">
-<button type="submit" style="padding: 17px 24px; border-radius: 14px; border: 0; background: #3DDC97; color: #07090D; font: inherit; font-weight: 800; font-size: 16px; cursor: pointer">{{t.join}}</button>
+<button type="submit" style="padding: 17px 24px; border-radius: 14px; border: 0; background: #3DDC97; color: #07090D; font: inherit; font-weight: 800; font-size: 16px; cursor: pointer">{{joinLabel}}</button>
 </form>
+<sc-if value="{{planNote}}" hint-placeholder-val="{{ false }}">
+<p style="margin: 10px 0 0; font-size: 14px; color: #B7C0CC">{{planNote}}</p>
+</sc-if>
+<sc-if value="{{joinErr}}" hint-placeholder-val="{{ false }}">
+<p class="msg" role="alert" style="margin: 12px 0 0; color: #FF8A8A; font-weight: 600">{{t.joinErr}}</p>
+</sc-if>
 <sc-if value="{{joined}}" hint-placeholder-val="{{ false }}">
 <p class="msg" style="margin: 12px 0 0; color: #3DDC97; font-weight: 600">{{t.joined}}</p>
 </sc-if>
@@ -323,7 +329,7 @@ input::placeholder{color:#6F7B8C}
 <span style="font-size: 15px; opacity: 0.8">{{t.perMonth}}</span>
 </div>
 <p style="margin: -8px 0 0; font-size: 14px; opacity: 0.75; min-height: 20px">{{p.note}}</p>
-<a href="#acesso" style="text-align: center; text-decoration: none; font-weight: 800; padding: 15px; border-radius: 14px; background: {{p.btnBg}}; color: {{p.btnFg}}">{{p.start}}</a>
+<a href="{{p.href}}" onClick="{{p.pick}}" style="text-align: center; text-decoration: none; font-weight: 800; padding: 15px; border-radius: 14px; background: {{p.btnBg}}; color: {{p.btnFg}}">{{p.start}}</a>
 <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 6px">
 <sc-for list="{{p.items}}" as="i" hint-placeholder-count="6">
 <div style="display: flex; gap: 10px; align-items: flex-start; font-size: 15px; line-height: 1.4">
@@ -373,6 +379,7 @@ input::placeholder{color:#6F7B8C}
 <span>{{t.company}}</span>
 </div>
 <div style="display: flex; flex-wrap: wrap; gap: 20px">
+<a href="{{x.partnerHref}}" style="color: #8D98A8">{{t.partners}}</a>
 <a href="/privacy?lang={{x.lang}}" style="color: #8D98A8">{{t.privacy}}</a>
 <a href="/terms?lang={{x.lang}}" style="color: #8D98A8">{{t.terms}}</a>
 <a href="mailto:suporte@heyfidus.com" style="color: #8D98A8">{{t.contact}}</a>
@@ -516,6 +523,10 @@ function fmtMoney(n, cur, loc) {
   catch (e) { return SYM[cur] + n.toFixed(2); }
 }
 // "{m45.90}" no texto vira o valor na moeda do visitante
+// código de parceiro na URL (heyfidus.com/?ref=ANA): vai junto com o e-mail da lista de espera
+function detectRef() {
+  try { var m = /[?&]ref=([A-Za-z0-9_-]{2,24})/.exec(location.search || ""); return m ? m[1].toUpperCase() : ""; } catch (e) { return ""; }
+}
 function detectPlatform() {
   var ua = "";
   try { ua = navigator.userAgent || ""; } catch (e) {}
@@ -549,7 +560,7 @@ pt: {
     recommended: "Recomendado", perMonth: "/mês", yearNote: "{p} por ano, cobrado uma vez", monthNote: "cobrado todo mês", startWith: "Começar com o {n}", soon: "EM BREVE",
     priceNote: "Preços em {c}, com impostos [confirmar]. Cancele quando quiser, direto no app.", faqH: "Perguntas",
     finalH: "Pare de anotar. Comece a falar.", finalCta: "Quero acesso antecipado →", company: "· Fidus Labs Limited, Reino Unido",
-    privacy: "Privacidade", terms: "Termos", contact: "Contato", langLabel: "Idioma", curLabel: "Moeda", navAria: "Principal",
+    privacy: "Privacidade", terms: "Termos", contact: "Contato", partners: "Seja parceiro", joinErr: "Não deu para enviar. Confira o e-mail e tente de novo.", sending: "Enviando…", planPicked: "Plano escolhido: {n}. Deixe seu e-mail e avisamos quando abrir.", langLabel: "Idioma", curLabel: "Moeda", navAria: "Principal",
     cur: { GBP: "libras", EUR: "euros", USD: "dólares" } },
   plans: { essencial: ["Essencial", "Para organizar a vida e começar no próprio negócio.", ["Voz e texto sem limite", "Agenda, lembretes e bom dia às 8h", "E-mail: resumo e rascunhos com aprovação", "Gastos e recibos de 1 carteira", "Documentos com aviso de validade", "Tarefas e aba Atividade"]],
     negocio: ["Negócio", "Para quem toca uma ou mais empresas.", ["Tudo do Essencial", "Modo conversa: fale como numa ligação", "Empresas e moedas ilimitadas", "Link de agendamento para clientes", "Ata de reunião automática", "Pacote do contador com recibos", "Alerta de assinaturas e resumo da semana"]],
@@ -603,7 +614,7 @@ en: {
     recommended: "Recommended", perMonth: "/month", yearNote: "{p} per year, billed once", monthNote: "billed monthly", startWith: "Start with {n}", soon: "SOON",
     priceNote: "Prices in {c}, taxes included [confirm]. Cancel any time, right in the app.", faqH: "Questions",
     finalH: "Stop taking notes. Start talking.", finalCta: "Get early access →", company: "· Fidus Labs Limited, United Kingdom",
-    privacy: "Privacy", terms: "Terms", contact: "Contact", langLabel: "Language", curLabel: "Currency", navAria: "Main",
+    privacy: "Privacy", terms: "Terms", contact: "Contact", partners: "Become a partner", joinErr: "Couldn’t send. Check your email and try again.", sending: "Sending…", planPicked: "Plan picked: {n}. Leave your email and we’ll tell you when it opens.", langLabel: "Language", curLabel: "Currency", navAria: "Main",
     cur: { GBP: "pounds", EUR: "euros", USD: "US dollars" } },
   plans: { essencial: ["Essential", "To organise your life and get started in your own business.", ["Unlimited voice and text", "Diary, reminders and an 8am briefing", "Email: summaries and drafts you approve", "Expenses and receipts for 1 wallet", "Documents with expiry alerts", "Tasks and Activity tab"]],
     negocio: ["Business", "For people running one or more companies.", ["Everything in Essential", "Conversation mode: talk like a phone call", "Unlimited businesses and currencies", "Booking link for clients", "Automatic meeting minutes", "Accountant pack with receipts", "Subscription alerts and weekly review"]],
@@ -657,7 +668,7 @@ es: {
     recommended: "Recomendado", perMonth: "/mes", yearNote: "{p} al año, en un solo pago", monthNote: "se cobra cada mes", startWith: "Empezar con {n}", soon: "PRONTO",
     priceNote: "Precios en {c}, impuestos incluidos [confirmar]. Cancela cuando quieras, desde la app.", faqH: "Preguntas",
     finalH: "Deja de anotar. Empieza a hablar.", finalCta: "Quiero acceso anticipado →", company: "· Fidus Labs Limited, Reino Unido",
-    privacy: "Privacidad", terms: "Términos", contact: "Contacto", langLabel: "Idioma", curLabel: "Moneda", navAria: "Principal",
+    privacy: "Privacidad", terms: "Términos", contact: "Contacto", partners: "Hazte socio", joinErr: "No se pudo enviar. Revisa tu correo e inténtalo de nuevo.", sending: "Enviando…", planPicked: "Plan elegido: {n}. Deja tu correo y te avisamos cuando abra.", langLabel: "Idioma", curLabel: "Moneda", navAria: "Principal",
     cur: { GBP: "libras", EUR: "euros", USD: "dólares" } },
   plans: { essencial: ["Esencial", "Para organizar tu vida y empezar en tu propio negocio.", ["Voz y texto sin límite", "Agenda, recordatorios y resumen a las 8", "Correo: resúmenes y borradores que tú apruebas", "Gastos y recibos de 1 cartera", "Documentos con aviso de vencimiento", "Tareas y pestaña Actividad"]],
     negocio: ["Negocio", "Para quien lleva una o más empresas.", ["Todo lo de Esencial", "Modo conversación: habla como en una llamada", "Empresas y monedas ilimitadas", "Enlace de reservas para clientes", "Acta de reunión automática", "Paquete del contable con recibos", "Alerta de suscripciones y resumen semanal"]],
@@ -711,7 +722,7 @@ fr: {
     recommended: "Recommandé", perMonth: "/mois", yearNote: "{p} par an, payé en une fois", monthNote: "facturé chaque mois", startWith: "Commencer avec {n}", soon: "BIENTÔT",
     priceNote: "Prix en {c}, taxes comprises [à confirmer]. Résiliez quand vous voulez, dans l’app.", faqH: "Questions",
     finalH: "Arrêtez de noter. Commencez à parler.", finalCta: "Je veux l’accès anticipé →", company: "· Fidus Labs Limited, Royaume-Uni",
-    privacy: "Confidentialité", terms: "Conditions", contact: "Contact", langLabel: "Langue", curLabel: "Devise", navAria: "Principal",
+    privacy: "Confidentialité", terms: "Conditions", contact: "Contact", partners: "Devenir partenaire", joinErr: "Envoi impossible. Vérifiez votre e-mail et réessayez.", sending: "Envoi…", planPicked: "Formule choisie : {n}. Laissez votre e-mail, on vous prévient à l’ouverture.", langLabel: "Langue", curLabel: "Devise", navAria: "Principal",
     cur: { GBP: "livres sterling", EUR: "euros", USD: "dollars US" } },
   plans: { essencial: ["Essentiel", "Pour organiser votre vie et démarrer votre activité.", ["Voix et texte illimités", "Agenda, rappels et point du matin à 8 h", "E-mail : résumés et brouillons que vous validez", "Dépenses et reçus pour 1 portefeuille", "Documents avec alerte d’échéance", "Tâches et onglet Activité"]],
     negocio: ["Business", "Pour ceux qui gèrent une ou plusieurs entreprises.", ["Tout l’Essentiel", "Mode conversation : parlez comme au téléphone", "Entreprises et devises illimitées", "Lien de réservation pour vos clients", "Compte rendu de réunion automatique", "Dossier comptable avec reçus", "Alerte abonnements et bilan de la semaine"]],
@@ -765,7 +776,7 @@ de: {
     recommended: "Empfohlen", perMonth: "/Monat", yearNote: "{p} pro Jahr, einmal abgerechnet", monthNote: "monatlich abgerechnet", startWith: "Mit {n} starten", soon: "BALD",
     priceNote: "Preise in {c}, inkl. Steuern [bestätigen]. Jederzeit in der App kündbar.", faqH: "Fragen",
     finalH: "Hör auf zu notieren. Fang an zu sprechen.", finalCta: "Früher Zugang →", company: "· Fidus Labs Limited, Vereinigtes Königreich",
-    privacy: "Datenschutz", terms: "AGB", contact: "Kontakt", langLabel: "Sprache", curLabel: "Währung", navAria: "Hauptmenü",
+    privacy: "Datenschutz", terms: "AGB", contact: "Kontakt", partners: "Partner werden", joinErr: "Senden fehlgeschlagen. Prüfe deine E-Mail und versuch es erneut.", sending: "Wird gesendet…", planPicked: "Gewählter Tarif: {n}. Hinterlass deine E-Mail, wir melden uns zum Start.", langLabel: "Sprache", curLabel: "Währung", navAria: "Hauptmenü",
     cur: { GBP: "Pfund", EUR: "Euro", USD: "US-Dollar" } },
   plans: { essencial: ["Essenziell", "Um dein Leben zu organisieren und im eigenen Geschäft zu starten.", ["Sprache und Text unbegrenzt", "Kalender, Erinnerungen und Morgenbriefing um 8", "E-Mail: Zusammenfassungen und Entwürfe zur Freigabe", "Ausgaben und Belege für 1 Konto", "Dokumente mit Ablaufwarnung", "Aufgaben und Tab Aktivität"]],
     negocio: ["Business", "Für alle, die eine oder mehrere Firmen führen.", ["Alles aus Essenziell", "Gesprächsmodus: sprechen wie am Telefon", "Unbegrenzt Firmen und Währungen", "Buchungslink für Kunden", "Automatisches Meeting-Protokoll", "Steuerberater-Paket mit Belegen", "Abo-Warnung und Wochenrückblick"]],
@@ -819,7 +830,7 @@ it: {
     recommended: "Consigliato", perMonth: "/mese", yearNote: "{p} all’anno, addebitati una volta", monthNote: "addebitato ogni mese", startWith: "Inizia con {n}", soon: "PRESTO",
     priceNote: "Prezzi in {c}, tasse incluse [da confermare]. Disdici quando vuoi, dall’app.", faqH: "Domande",
     finalH: "Smetti di prendere appunti. Inizia a parlare.", finalCta: "Voglio l’accesso anticipato →", company: "· Fidus Labs Limited, Regno Unito",
-    privacy: "Privacy", terms: "Termini", contact: "Contatti", langLabel: "Lingua", curLabel: "Valuta", navAria: "Principale",
+    privacy: "Privacy", terms: "Termini", contact: "Contatti", partners: "Diventa partner", joinErr: "Invio non riuscito. Controlla l’e-mail e riprova.", sending: "Invio…", planPicked: "Piano scelto: {n}. Lascia la tua e-mail e ti avvisiamo all’apertura.", langLabel: "Lingua", curLabel: "Valuta", navAria: "Principale",
     cur: { GBP: "sterline", EUR: "euro", USD: "dollari USA" } },
   plans: { essencial: ["Essenziale", "Per organizzare la vita e partire con la tua attività.", ["Voce e testo illimitati", "Agenda, promemoria e buongiorno alle 8", "E-mail: riassunti e bozze da approvare", "Spese e ricevute di 1 portafoglio", "Documenti con avviso di scadenza", "Attività e scheda Attività"]],
     negocio: ["Business", "Per chi gestisce una o più aziende.", ["Tutto dell’Essenziale", "Modalità conversazione: parla come al telefono", "Aziende e valute illimitate", "Link di prenotazione per i clienti", "Verbale di riunione automatico", "Pacchetto commercialista con ricevute", "Avviso abbonamenti e riepilogo settimanale"]],
@@ -873,7 +884,7 @@ ms: {
     recommended: "Disyorkan", perMonth: "/bulan", yearNote: "{p} setahun, dibayar sekali", monthNote: "dibil setiap bulan", startWith: "Mula dengan {n}", soon: "AKAN DATANG",
     priceNote: "Harga dalam {c}, termasuk cukai [sahkan]. Batal bila-bila masa, terus dalam aplikasi.", faqH: "Soalan",
     finalH: "Berhenti mencatat. Mula bercakap.", finalCta: "Saya mahu akses awal →", company: "· Fidus Labs Limited, United Kingdom",
-    privacy: "Privasi", terms: "Terma", contact: "Hubungi", langLabel: "Bahasa", curLabel: "Mata wang", navAria: "Utama",
+    privacy: "Privasi", terms: "Terma", contact: "Hubungi", partners: "Jadi rakan kongsi", joinErr: "Tidak dapat dihantar. Semak e-mel anda dan cuba lagi.", sending: "Menghantar…", planPicked: "Pelan dipilih: {n}. Tinggalkan e-mel anda dan kami akan maklumkan bila dibuka.", langLabel: "Bahasa", curLabel: "Mata wang", navAria: "Utama",
     cur: { GBP: "paun", EUR: "euro", USD: "dolar AS" } },
   plans: { essencial: ["Asas", "Untuk menyusun hidup dan memulakan perniagaan sendiri.", ["Suara dan teks tanpa had", "Jadual, peringatan dan ringkasan pagi pukul 8", "E-mel: ringkasan dan draf untuk diluluskan", "Perbelanjaan dan resit untuk 1 dompet", "Dokumen dengan amaran tamat tempoh", "Tugasan dan tab Aktiviti"]],
     negocio: ["Perniagaan", "Untuk mereka yang menguruskan satu atau lebih syarikat.", ["Semua dalam Asas", "Syarikat dan mata wang tanpa had", "Pautan tempahan untuk pelanggan", "Minit mesyuarat automatik", "Pakej akauntan dengan resit", "Amaran langganan dan ringkasan mingguan"]],
@@ -920,7 +931,7 @@ var CURS = [["GBP", "£ GBP"], ["EUR", "€ EUR"], ["USD", "$ USD"]];
 class Component extends DCLogic {
   constructor(props) {
     super(props);
-    this.state = { tick: 0, dayPick: -1, open: 0, joined: false, yearly: false, lang: detectLang(), cur: detectCurrency(), platform: detectPlatform() };
+    this.state = { tick: 0, dayPick: -1, open: 0, joined: false, sending: false, joinErr: false, plan: "", ref: detectRef(), yearly: false, lang: detectLang(), cur: detectCurrency(), platform: detectPlatform() };
   }
   componentDidMount() {
     var self = this;
@@ -958,7 +969,7 @@ class Component extends DCLogic {
     if (plat === "android" && !play && apple) storeNote = T.androidSoon;
     return {
       t: T,
-      x: { lang: lang, toast2s: f(T.toast2s), priceNote: T.priceNote.replace("{c}", T.cur[cur]),
+      x: { lang: lang, partnerHref: lang === "pt" ? "/parceiros" : "/partners?lang=" + lang, toast2s: f(T.toast2s), priceNote: T.priceNote.replace("{c}", T.cur[cur]),
            showStores: showStores, showPlay: showPlay, showApple: showApple, playUrl: play || "#acesso", appleUrl: apple || "#acesso",
            showForm: !showStores || (plat === "ios" && !apple) || (plat === "android" && !play),
            storeNote: showStores && direct ? T.storeAfter : (showStores ? (plat === "desktop" ? T.storeAfter : storeNote) : ""),
@@ -985,6 +996,7 @@ class Component extends DCLogic {
       plans: PLAN_IDS.map(function (id) {
         var p = D.plans[id], month = prices[id], featured = id === "negocio";
         return { name: p[0], who: p[1], featured: featured, start: T.startWith.replace("{n}", p[0]),
+                 href: direct || "#acesso", pick: function () { self.setState({ plan: id }); },
                  price: yearly ? m(Math.round(month * 10 / 12 * 100) / 100) : m(month),
                  note: yearly ? T.yearNote.replace("{p}", m(month * 10)) : T.monthNote,
                  bg: featured ? "#07090D" : "#FFFFFF", fg: featured ? "#F2F5F7" : "#07090D",
@@ -1006,8 +1018,23 @@ class Component extends DCLogic {
         return { label: k[1], on: on ? "true" : "false", bg: on ? "#3DDC97" : "transparent", fg: on ? "#07090D" : "#B7C0CC",
                  pick: function () { self.setState({ cur: k[0] }); } };
       }),
-      joined: this.state.joined,
-      join: function (e) { if (e && e.preventDefault) e.preventDefault(); var f = e && e.target; var em = f && f.querySelector ? (f.querySelector('input[type=email]') || {}).value : ''; try { fetch('/v1/site/waitlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: em || '', lang: lang, platform: self.state.platform }) }); } catch (x) {} self.setState({ joined: true }); }
+      joined: this.state.joined, joinErr: this.state.joinErr, sending: this.state.sending,
+      joinLabel: this.state.sending ? T.sending : T.join,
+      planNote: this.state.plan && !this.state.joined ? T.planPicked.replace("{n}", D.plans[this.state.plan][0]) : "",
+      join: function (e) {
+        if (e && e.preventDefault) e.preventDefault();
+        if (self.state.sending) return;
+        var f = e && e.target, inp = f && f.querySelector ? f.querySelector("input[type=email]") : null;
+        var em = inp ? (inp.value || "").trim() : "";
+        if (!em || (inp && inp.checkValidity && !inp.checkValidity())) { self.setState({ joinErr: true }); return; }
+        self.setState({ sending: true, joinErr: false });
+        var done = function (ok) { self.setState({ sending: false, joined: ok, joinErr: !ok }); };
+        try {
+          fetch("/v1/site/waitlist", { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: em, lang: lang, platform: self.state.platform, plan: self.state.plan, ref: self.state.ref }) })
+            .then(function (r) { done(r.ok); }, function () { done(false); });
+        } catch (x) { done(false); }
+      }
     };
   }
 }

@@ -126,6 +126,9 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [ ] Lançamento aberto e anúncios
 
 ## Já feito
+- [x] v0.12: o Fidus escreve a resposta ao vivo (e mostra o que está fazendo); backend do site: lista de espera com
+      e-mail de confirmação e saída, plano e código de parceiro guardados, página de parceria, painel › Site com CSV
+      e aviso de lançamento para a lista
 - [x] v0.10: boas-vindas em conversa, dicas por e-mail + Leads, parceiros, português de Portugal, privacidade e termos,
       exportar gastos para o próprio e-mail, medição da voz, cartão de e-mail com o visual de antes
 - [x] v0.9.9: visual limpo (neutros, preto como cor de ação, ícones de linha, resposta sem balão, modo escuro grafite)

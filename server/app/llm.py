@@ -8,9 +8,23 @@ Resposta: {"text": str, "tool_calls": [{"id", "name", "input"}], "usage": {...}}
 Anthropic e custa 10% nas chamadas seguintes; a que muda (data, hora, perfil) vai depois.
 Cada chamada grava tokens e custo no banco do cliente (store.add_usage), para medir o custo por cliente.
 """
+import contextvars
 import json
 
 from . import config, store
+
+# Quem quiser ver a resposta sendo escrita (o chat do app) põe aqui uma função: recebe cada pedaço de texto,
+# e None quando a resposta recomeça (ex. o modelo reserva assumiu).
+STREAM: contextvars.ContextVar = contextvars.ContextVar("fidus_stream", default=None)
+
+
+def _emit(piece):
+    cb = STREAM.get()
+    if cb:
+        try:
+            cb(piece)
+        except Exception:  # noqa: BLE001 - mostrar o texto nunca derruba a resposta
+            pass
 
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
@@ -63,6 +77,7 @@ def chat(system, messages: list[dict], tools: list[dict], web_search: bool = Tru
             raise
         import logging
         logging.getLogger("fidus.llm").warning("modelo %s falhou (%s); usando %s", spec, str(first)[:160], backup)
+        _emit(None)
         out = _call(backup, system, messages, tools, web_search)
         out["fallback"] = backup
     try:
@@ -154,16 +169,25 @@ def _anthropic(system, messages, tools, web_search=True, model=None):
     raw: list = []
     usage = {"model": model, "calls": 0, "input": 0, "output": 0, "cache_write": 0, "cache_read": 0, "searches": 0}
     extra = {"tools": api_tools} if api_tools else {}
+    def create(**kw):
+        if not STREAM.get():
+            return client.messages.create(**kw)
+        with client.messages.stream(**kw) as st:  # o texto aparece no app enquanto é escrito
+            for ev in st:
+                if getattr(ev, "type", "") == "content_block_delta" and getattr(ev.delta, "type", "") == "text_delta":
+                    _emit(ev.delta.text)
+            return st.get_final_message()
+
     for _ in range(3):  # "pause_turn": a busca longa pede para continuar a mesma resposta
         try:
-            resp = client.messages.create(model=model, max_tokens=4000, system=system, messages=msgs, **extra)
+            resp = create(model=model, max_tokens=4000, system=system, messages=msgs, **extra)
         except anthropic.BadRequestError as e:
             if "web_search" not in str(e) or not config.WEB_SEARCH:
                 raise
             config.WEB_SEARCH = False  # busca não liberada nesta conta: segue sem ela
             api_tools = [t for t in api_tools if t.get("name") != "web_search"]
             extra = {"tools": api_tools} if api_tools else {}
-            resp = client.messages.create(model=model, max_tokens=4000, system=system, messages=msgs, **extra)
+            resp = create(model=model, max_tokens=4000, system=system, messages=msgs, **extra)
         u = getattr(resp, "usage", None)
         if u is not None:
             usage["calls"] += 1
@@ -206,6 +230,8 @@ def _openai_compat(system, messages, tools, model=None, base_url=None, api_key=N
         else:
             msgs.append({"role": m["role"], "content": m["content"]})
     extra = {"tools": [{"type": "function", "function": t} for t in tools]} if tools else {}
+    if STREAM.get():
+        return _openai_stream(client, model, msgs, extra)
     resp = client.chat.completions.create(model=model or config.LLM_MODEL, messages=msgs, **extra)
     choice = resp.choices[0].message
     import uuid
@@ -218,3 +244,38 @@ def _openai_compat(system, messages, tools, model=None, base_url=None, api_key=N
     usage = {"model": model, "calls": 1, "input": getattr(u, "prompt_tokens", 0) or 0,
              "output": getattr(u, "completion_tokens", 0) or 0}
     return {"text": choice.content or "", "tool_calls": calls, "usage": usage}
+
+
+def _openai_stream(client, model, msgs, extra) -> dict:
+    """Mesma resposta do _openai_compat, mas recebendo aos pedaços (o texto vai aparecendo no app)."""
+    import uuid
+    text, calls, usage_obj = [], {}, None
+    stream = client.chat.completions.create(model=model or config.LLM_MODEL, messages=msgs, stream=True,
+                                            stream_options={"include_usage": True}, **extra)
+    for chunk in stream:
+        if getattr(chunk, "usage", None):
+            usage_obj = chunk.usage
+        if not chunk.choices:
+            continue
+        d = chunk.choices[0].delta
+        if getattr(d, "content", None):
+            text.append(d.content)
+            _emit(d.content)
+        for tc in getattr(d, "tool_calls", None) or []:
+            slot = calls.setdefault(tc.index if tc.index is not None else len(calls), {"id": "", "name": "", "args": "", "extra": {}})
+            if tc.id:
+                slot["id"] = tc.id
+            if tc.function and tc.function.name:
+                slot["name"] += tc.function.name
+            if tc.function and tc.function.arguments:
+                slot["args"] += tc.function.arguments
+            if getattr(tc, "model_extra", None):
+                slot["extra"].update(tc.model_extra)
+    out_calls = []
+    for _, c in sorted(calls.items()):
+        cid = c["id"] if c["id"] and all(ch.isalnum() or ch in "_-" for ch in c["id"]) else f"call_{uuid.uuid4().hex[:20]}"
+        out_calls.append({"id": cid, "name": c["name"], "input": json.loads(c["args"] or "{}"),
+                          **({"extra": c["extra"]} if c["extra"] else {})})
+    usage = {"model": model, "calls": 1, "input": getattr(usage_obj, "prompt_tokens", 0) or 0,
+             "output": getattr(usage_obj, "completion_tokens", 0) or 0}
+    return {"text": "".join(text), "tool_calls": out_calls, "usage": usage}

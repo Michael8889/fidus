@@ -26,6 +26,57 @@ def cancel(request_id: str) -> None:
     _CANCEL[_cancel_key(request_id)] = now
 
 
+# ---------- Resposta aparecendo enquanto é escrita (o app consulta /v1/partial/{request_id}) ----------
+_PARTIAL: dict[str, dict] = {}
+STATUS = {  # o que aparece no app enquanto a ferramenta roda
+    "pt": {"list_calendar_events": "Vendo sua agenda…", "create_calendar_event": "Marcando na agenda…",
+           "create_reminder": "Criando o lembrete…", "add_expense": "Lançando o gasto…", "summarize_expenses": "Somando os gastos…",
+           "search_emails": "Procurando nos e-mails…", "read_email": "Lendo o e-mail…", "prepare_new_email": "Escrevendo o e-mail…",
+           "prepare_email_reply": "Escrevendo a resposta…", "find_place": "Procurando o endereço…",
+           "route_distance": "Calculando a rota…", "prepare_payment": "Preparando o pagamento…", "web_search": "Pesquisando…",
+           "_": "Pensando…"},
+    "en": {"list_calendar_events": "Checking your calendar…", "create_calendar_event": "Adding to your calendar…",
+           "create_reminder": "Setting the reminder…", "add_expense": "Logging the expense…", "summarize_expenses": "Adding up expenses…",
+           "search_emails": "Searching your email…", "read_email": "Reading the email…", "prepare_new_email": "Writing the email…",
+           "prepare_email_reply": "Writing the reply…", "find_place": "Looking up the address…",
+           "route_distance": "Working out the route…", "prepare_payment": "Preparing the payment…", "web_search": "Searching…",
+           "_": "Thinking…"},
+}
+
+
+def _pkey(request_id: str) -> str:
+    return f"{(store.CURRENT.get() or {}).get('id') or store.OWNER_ID}:{request_id}"
+
+
+def partial(request_id: str) -> dict:
+    p = _PARTIAL.get(_pkey(request_id))
+    return {"text": p["text"], "status": p["status"], "done": p["done"]} if p else {"text": "", "status": "", "done": False}
+
+
+import contextvars as _cv
+_CUR_PARTIAL: _cv.ContextVar = _cv.ContextVar("fidus_partial", default=None)
+
+
+def _partial_start(request_id: str | None):
+    """Abre o rascunho visível da resposta e devolve (buffer, função que recebe os pedaços)."""
+    import time as _t
+    now = _t.time()
+    for k in [k for k, v in _PARTIAL.items() if now - v["t"] > 300]:  # limpa os antigos
+        _PARTIAL.pop(k, None)
+    if not request_id:
+        return None
+    buf = {"text": "", "status": STATUS["en" if store.user_lang() == "en" else "pt"]["_"], "done": False, "t": now}
+    _PARTIAL[_pkey(request_id)] = buf
+
+    def cb(piece):
+        if piece is None:
+            buf["text"] = ""
+        else:
+            buf["text"] += piece
+            buf["status"] = ""
+    return buf, cb
+
+
 def _cancelled(request_id: str | None) -> bool:
     return bool(request_id) and _cancel_key(request_id) in _CANCEL
 SMALLTALK = re.compile(r"^\W*(oi|ol[aá]|e a[ií]|obrigad[oa]|muito obrigad[oa]|valeu|"
@@ -394,7 +445,15 @@ def handle(user_text: str, image_b64: str | None = None, media_type: str = "imag
     import time as _t
     from . import metrics
     t0 = _t.time()
-    out = _handle(user_text, image_b64, media_type, receipt_path, voice, speak or voice, request_id)
+    pt = _partial_start(request_id)
+    toks = (llm.STREAM.set(pt[1]), _CUR_PARTIAL.set(pt[0])) if pt else None
+    try:
+        out = _handle(user_text, image_b64, media_type, receipt_path, voice, speak or voice, request_id)
+    finally:
+        if pt:
+            pt[0]["done"] = True
+            llm.STREAM.reset(toks[0])
+            _CUR_PARTIAL.reset(toks[1])
     meta = out.pop("_meta", {})
     ok = not out.get("fair_use") and not meta.get("failed")
     metrics.record_task((store.CURRENT.get() or {}).get("id") or store.OWNER_ID, kind, ok, meta.get("tools", 0),
@@ -432,6 +491,8 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
         # roteador ligado: cumprimentos e pedidos simples no modelo barato; o resto no principal
         light = config.LLM_MODEL_CHEAP if (light or route(user_text, bool(image_b64)) == "cheap") else None
     steps = 0
+    buf = _CUR_PARTIAL.get()
+    lang_s = STATUS["en" if store.user_lang() == "en" else "pt"]
     def stopped() -> dict:
         """A pessoa tocou em parar: não faz mais nada (o que já foi feito fica na Atividade, com Desfazer)."""
         store.add_message("assistant", "[pedido cancelado pelo usuário; não continue este pedido]" + _action_log(actions))
@@ -449,6 +510,8 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
         if _cancelled(request_id):
             return stopped()
         _t0 = _tm.time()
+        if buf is not None:
+            buf["text"] = ""  # cada volta escreve do zero (o texto antes de uma ferramenta é só "vou ver")
         out = llm.chat(system_parts(voice), messages, tools.TOOLS, **({"model": light} if light else {}))
         _metrics.record_stage("ia", int((_tm.time() - _t0) * 1000))
         steps += 1
@@ -482,6 +545,8 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
         if _cancelled(request_id):  # cancelou enquanto a IA pensava: nenhuma ferramenta deste passo roda
             return stopped()
         for call in out["tool_calls"]:
+            if buf is not None:
+                buf["text"], buf["status"] = "", lang_s.get(call["name"], lang_s["_"])
             result = tools.run(call["name"], call["input"])
             if call["name"] in ("read_email", "open_link", "search_emails", "read_sheet"):
                 tools.web_tools.note_output(tools.dumps(result))
