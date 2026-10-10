@@ -108,6 +108,9 @@ RESEND_API_KEY = (env("FIDUS_RESEND_API_KEY", "") or "").strip()
 # dados da empresa nas páginas de privacidade e termos (/privacy, /terms)
 COMPANY_ADDRESS = (env("FIDUS_COMPANY_ADDRESS", "") or "").strip() or "2 Connaught Road, Harrow, London, United Kingdom"
 SUPPORT_EMAIL = (env("FIDUS_SUPPORT_EMAIL", "") or "").strip() or "suporte@heyfidus.com"
+# links das lojas no site (vazio = lista de espera no lugar do botão)
+PLAY_STORE_URL = (env("FIDUS_PLAY_STORE_URL", "") or "").strip()
+APP_STORE_URL = (env("FIDUS_APP_STORE_URL", "") or "").strip()
 # link do diagnóstico gratuito de 30 min (vai nos e-mails de dicas); sem ele, os convites não saem
 MENTOR_BOOKING_URL = (env("FIDUS_MENTOR_BOOKING_URL", "") or "").strip()
 EMAIL_FROM = (env("FIDUS_EMAIL_FROM", "") or "").strip()  # ex. "Fidus <ola@seudominio.com>"

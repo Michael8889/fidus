@@ -168,9 +168,17 @@ HOME_TEXT = {
 }
 
 
+_SITE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "site.html")
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
-    """Página do domínio (heyfidus.com) até o site completo entrar no ar. Também serve de site da empresa nas lojas."""
+    """Site do Fidus (heyfidus.com). Gerado de site/landing.dc.html por site/build_site.py; sem o arquivo, a página simples."""
+    try:
+        page = open(_SITE, encoding="utf-8").read()
+        return HTMLResponse(page.replace("__PLAY_URL__", config.PLAY_STORE_URL).replace("__APP_STORE_URL__", config.APP_STORE_URL))
+    except OSError:
+        pass
     al = (request.headers.get("accept-language") or "").lower()
     lang = "pt" if al.startswith("pt") else "en"
     T = HOME_TEXT[lang]
@@ -184,6 +192,32 @@ def home(request: Request):
             f'<p style="font-size:13px">Fidus Labs Limited · Company no. 17510962 · England &amp; Wales<br>'
             f'{html.escape(config.COMPANY_ADDRESS)}</p>')
     return _page("Fidus", body)
+
+
+class WaitlistIn(BaseModel):
+    email: str
+    lang: str | None = None
+    platform: str | None = None
+
+
+_WAIT_HITS: dict[str, list[float]] = {}
+
+
+@app.post("/v1/site/waitlist")
+def site_waitlist(body: WaitlistIn, request: Request):
+    """Lista de espera do site (só para avisar quando o app chegar na loja do celular da pessoa)."""
+    import re as _re
+    import time as _time
+    ip = (request.headers.get("x-real-ip") or (request.client.host if request.client else "") or "?")
+    hits = [t for t in _WAIT_HITS.get(ip, []) if _time.time() - t < 3600]
+    if len(hits) >= 5:
+        raise HTTPException(429, "muitas tentativas")
+    _WAIT_HITS[ip] = hits + [_time.time()]
+    email = (body.email or "").strip().lower()[:200]
+    if not _re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        raise HTTPException(400, "e-mail inválido")
+    accounts.add_waitlist(email, (body.lang or "")[:8], (body.platform or "")[:12])
+    return {"ok": True}
 
 
 @app.get("/privacy", response_class=HTMLResponse)

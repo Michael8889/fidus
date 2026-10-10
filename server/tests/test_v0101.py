@@ -15,12 +15,27 @@ client = TestClient(main.app)
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-def test_home_page_languages():
+def test_home_serves_site_with_store_links_and_company(monkeypatch):
+    monkeypatch.setattr(main.config, "PLAY_STORE_URL", "https://play.google.com/store/apps/details?id=x")
+    r = client.get("/")
+    assert r.status_code == 200 and "__mount(Component" in r.text and "__PLAY_URL__" not in r.text
+    assert "play.google.com/store/apps/details?id=x" in r.text and "Fidus Labs Limited" in r.text
+    assert "[EMPRESA LTD]" not in r.text and "mailto:suporte@heyfidus.com" in r.text
+
+
+def test_home_fallback_page_languages(monkeypatch):
+    monkeypatch.setattr(main, "_SITE", "/nao/existe.html")
     r = client.get("/", headers={"accept-language": "pt-BR,pt;q=0.9"})
-    assert r.status_code == 200 and "Fale. O Fidus resolve." in r.text and "17510962" in r.text and "Connaught" in r.text and "Pagar por voz" in r.text
-    assert "/privacy?lang=pt" in r.text
+    assert r.status_code == 200 and "Fale. O Fidus resolve." in r.text and "Connaught" in r.text
     r = client.get("/", headers={"accept-language": "en-GB"})
     assert "Fidus handles it" in r.text and "/terms?lang=en" in r.text
+
+
+def test_site_waitlist():
+    from app import accounts
+    assert client.post("/v1/site/waitlist", json={"email": "Ana@Exemplo.com", "lang": "pt"}).status_code == 200
+    assert client.post("/v1/site/waitlist", json={"email": "não-é-email"}).status_code == 400
+    assert any(w["email"] == "ana@exemplo.com" for w in accounts.waitlist())
 
 
 def test_install_script_is_valid_bash_and_never_touches_other_sites():

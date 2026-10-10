@@ -38,6 +38,7 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
   - **Claude**: conectar banco (tela do banco abre no celular), importar transações como gastos na carteira
     certa sem duplicar, aviso para reconectar a cada 90/180 dias, desligar/apagar dados; plano mínimo Premium
   - Privacidade: atualizar política (dados bancários, o provedor como parceiro) e avaliar DPIA
+- [x] Site completo no ar em heyfidus.com (gerado do desenho; lista de espera grava no servidor)
 - Site: página "Membro fundador" (lista de espera com código aplicado) e página "Seja parceiro" (candidatura)
 - Voz ainda mais rápida conforme a medição do painel (começar a falar antes de terminar, etc.)
 - Chamar o Fidus com a tela bloqueada, para anotação rápida com confirmação por voz:

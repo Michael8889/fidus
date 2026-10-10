@@ -214,6 +214,9 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
 - Sem chave, APK antigo ou falha na conexão: o app usa o modo conversa normal (transcrição no celular + IA + voz).
 
 ## Site
+- No ar em heyfidus.com: `python site/build_site.py` gera `server/app/static/site.html` a partir do desenho;
+  o servidor serve em `/`. Lojas: `FIDUS_PLAY_STORE_URL` / `FIDUS_APP_STORE_URL` no `.env` (vazio = lista de espera,
+  que grava em `waitlist` no accounts.db via `/v1/site/waitlist`).
 - `site/landing.dc.html` (cópia do site no Claude Design). Idioma e moeda do visitante; botões da Google Play e da
   App Store conforme o celular (os links entram nas Tweaks do site: `playStoreUrl`, `appStoreUrl`). Loja sem link =
   lista de espera. O cadastro acontece no app.

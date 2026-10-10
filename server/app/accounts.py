@@ -44,6 +44,7 @@ def init() -> None:
                 app_challenge TEXT);
             CREATE TABLE IF NOT EXISTS used_links (sig TEXT PRIMARY KEY, expires REAL NOT NULL);
             CREATE TABLE IF NOT EXISTS public_slugs (slug TEXT PRIMARY KEY, user_id TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS waitlist (email TEXT PRIMARY KEY, lang TEXT, platform TEXT, created_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS referral_codes (user_id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL);
             CREATE TABLE IF NOT EXISTS referrals (
                 invitee_id TEXT PRIMARY KEY, referrer_id TEXT NOT NULL, created_at TEXT NOT NULL, paid_at TEXT);
@@ -606,3 +607,17 @@ def forget_user(uid: str, email: str | None) -> None:
         if email:
             c.execute("DELETE FROM invites WHERE lower(email)=lower(?)", (email,))
             c.execute("DELETE FROM email_login_codes WHERE email=?", (email.lower(),))
+
+
+def add_waitlist(email: str, lang: str = "", platform: str = "") -> None:
+    """Lista de espera do site (aviso quando o app chegar na loja). Repetir o e-mail só atualiza."""
+    from datetime import datetime, timezone
+    with _db() as c:
+        c.execute("INSERT INTO waitlist(email,lang,platform,created_at) VALUES(?,?,?,?) "
+                  "ON CONFLICT(email) DO UPDATE SET lang=excluded.lang, platform=excluded.platform",
+                  (email, lang, platform, datetime.now(timezone.utc).isoformat()))
+
+
+def waitlist() -> list[dict]:
+    with _db() as c:
+        return [dict(r) for r in c.execute("SELECT * FROM waitlist ORDER BY created_at DESC").fetchall()]
