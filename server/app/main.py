@@ -418,7 +418,7 @@ def me(request: Request):
             "google_connected": google_client.is_connected(), "profile": store.profile(),
             "language": store.user_lang(), "currency": plans.user_currency(),
             "staff_role": admin.role_for({**u, "email": u.get("email")}),
-            "nps_due": _nps_due(u), "natural_voice": _tts_on(), "onboarding_pending": _onb_pending(), "voice_gender": store.profile().get("voice_gender") or "female"}
+            "nps_due": _nps_due(u), "natural_voice": _tts_on(), "realtime": _rt_on(), "onboarding_pending": _onb_pending(), "voice_gender": store.profile().get("voice_gender") or "female"}
 
 
 def _onb_pending() -> bool:
@@ -427,6 +427,11 @@ def _onb_pending() -> bool:
         return onboarding.pending()
     except Exception:  # noqa: BLE001
         return False
+
+
+def _rt_on() -> bool:
+    from . import realtime
+    return realtime.enabled()
 
 
 def _tts_on() -> bool:
@@ -646,6 +651,69 @@ def tts_phrase(body: TtsIn):
     lang = store.user_lang()
     text = body.phrase if lang == "pt" else (i18n.translate(lang, [body.phrase]).get(body.phrase) or body.phrase)
     return {"audio": tts.synthesize(text, lang, cache=True)}
+
+
+# ---------- Modo conversa em tempo real ----------
+@app.post("/v1/realtime/session", dependencies=[Depends(auth)])
+def realtime_session():
+    from . import realtime
+    r = realtime.session()
+    if r.get("error") == "fair_use":
+        lang = "pt" if store.user_lang().startswith("pt") else "en"
+        raise HTTPException(429, agent.FAIR_USE_MSG[lang])
+    if r.get("error"):
+        raise HTTPException(503, r["error"])
+    return r
+
+
+class RtToolIn(BaseModel):
+    name: str
+    arguments: str | dict | None = None
+    call_id: str | None = None
+
+
+@app.post("/v1/realtime/tool", dependencies=[Depends(auth)])
+def realtime_tool(body: RtToolIn):
+    from . import realtime
+    return realtime.run_tool(body.name, body.arguments)
+
+
+class RtTurnIn(BaseModel):
+    user: str = ""
+    assistant: str = ""
+
+
+@app.post("/v1/realtime/turn", dependencies=[Depends(auth)])
+def realtime_turn(body: RtTurnIn):
+    from . import realtime
+    realtime.save_turn(body.user, body.assistant)
+    return {"ok": True}
+
+
+class RtUsageIn(BaseModel):
+    usage: dict
+
+
+@app.post("/v1/realtime/usage", dependencies=[Depends(auth)])
+def realtime_usage(body: RtUsageIn):
+    from . import realtime
+    realtime.record_usage(body.usage)
+    return {"ok": True}
+
+
+class RtCommandIn(BaseModel):
+    text: str
+    drafts: list[str] | None = None
+
+
+@app.post("/v1/realtime/command", dependencies=[Depends(auth)])
+def realtime_command(body: RtCommandIn):
+    """'envia' falado na ligação: só o servidor envia, e só rascunho que está na tela (a IA de voz não envia nada)."""
+    sent = actions.handle_command(body.text, body.drafts)
+    if not sent:
+        return {"handled": False}
+    metrics.record_task(store.current()["id"], "envio", bool(sent.get("sent_actions")))
+    return {"handled": True, **sent}
 
 
 class TtsTextIn(BaseModel):

@@ -42,6 +42,11 @@ LLM_MODEL_LIGHT = env("FIDUS_LLM_MODEL_LIGHT", "claude-haiku-4-5-20251001" if en
 # Ex.: gemini:gemini-2.5-flash  ou  claude-haiku-4-5-20251001. Vazio = tudo no principal.
 LLM_MODEL_CHEAP = (env("FIDUS_LLM_MODEL_CHEAP", "") or "").strip() or None
 GEMINI_API_KEY = env("FIDUS_GEMINI_API_KEY")
+# Modo conversa em tempo real (voz da OpenAI, como o ChatGPT). Sem chave: o app usa o modo conversa normal.
+OPENAI_API_KEY = env("FIDUS_OPENAI_API_KEY") or env("OPENAI_API_KEY")
+REALTIME_MODEL = env("FIDUS_REALTIME_MODEL", "gpt-realtime-2.1-mini")
+REALTIME_VOICE = env("FIDUS_REALTIME_VOICE", "marin")
+REALTIME_ON = (env("FIDUS_REALTIME", "1") or "1").strip() not in ("0", "false", "no")
 # Preço de um modelo fora da lista do llm.py: "entrada,saída,gravar_cache,ler_cache" em US$ por milhão de tokens
 CUSTOM_PRICES = tuple(float(x) for x in (env("FIDUS_LLM_PRICES", "") or "").split(",") if x.strip()) or None
 # Uso justo: gasto de IA por cliente por dia (US$). Passou, o Fidus pede para continuar amanhã. 0 = sem limite.

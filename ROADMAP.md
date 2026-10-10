@@ -18,8 +18,9 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
   Gemini (aistudio.google.com, com faturamento) + `FIDUS_LLM_MODEL_CHEAP=gemini:gemini-2.5-flash` no `.env`
 - [x] v0.10.3 (etapa 1 da voz): tela no estilo ChatGPT (bolinha que reage à voz, botões microfone e fechar),
   fim da fala mais rápido (0,85 s de silêncio), começa a falar a 1ª frase enquanto busca o resto, vibração leve
-- Etapa 2 da voz (APK novo): voz em tempo real (Gemini Live ou OpenAI Realtime) com as ferramentas do Fidus;
-  interromper falando (cancelamento de eco), resposta em ~1 s. Comparar custo por minuto antes de escolher
+- [x] v0.11.0 (etapa 2 da voz, APK novo): conversa em tempo real com a OpenAI (gpt-realtime-2.1-mini, ~US$ 0,02/min),
+  interromper falando, ferramentas do Fidus, "envia" só pelo servidor. **Você**: `FIDUS_OPENAI_API_KEY` no `.env`
+- Depois de testar: comparar com Gemini Live (mais barato?) e decidir se fica para todos os planos ou só pagos
 - **Você**: testar a voz mais natural: `FIDUS_TTS_TIER=chirp3` no `.env` (1 milhão de letras grátis/mês)
 - [x] v0.10.1: Configurações mostram só "Meu plano: X"; tocar abre a tela do plano (trocar ou cancelar)
 - Open banking no Premium (importar gastos do banco sozinho):

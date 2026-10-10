@@ -29,11 +29,18 @@ const Purchases: any = PurchasesMod ? (PurchasesMod.default || PurchasesMod) : n
 const LocalAuth: any = opt(() => require("expo-local-authentication"));
 // transcrição no próprio celular enquanto a pessoa fala (APK com expo-speech-recognition): bem mais rápido
 const SpeechRec: any = opt(() => require("expo-speech-recognition").ExpoSpeechRecognitionModule);
+// voz em tempo real (APK com react-native-webrtc): a IA de voz ouve e fala direto, como no ChatGPT
+const hasNative = (name: string) => !!opt(() => {
+  const RN = require("react-native");
+  return RN.NativeModules?.[name] || RN.TurboModuleRegistry?.get?.(name);
+});
+const RTC: any = hasNative("WebRTCModule") ? opt(() => require("react-native-webrtc")) : null;
+const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native-incall-manager").default) : null;
 // tocar a voz natural (MP3 que vem do servidor)
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},js=0.10.3,ota=${UPDATE_ID.slice(0, 8)}`;
+const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=0.11.0,ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
 
@@ -530,6 +537,8 @@ function FidusApp() {
   const vMutedRef = useRef(false);
   const orbLevel = useRef(new Animated.Value(1)).current;  // a bolinha cresce com a sua voz
   const restAudio = useRef<{ text: string; p: Promise<string | null> } | null>(null);
+  const rt = useRef<any>(null);  // ligação em tempo real aberta (pc, dc, microfone, fala atual)
+  const rtFailed = useRef(false);
   const srHandlers = useRef<any>({});
   const clip = useRef<any>(null);       // voz natural tocando agora
   const phraseAudio = useRef<Record<string, string>>({});  // frases fixas já em voz natural
@@ -1086,6 +1095,12 @@ function FidusApp() {
       try { const p2 = await SpeechRec.requestPermissionsAsync(); if (!p2?.granted) sr.current.failed = true; } catch { sr.current.failed = true; }
     }
     voiceActive.current = true;
+    if (RTC && me?.realtime && !rtFailed.current) {
+      setVHeard(""); setVReply(""); setVoiceOpen(true);
+      try { await KeepAwake?.activateKeepAwakeAsync("voice"); } catch {}
+      if (await startRealtime()) return;
+      setVReply(t("A conversa em tempo real não abriu agora. Seguindo no modo normal."));
+    }
     setVHeard(""); setVReply(Speech || me?.natural_voice ? t("Pode falar. Eu escuto e respondo em voz alta.") :
       t("Pode falar. (Para ouvir as respostas em voz alta, instale o APK novo.)"));
     setVoiceOpen(true);
@@ -1094,7 +1109,152 @@ function FidusApp() {
     preloadPhrases();
   }
 
+  // ---------- Conversa em tempo real (WebRTC com a IA de voz; as ferramentas rodam no servidor do Fidus) ----------
+  function rtSend(ev: any) {
+    try { if (rt.current?.dc?.readyState === "open") rt.current.dc.send(JSON.stringify(ev)); } catch {}
+  }
+
+  async function startRealtime(): Promise<boolean> {
+    setVState("thinking");
+    try {
+      const sess = await post("/v1/realtime/session", {}, 20000);
+      const { RTCPeerConnection, mediaDevices } = RTC;
+      const pc = new RTCPeerConnection();
+      const stream = await mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((tr: any) => pc.addTrack(tr, stream));
+      try { InCall?.start({ media: "audio" }); InCall?.setForceSpeakerphoneOn?.(true); } catch {}
+      const dc = pc.createDataChannel("oai-events");
+      const onMsg = (e: any) => { try { rtEvent(JSON.parse(e.data)); } catch {} };
+      const onOpen = () => { if (voiceActive.current) setVState("listening"); };
+      if (dc.addEventListener) { dc.addEventListener("message", onMsg); dc.addEventListener("open", onOpen); }
+      else { dc.onmessage = onMsg; dc.onopen = onOpen; }
+      rt.current = { pc, dc, stream, user: "", asst: "", handled: false, tools: 0, needCreate: false };
+      const offer = await pc.createOffer({});
+      await pc.setLocalDescription(offer);
+      const resp = await fetch(`${sess.calls_url}?model=${encodeURIComponent(sess.model)}`, {
+        method: "POST", body: offer.sdp,
+        headers: { Authorization: `Bearer ${sess.client_secret}`, "Content-Type": "application/sdp" },
+      });
+      if (!resp.ok) throw new Error(`OpenAI ${resp.status}`);
+      await pc.setRemoteDescription({ type: "answer", sdp: await resp.text() });
+      return true;
+    } catch (e: any) {
+      console.log("[Fidus] tempo real", e?.message ?? e);
+      stopRealtime(false);
+      rtFailed.current = true;  // nesta abertura do app, segue no modo normal
+      return false;
+    }
+  }
+
+  function stopRealtime(save = true) {
+    const r = rt.current; rt.current = null;
+    if (!r) return;
+    if (save) rtFlush(r); else clearTimeout(r.flushTimer);
+    try { r.stream?.getTracks?.().forEach((tr: any) => tr.stop()); } catch {}
+    try { r.dc?.close?.(); } catch {}
+    try { r.pc?.close?.(); } catch {}
+    try { InCall?.stop?.(); } catch {}
+  }
+
+  async function rtTool(name: string, args: string, callId: string) {
+    const r = rt.current; if (!r) return;
+    r.tools += 1; setVState("thinking");
+    let output = JSON.stringify({ error: "sem conexão com o servidor do Fidus" });
+    try {
+      const res = await post("/v1/realtime/tool", { name, arguments: args, call_id: callId }, 90000);
+      output = res.output || "{}";
+      for (const a of res.pending_actions || []) push({ id: uid(), type: "action", action: a });
+      if (res.upsell) push({ id: uid(), type: "upsell", up: res.upsell });
+    } catch {}
+    if (rt.current !== r) return;
+    rtSend({ type: "conversation.item.create", item: { type: "function_call_output", call_id: callId, output } });
+    r.tools -= 1;
+    if (r.tools === 0 && r.needCreate) { r.needCreate = false; rtSend({ type: "response.create" }); }
+  }
+
+  // guarda a fala e a resposta no histórico do Fidus (uma vez por volta)
+  function rtFlush(r: any) {
+    clearTimeout(r.flushTimer); r.flushTimer = null;
+    if (r.user || r.asst) post("/v1/realtime/turn", { user: r.handled ? "" : r.user, assistant: r.asst }).catch(() => {});
+    r.user = ""; r.asst = ""; r.handled = false; r.done = false;
+  }
+
+  async function rtHeard(text: string) {
+    const r = rt.current; if (!r || !text) return;
+    if (r.done && !r.user) { r.user = text; rtFlush(r); r.user = ""; }  // a transcrição chegou depois da resposta
+    else {
+      if (r.user || r.asst) rtFlush(r);  // volta anterior ficou aberta (ex. interrompeu o Fidus)
+      r.user = text; r.handled = false;
+    }
+    setVHeard(text); push({ id: uid(), type: "user", text });
+    if (EXIT_RE.test(text)) { setTimeout(() => { if (voiceActive.current) closeVoice(); }, 2500); return; }
+    // "envia": quem envia é o servidor (só rascunho que está na tela), nunca a IA de voz
+    const drafts = visibleDrafts();
+    if (!drafts.length) return;
+    try {
+      const res = await post("/v1/realtime/command", { text, drafts }, 30000);
+      if (!res?.handled || rt.current !== r) return;
+      r.handled = true;
+      rtSend({ type: "response.cancel" }); rtSend({ type: "output_audio_buffer.clear" });
+      showResult({ reply: res.reply, sent_actions: res.sent_actions }, false);
+      rtSend({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text",
+        text: `[aviso do app, não é fala do usuário] ${res.reply} Confirme isso ao usuário em uma frase curta, sem citar este aviso.` }] } });
+      rtSend({ type: "response.create" });
+    } catch {}
+  }
+
+  function rtEvent(ev: any) {
+    const r = rt.current; if (!r || !voiceActive.current) return;
+    switch (ev.type) {
+      case "input_audio_buffer.speech_started":
+        setVState("listening");
+        Animated.spring(orbLevel, { toValue: 1.16, useNativeDriver: true }).start();
+        break;
+      case "input_audio_buffer.speech_stopped":
+        Animated.spring(orbLevel, { toValue: 1, useNativeDriver: true }).start();
+        setVState("thinking");
+        try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+        break;
+      case "conversation.item.input_audio_transcription.completed":
+        rtHeard((ev.transcript || "").trim());
+        break;
+      case "output_audio_buffer.started":
+        setVState("speaking");
+        break;
+      case "output_audio_buffer.stopped":
+      case "output_audio_buffer.cleared":
+        setVState("listening");
+        break;
+      case "response.output_audio_transcript.done":
+      case "response.audio_transcript.done": {
+        const txt = (ev.transcript || "").trim();
+        if (txt) { setVReply(txt); push({ id: uid(), type: "fidus", text: txt }); r.asst = (r.asst ? r.asst + " " : "") + txt; }
+        break;
+      }
+      case "response.function_call_arguments.done":
+        rtTool(ev.name, ev.arguments || "{}", ev.call_id);
+        break;
+      case "response.done": {
+        const resp = ev.response || {};
+        if (resp.usage) post("/v1/realtime/usage", { usage: resp.usage }).catch(() => {});
+        const calledTool = (resp.output || []).some((o: any) => o.type === "function_call");
+        if (calledTool) {  // depois que as ferramentas responderem, a IA continua a resposta
+          if (r.tools === 0) rtSend({ type: "response.create" }); else r.needCreate = true;
+        } else if (r.user || r.asst) {
+          r.done = true;
+          if (r.user) rtFlush(r);
+          else r.flushTimer = setTimeout(() => { if (rt.current === r) rtFlush(r); }, 2500);  // espera a transcrição
+        }
+        break;
+      }
+      case "error":
+        console.log("[Fidus] tempo real erro", JSON.stringify(ev.error || ev).slice(0, 300));
+        break;
+    }
+  }
+
   async function closeVoice() {
+    stopRealtime();
     voiceActive.current = false;
     restAudio.current = null; vMutedRef.current = false; setVMuted(false);
     clearInterval(vad.current.timer);
@@ -1296,6 +1456,10 @@ function FidusApp() {
   function toggleVoiceMute() {
     const m = !vMutedRef.current;
     vMutedRef.current = m; setVMuted(m);
+    if (rt.current) {  // tempo real: só desliga o microfone, a ligação continua
+      try { rt.current.stream.getAudioTracks().forEach((tr: any) => { tr.enabled = !m; }); } catch {}
+      return;
+    }
     if (m) {
       if (sr.current.on) { try { SpeechRec.abort(); } catch {} ; sr.current.on = false; }
       clearInterval(vad.current.timer); voiceRec.stop().catch(() => {});
@@ -1305,6 +1469,10 @@ function FidusApp() {
 
   function tapVoiceCircle() {
     if (vMutedRef.current) return toggleVoiceMute();
+    if (rt.current) {  // tempo real: tocar interrompe o Fidus (falar por cima também interrompe)
+      if (vState === "speaking" || vState === "thinking") { rtSend({ type: "response.cancel" }); rtSend({ type: "output_audio_buffer.clear" }); setVState("listening"); }
+      return;
+    }
     if (vState === "speaking") { try { Speech?.stop(); } catch {} ; stopClip(); listen(); }
     else if (vState === "listening") finishUtterance();
     else if (vState === "idle" && voiceActive.current) { sr.current.empty = 0; listen(); }
@@ -2478,7 +2646,7 @@ function FidusApp() {
           <Text style={{ color: c.sub, fontSize: 12, marginTop: 6 }}>
             {SpeechRec ? "✅" : "❌"} {t("Transcrição no celular")}{SpeechRec ? "" : ` (${t("precisa do APK novo")})`}{"\n"}
             {me?.natural_voice ? "✅" : "❌"} {t("Voz natural")}{me?.natural_voice ? "" : ` (${t("falta a chave no servidor")})`}{"\n"}
-            {t("Versão")}: 0.10.3 · {UPDATE_ID.slice(0, 8)}</Text>
+            {t("Versão")}: 0.11.0 · {UPDATE_ID.slice(0, 8)}</Text>
           <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
         </Card>
         <Card c={c} onPress={() => { setScreen("chat"); startOnboarding(true); }}>
@@ -3023,6 +3191,7 @@ const I18N_KEYS: string[] = [
   "Deixa eu ver.",
   "Já vejo isso.",
   "Feito.",
+  "A conversa em tempo real não abriu agora. Seguindo no modo normal.",
   "Pode falar. Eu escuto e respondo em voz alta.",
   "Pode falar. (Para ouvir as respostas em voz alta, instale o APK novo.)",
   "Pode falar.",

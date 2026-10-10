@@ -205,6 +205,14 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
   no mesmo pedido. Se um modelo falha (ex. crédito acabou), o outro responde. Teste: `docker exec fidus_server
   python -m app.checkai`. Regras em `agent.route` (testes em `tests/test_router.py`).
 
+## Conversa em tempo real (v0.11)
+- APK com `react-native-webrtc` + `FIDUS_OPENAI_API_KEY`: o modo conversa liga direto com a IA de voz da OpenAI
+  (`gpt-realtime-2.1-mini`, ~US$ 0,02/min). O servidor cria a chave temporária (10 min) com regras, contexto e
+  ferramentas (`realtime.py`), executa as ferramentas (`/v1/realtime/tool`, mesmas regras do chat) e guarda as
+  falas (`/v1/realtime/turn`) e o custo (`/v1/realtime/usage`). "Envia" falado vai para `/v1/realtime/command`
+  (actions.handle_command, só rascunho na tela); a IA de voz não envia nada.
+- Sem chave, APK antigo ou falha na conexão: o app usa o modo conversa normal (transcrição no celular + IA + voz).
+
 ## Site
 - `site/landing.dc.html` (cópia do site no Claude Design). Idioma e moeda do visitante; botões da Google Play e da
   App Store conforme o celular (os links entram nas Tweaks do site: `playStoreUrl`, `appStoreUrl`). Loja sem link =

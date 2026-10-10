@@ -78,6 +78,8 @@ PRICES = {"claude-sonnet-5-5": (2.0, 10.0, 2.5, 0.2), "claude-haiku-4-5": (1.0, 
           # Google (preço padrão, set/2026) e OpenAI; o cache automático deles não é descontado aqui
           "gemini-2.5-flash-lite": (0.10, 0.40, 0, 0), "gemini-2.5-flash": (0.25, 1.50, 0, 0),
           "gpt-5-mini": (0.25, 2.0, 0, 0),
+          # voz em tempo real (preço do áudio, que é o que pesa; set/2026)
+          "realtime-gpt-realtime-2.1-mini": (10.0, 20.0, 0, 0.30), "realtime-gpt-realtime": (32.0, 64.0, 0, 0.40),
           # voz do Google: preço por milhão de letras (fica em "input"); o plano grátis mensal não é descontado aqui
           "tts-google-wavenet": (4.0, 0, 0, 0), "tts-google-standard": (4.0, 0, 0, 0),
           "tts-google-neural2": (16.0, 0, 0, 0), "tts-google-chirp3": (30.0, 0, 0, 0)}
