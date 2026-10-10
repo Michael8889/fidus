@@ -24,7 +24,11 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - Depois de testar: comparar com Gemini Live (mais barato?)
 - **Você**: testar a voz mais natural: `FIDUS_TTS_TIER=chirp3` no `.env` (1 milhão de letras grátis/mês)
 - [x] v0.10.1: Configurações mostram só "Meu plano: X"; tocar abre a tela do plano (trocar ou cancelar)
-- Open banking no Premium (importar gastos do banco sozinho):
+- **Pagar por voz (Premium, a "cereja do bolo")**: protótipo no canvas "Fidus — Pagar por voz". Contas ligadas por
+  carteira, contatos de pagamento, Fidus escolhe a conta pelo contato; sempre confirma com digital (Pix por Open
+  Finance sem sair do app) ou aprovação no app do banco (UK/EU); pedido ambíguo pergunta; gasto lançado sozinho.
+  Fase 1 sem custo: contatos + Pix copia e cola por voz. Fase 2: Pluggy (Pix, provável CNPJ BR) e TrueLayer/Yapily (UK/EU)
+- Open banking no Premium (importar gastos do banco sozinho): adiado; no lugar, recibos do e-mail + extrato PDF/CSV
   - provedor: **Enable Banking** (licença da Finlândia, cobre PT/ES/FR/DE/IE/NL/IT; teste grátis com as suas
     contas). Reserva: **Yapily Connect** (UK + UE num contrato só). GoCardless (Nordigen) fechou para novos em 07/2025
   - **Você**: criar conta em enablebanking.com (sandbox grátis), registrar o app e perguntar: cobertura no
