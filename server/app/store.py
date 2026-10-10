@@ -13,7 +13,7 @@ import re
 import sqlite3
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from . import config
 
@@ -222,6 +222,14 @@ def get_pending(pid: str) -> dict | None:
     d = dict(row)
     d["payload"] = json.loads(d["payload"])
     return d
+
+
+def recent_pending(hours: int = 2) -> int:
+    """Rascunhos esperando confirmação criados nas últimas horas (o roteador mantém o modelo forte na conversa)."""
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    with _conn() as c:
+        return c.execute("SELECT COUNT(*) FROM pending_actions WHERE status='pending' AND created_at>=?",
+                         (since,)).fetchone()[0]
 
 
 def claim_pending(pid: str) -> bool:

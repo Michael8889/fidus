@@ -13,14 +13,58 @@ import json
 from . import config, store
 
 
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+
+
+def split_spec(spec: str | None) -> tuple[str, str]:
+    """'gemini:gemini-2.5-flash' -> ('gemini', 'gemini-2.5-flash'). Sem prefixo: o provedor do .env (ou deduzido do nome)."""
+    spec = (spec or config.LLM_MODEL or "").strip()
+    if ":" in spec and spec.split(":", 1)[0] in ("anthropic", "gemini", "openai", "openai_compat"):
+        prov, model = spec.split(":", 1)
+        return ("openai_compat" if prov == "openai" else prov), model
+    if spec.startswith("claude"):
+        return "anthropic", spec
+    if spec.startswith("gemini"):
+        return "gemini", spec
+    return config.LLM_PROVIDER, spec
+
+
+def available(spec: str | None) -> bool:
+    """Tem chave para este modelo? (sem chave o roteador não usa)"""
+    prov, _ = split_spec(spec)
+    if prov == "anthropic":
+        return bool((config.ANTHROPIC_API_KEY or "").strip())
+    if prov == "gemini":
+        return bool((config.GEMINI_API_KEY or "").strip())
+    return bool((config.OPENAI_COMPAT_API_KEY or "").strip()) or "localhost" in (config.OPENAI_COMPAT_BASE_URL or "")
+
+
+def _call(spec, system, messages, tools, web_search):
+    prov, model = split_spec(spec)
+    if prov == "anthropic":
+        return _anthropic(system, messages, tools, web_search, model)
+    sys_text = "\n\n".join(system) if isinstance(system, (tuple, list)) else system
+    if prov == "gemini":
+        return _openai_compat(sys_text, messages, tools, model, GEMINI_BASE_URL, config.GEMINI_API_KEY)
+    if prov == "openai_compat":
+        return _openai_compat(sys_text, messages, tools, model)
+    raise ValueError(f"Provedor desconhecido: {prov}")
+
+
 def chat(system, messages: list[dict], tools: list[dict], web_search: bool = True, model: str | None = None) -> dict:
-    if config.LLM_PROVIDER == "anthropic":
-        out = _anthropic(system, messages, tools, web_search, model or config.LLM_MODEL)
-    elif config.LLM_PROVIDER == "openai_compat":
-        sys_text = "\n\n".join(system) if isinstance(system, (tuple, list)) else system
-        out = _openai_compat(sys_text, messages, tools, model or config.LLM_MODEL)
-    else:
-        raise ValueError(f"Provedor desconhecido: {config.LLM_PROVIDER}")
+    """Chama a IA. Se o modelo falhar (sem crédito, fora do ar), tenta o outro configurado antes de desistir."""
+    spec = model or config.LLM_MODEL
+    try:
+        out = _call(spec, system, messages, tools, web_search)
+    except Exception as first:  # noqa: BLE001
+        backup = next((m for m in (config.LLM_MODEL, config.LLM_MODEL_CHEAP)
+                       if m and m != spec and available(m)), None)
+        if not backup:
+            raise
+        import logging
+        logging.getLogger("fidus.llm").warning("modelo %s falhou (%s); usando %s", spec, str(first)[:160], backup)
+        out = _call(backup, system, messages, tools, web_search)
+        out["fallback"] = backup
     try:
         store.add_usage(out.get("usage") or {})
     except Exception:  # noqa: BLE001 - medir nunca derruba a resposta
@@ -31,6 +75,9 @@ def chat(system, messages: list[dict], tools: list[dict], web_search: bool = Tru
 # Preço por milhão de tokens: (entrada, saída, gravar cache 5 min, ler cache). Fonte: tabela de preços da Anthropic
 # (out/2026). Modelos fora da lista usam FIDUS_PRICE_* ou o preço do Sonnet.
 PRICES = {"claude-sonnet-5-5": (2.0, 10.0, 2.5, 0.2), "claude-haiku-4-5": (1.0, 5.0, 1.25, 0.1),
+          # Google (preço padrão, set/2026) e OpenAI; o cache automático deles não é descontado aqui
+          "gemini-2.5-flash-lite": (0.10, 0.40, 0, 0), "gemini-2.5-flash": (0.25, 1.50, 0, 0),
+          "gpt-5-mini": (0.25, 2.0, 0, 0),
           # voz do Google: preço por milhão de letras (fica em "input"); o plano grátis mensal não é descontado aqui
           "tts-google-wavenet": (4.0, 0, 0, 0), "tts-google-standard": (4.0, 0, 0, 0),
           "tts-google-neural2": (16.0, 0, 0, 0), "tts-google-chirp3": (30.0, 0, 0, 0)}
@@ -134,10 +181,11 @@ def _anthropic(system, messages, tools, web_search=True, model=None):
 
 
 # ---------- OpenAI-compatível (OpenAI, Mistral, vLLM, Ollama, etc.) ----------
-def _openai_compat(system, messages, tools, model=None):
+def _openai_compat(system, messages, tools, model=None, base_url=None, api_key=None):
     from openai import OpenAI
 
-    client = OpenAI(base_url=config.OPENAI_COMPAT_BASE_URL, api_key=config.OPENAI_COMPAT_API_KEY or "none")
+    client = OpenAI(base_url=base_url or config.OPENAI_COMPAT_BASE_URL,
+                    api_key=(api_key or config.OPENAI_COMPAT_API_KEY or "none").strip())
     msgs = [{"role": "system", "content": system}]
     for m in messages:
         if m["role"] == "tool":
@@ -157,7 +205,9 @@ def _openai_compat(system, messages, tools, model=None):
     extra = {"tools": [{"type": "function", "function": t} for t in tools]} if tools else {}
     resp = client.chat.completions.create(model=model or config.LLM_MODEL, messages=msgs, **extra)
     choice = resp.choices[0].message
-    calls = [{"id": c.id, "name": c.function.name, "input": json.loads(c.function.arguments or "{}")}
+    import uuid
+    calls = [{"id": (c.id if c.id and all(ch.isalnum() or ch in "_-" for ch in c.id) else f"call_{uuid.uuid4().hex[:20]}"),
+              "name": c.function.name, "input": json.loads(c.function.arguments or "{}")}
              for c in (choice.tool_calls or [])]
     u = getattr(resp, "usage", None)
     usage = {"model": model, "calls": 1, "input": getattr(u, "prompt_tokens", 0) or 0,

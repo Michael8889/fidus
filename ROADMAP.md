@@ -14,6 +14,9 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [ ] **Você**: Google Cloud: ativar a Google Sheets API + escopo de planilhas; todos tocam em Reconectar Google
 
 ## Anotado para a próxima versão (juntar e rodar uma vez só)
+- [x] v0.10.2: roteador de IA (simples no barato, complexo no Sonnet, um é reserva do outro). **Você**: chave do
+  Gemini (aistudio.google.com, com faturamento) + `FIDUS_LLM_MODEL_CHEAP=gemini:gemini-2.5-flash` no `.env`
+- Modo conversa por voz "igual ao ChatGPT": sem tocar para falar, interromper falando, resposta em ~1 s, voz natural
 - [x] v0.10.1: Configurações mostram só "Meu plano: X"; tocar abre a tela do plano (trocar ou cancelar)
 - Open banking no Premium (importar gastos do banco sozinho):
   - provedor: **Enable Banking** (licença da Finlândia, cobre PT/ES/FR/DE/IE/NL/IT; teste grátis com as suas

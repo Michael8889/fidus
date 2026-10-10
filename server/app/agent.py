@@ -32,6 +32,30 @@ SMALLTALK = re.compile(r"^\W*(oi|ol[aá]|e a[ií]|obrigad[oa]|muito obrigad[oa]|
                        r"tchau|at[eé] mais|at[eé] logo|hi|hello|hey|thanks|thank you|cheers|bye|"
                        r"gracias|hola|merci|danke)\W*(fidus)?\W*$", re.I)
 
+# Roteador: o que precisa do modelo forte. O resto (marcar, anotar gasto, lembrete, tarefa, consultar) vai no barato.
+COMPLEX = re.compile(
+    r"e-?mail|\bmail\b|escrev|redig|redaç|rascunho|respond|responde|mensagem pr|convite|convida|\bata\b|"
+    r"proposta|carta|contrato|or[çc]amento|pesquis|procur\w* n[ao] (internet|web|google)|not[ií]cia|"
+    r"compar|anali[sz]|planilha|sheet|https?://|www\.|resum|traduz|explic|por ?que|estrat[eé]g|plano de|"
+    r"\b(write|draft|reply|email|search|research|compare|analy[sz]e|summari[sz]e|translate|explain|why)\b", re.I)
+MULTI = re.compile(r"\b(e depois|depois disso|e tamb[eé]m|al[eé]m disso|and then|and also)\b|;", re.I)
+
+
+def route(user_text: str, image: bool = False) -> str:
+    """'cheap' ou 'smart'. Na dúvida, smart (qualidade primeiro)."""
+    if not config.LLM_MODEL_CHEAP or not llm.available(config.LLM_MODEL_CHEAP):
+        return "smart"
+    t = (user_text or "").strip()
+    if image or not t or len(t) > 240 or COMPLEX.search(t) or MULTI.search(t) or t.count("?") > 1:
+        return "smart"
+    try:  # rascunho esperando "envia"/ajuste: a conversa segue no modelo forte
+        if store.recent_pending():
+            return "smart"
+    except Exception:  # noqa: BLE001
+        pass
+    return "cheap"
+
+
 # frases de quem diz que JÁ fez algo; sem ferramenta usada no pedido, isso seria inventado
 CLAIM = re.compile(r"(?<!não )(?<!nao )\b(marquei|agendei|criei|lancei|anotei|registrei|guardei|apaguei|cancelei|cadastrei|"
                    r"coloquei na (sua )?agenda|est[áa] (marcad|agendad|lan[çc]ad|anotad)[oa])\b", re.I)
@@ -397,6 +421,10 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
     nudged = False
     # só cumprimento ou agradecimento ("oi", "obrigado", "tchau"; "ok" pode ser confirmação, fica no principal): modelo leve, responde mais rápido e custa menos
     light = config.LLM_MODEL_LIGHT if not image_b64 and SMALLTALK.match(user_text or "") else None
+    if config.LLM_MODEL_CHEAP and llm.available(config.LLM_MODEL_CHEAP):
+        # roteador ligado: cumprimentos e pedidos simples no modelo barato; o resto no principal
+        light = config.LLM_MODEL_CHEAP if (light or route(user_text, bool(image_b64)) == "cheap") else None
+    steps = 0
     def stopped() -> dict:
         """A pessoa tocou em parar: não faz mais nada (o que já foi feito fica na Atividade, com Desfazer)."""
         store.add_message("assistant", "[pedido cancelado pelo usuário; não continue este pedido]" + _action_log(actions))
@@ -416,11 +444,15 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
         _t0 = _tm.time()
         out = llm.chat(system_parts(voice), messages, tools.TOOLS, **({"model": light} if light else {}))
         _metrics.record_stage("ia", int((_tm.time() - _t0) * 1000))
+        steps += 1
+        if light and light == config.LLM_MODEL_CHEAP and steps >= 4:
+            light = None  # o barato está dando voltas: o forte termina o pedido
         if not out["tool_calls"]:
             reply = out["text"].strip()
             if not actions and not nudged and CLAIM.search(reply):
                 # disse que fez algo sem usar nenhuma ferramenta: pede para fazer de verdade ou corrigir
                 nudged = True
+                light = None  # o modelo barato "inventou" que fez: o forte refaz
                 messages.append({"role": "assistant", "content": reply})
                 messages.append({"role": "user", "content": NUDGE})
                 continue
@@ -463,6 +495,8 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
             if call["name"] == "create_calendar_event" and result.get("ok"):
                 events.append(result)
             messages.append({"role": "tool", "tool_call_id": call["id"], "content": tools.dumps(result)})
+            if result.get("error") and light and light == config.LLM_MODEL_CHEAP:
+                light = None  # ferramenta deu erro com o modelo barato: o forte decide o que fazer
 
     reply = "Não consegui concluir esse pedido. Pode repetir de outro jeito?"
     store.add_message("assistant", reply)

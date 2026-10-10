@@ -37,6 +37,11 @@ LLM_MODEL = env("FIDUS_LLM_MODEL", "claude-sonnet-5-5")
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY")
 # Modelo mais barato para tarefas simples (tradução de telas, textos fixos)
 LLM_MODEL_LIGHT = env("FIDUS_LLM_MODEL_LIGHT", "claude-haiku-4-5-20251001" if env("FIDUS_LLM_PROVIDER", "anthropic") == "anthropic" else "") or None
+# Roteador: pedidos simples (agenda, gasto, lembrete) vão para este modelo barato; os complexos (e-mail, várias ações,
+# foto, pesquisa) ficam no FIDUS_LLM_MODEL. Também é o reserva se o principal falhar (ex. crédito acabou).
+# Ex.: gemini:gemini-2.5-flash  ou  claude-haiku-4-5-20251001. Vazio = tudo no principal.
+LLM_MODEL_CHEAP = (env("FIDUS_LLM_MODEL_CHEAP", "") or "").strip() or None
+GEMINI_API_KEY = env("FIDUS_GEMINI_API_KEY")
 # Preço de um modelo fora da lista do llm.py: "entrada,saída,gravar_cache,ler_cache" em US$ por milhão de tokens
 CUSTOM_PRICES = tuple(float(x) for x in (env("FIDUS_LLM_PRICES", "") or "").split(",") if x.strip()) or None
 # Uso justo: gasto de IA por cliente por dia (US$). Passou, o Fidus pede para continuar amanhã. 0 = sem limite.
