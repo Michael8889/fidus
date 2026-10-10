@@ -648,6 +648,20 @@ def tts_phrase(body: TtsIn):
     return {"audio": tts.synthesize(text, lang, cache=True)}
 
 
+class TtsTextIn(BaseModel):
+    text: str
+
+
+@app.post("/v1/tts_text", dependencies=[Depends(auth)])
+def tts_text(body: TtsTextIn):
+    """Áudio do resto da resposta falada (o app já está tocando a primeira frase)."""
+    from . import tts
+    text = (body.text or "").strip()
+    if not text or len(text) > 700 or not tts.enabled():
+        return {"audio": None}
+    return {"audio": tts.synthesize(text)}
+
+
 # ---------- Boas-vindas (setup em conversa) ----------
 @app.get("/v1/onboarding", dependencies=[Depends(auth)])
 def onboarding_question():

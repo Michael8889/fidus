@@ -16,7 +16,11 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 ## Anotado para a próxima versão (juntar e rodar uma vez só)
 - [x] v0.10.2: roteador de IA (simples no barato, complexo no Sonnet, um é reserva do outro). **Você**: chave do
   Gemini (aistudio.google.com, com faturamento) + `FIDUS_LLM_MODEL_CHEAP=gemini:gemini-2.5-flash` no `.env`
-- Modo conversa por voz "igual ao ChatGPT": sem tocar para falar, interromper falando, resposta em ~1 s, voz natural
+- [x] v0.10.3 (etapa 1 da voz): tela no estilo ChatGPT (bolinha que reage à voz, botões microfone e fechar),
+  fim da fala mais rápido (0,85 s de silêncio), começa a falar a 1ª frase enquanto busca o resto, vibração leve
+- Etapa 2 da voz (APK novo): voz em tempo real (Gemini Live ou OpenAI Realtime) com as ferramentas do Fidus;
+  interromper falando (cancelamento de eco), resposta em ~1 s. Comparar custo por minuto antes de escolher
+- **Você**: testar a voz mais natural: `FIDUS_TTS_TIER=chirp3` no `.env` (1 milhão de letras grátis/mês)
 - [x] v0.10.1: Configurações mostram só "Meu plano: X"; tocar abre a tela do plano (trocar ou cancelar)
 - Open banking no Premium (importar gastos do banco sozinho):
   - provedor: **Enable Banking** (licença da Finlândia, cobre PT/ES/FR/DE/IE/NL/IT; teste grátis com as suas

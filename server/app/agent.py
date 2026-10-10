@@ -465,7 +465,7 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
                 extra = " ".join(_actions.readback(a, lang) for a in pend if a and a["status"] == "pending")
                 speech = (speechify(reply, store.user_lang()) + (" " + extra if extra else "")).strip()
             return {"_meta": {"tools": len(actions), "tool_errors": sum("(erro" in a for a in actions)},
-                    "reply": reply, "speech": speech, "speech_audio": _voice(speech),
+                    "reply": reply, "speech": speech, **_voice_parts(speech),
                     "pending_actions": pend, "events": events,
                     "documents": [{**d, "url": features.sign(d["document_id"])} for d in docs.values()],
                     "upsell": upsell}
@@ -516,6 +516,29 @@ _SPEECH = {
                       "octubre", "noviembre", "diciembre"], "date": "{d} de {m}", "link": "el enlace está en la app",
            "money": {"GBP": "libras", "EUR": "euros", "BRL": "reales", "USD": "dólares"}},
 }
+
+
+def split_speech(speech: str) -> tuple[str, str]:
+    """Primeira frase e o resto: o app começa a falar a primeira enquanto busca o áudio do resto."""
+    s = (speech or "").strip()
+    if len(s) < 110:
+        return s, ""
+    m = re.search(r"(?<=[.!?…])\s+(?=\S)", s[25:])
+    if not m:
+        return s, ""
+    cut = 25 + m.start()
+    return s[:cut].strip(), s[cut:].strip()
+
+
+def _voice_parts(speech: str | None) -> dict:
+    """{'speech_audio': mp3 da 1ª frase, 'speech_rest': texto do resto (o app pede o áudio dele enquanto toca)}."""
+    if not speech:
+        return {"speech_audio": None}
+    first, rest = split_speech(speech)
+    audio = _voice(first if rest else speech)
+    if audio and rest:
+        return {"speech_audio": audio, "speech_rest": rest}
+    return {"speech_audio": audio}
 
 
 def _voice(speech: str | None) -> str | None:

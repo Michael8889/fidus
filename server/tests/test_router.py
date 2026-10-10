@@ -92,3 +92,20 @@ def test_cheap_model_that_claims_without_tool_is_redone_by_smart(monkeypatch):
     out = agent.handle("marca dentista amanhã")
     assert seen == ["gemini:gemini-2.5-flash", None]
     assert "horário" in out["reply"]
+
+
+def test_split_speech_first_sentence():
+    first, rest = agent.split_speech("Pronto, marquei o dentista amanhã às dez da manhã na clínica. "
+                                     "Também deixei um lembrete uma hora antes para você não esquecer de sair cedo.")
+    assert first.endswith("clínica.") and rest.startswith("Também")
+    assert agent.split_speech("Feito.") == ("Feito.", "")
+
+
+def test_voice_parts_sends_rest_only_with_audio(monkeypatch):
+    long = ("Pronto, marquei o dentista amanhã às dez da manhã na clínica. "
+            "Também deixei um lembrete uma hora antes para você não esquecer de sair cedo.")
+    monkeypatch.setattr(agent, "_voice", lambda s: "MP3:" + s[:10])
+    out = agent._voice_parts(long)
+    assert out["speech_audio"] == "MP3:Pronto, ma" and out["speech_rest"].startswith("Também")
+    monkeypatch.setattr(agent, "_voice", lambda s: None)
+    assert agent._voice_parts(long) == {"speech_audio": None}

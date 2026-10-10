@@ -33,7 +33,7 @@ const SpeechRec: any = opt(() => require("expo-speech-recognition").ExpoSpeechRe
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},js=0.10.1,ota=${UPDATE_ID.slice(0, 8)}`;
+const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},js=0.10.3,ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
 
@@ -195,7 +195,14 @@ const ICON_PATHS: Record<string, string> = {
   video: '<rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/>',
   box: '<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
   sheet: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 9h16M4 15h16M10 3v18"/>',
+  micoff: '<path d="M15 9.5V6a3 3 0 0 0-5.6-1.5M9 9v2a3 3 0 0 0 4.6 2.5M5 11a7 7 0 0 0 11.3 5.5M19 11a7 7 0 0 1-.6 2.8M12 18v3M3 3l18 18"/>',
 };
+// bolinha do modo conversa (gradiente suave, como nos assistentes de voz)
+const ORB_XML = (a: string, b: string, c: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><defs>
+<radialGradient id="g" cx="38%" cy="32%" r="75%"><stop offset="0" stop-color="${a}"/><stop offset="0.55" stop-color="${b}"/>
+<stop offset="1" stop-color="${c}"/></radialGradient></defs><circle cx="100" cy="100" r="100" fill="url(#g)"/></svg>`;
+const ORB_LIVE = ORB_XML("#FFFFFF", "#DCE6F2", "#9FB3CC");
+const ORB_DIM = ORB_XML("#5A6270", "#3A404A", "#22262C");
 function Icon({ name, color, size = 20 }: { name: string; color: string; size?: number }) {
   const body = ICON_PATHS[name];
   if (!SvgXml || !body) return null;
@@ -519,6 +526,10 @@ function FidusApp() {
   const voiceActive = useRef(false);
   const vad = useRef({ t0: 0, floor: -60, samples: [] as number[], speechAt: 0, lastLoud: 0, timer: null as any });
   const sr = useRef({ on: false, text: "", empty: 0, failed: false });  // transcrição no celular
+  const [vMuted, setVMuted] = useState(false);  // microfone pausado no modo conversa
+  const vMutedRef = useRef(false);
+  const orbLevel = useRef(new Animated.Value(1)).current;  // a bolinha cresce com a sua voz
+  const restAudio = useRef<{ text: string; p: Promise<string | null> } | null>(null);
   const srHandlers = useRef<any>({});
   const clip = useRef<any>(null);       // voz natural tocando agora
   const phraseAudio = useRef<Record<string, string>>({});  // frases fixas já em voz natural
@@ -1014,9 +1025,11 @@ function FidusApp() {
   // ---------- Modo conversa (mãos livres) ----------
   useEffect(() => {
     if (!voiceOpen) return;
-    const speed = vState === "listening" ? 700 : vState === "speaking" ? 450 : 1100;
+    // ouvindo: quase parada (quem mexe é a sua voz); pensando: respira devagar; falando: pulsa como fala
+    const speed = vState === "listening" ? 1400 : vState === "speaking" ? 380 : 1200;
+    const amp = vState === "listening" ? 1.03 : vState === "speaking" ? 1.09 : 1.06;
     const loop = Animated.loop(Animated.sequence([
-      Animated.timing(pulse, { toValue: 1.12, duration: speed, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: amp, duration: speed, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       Animated.timing(pulse, { toValue: 1, duration: speed, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
     ]));
     loop.start();
@@ -1083,6 +1096,7 @@ function FidusApp() {
 
   async function closeVoice() {
     voiceActive.current = false;
+    restAudio.current = null; vMutedRef.current = false; setVMuted(false);
     clearInterval(vad.current.timer);
     try { Speech?.stop(); } catch {}
     stopClip();
@@ -1099,13 +1113,28 @@ function FidusApp() {
   }
 
   // fala e depois volta a ouvir: voz natural se veio o áudio (ou a frase fixa já carregada), senão a do celular
-  function speak(text: string, audio?: string | null, phrase?: string) {
+  function speak(text: string, audio?: string | null, phrase?: string, rest?: string | null) {
     if (!voiceActive.current) return;
     const mp3 = audio || (phrase ? phraseAudio.current[`${LANG}|${phrase}`] : null);
     try { Speech?.stop(); } catch {}
+    // resposta longa: o servidor mandou só a 1ª frase em áudio; o resto vem enquanto ela toca
+    restAudio.current = rest && mp3 ? { text: rest, p: post("/v1/tts_text", { text: rest }, 20000).then((r: any) => r?.audio || null).catch(() => null) } : null;
+    const afterFirst = async () => {
+      if (!voiceActive.current) return;
+      const ra = restAudio.current; restAudio.current = null;
+      if (ra) {
+        const a = await ra.p;
+        if (!voiceActive.current) return;
+        if (a && playClip(a, () => { if (voiceActive.current) listen(); })) return;
+        if (Speech) { Speech.speak(ra.text, { language: ttsLanguage(), rate: 1.02, onDone: () => { if (voiceActive.current) listen(); },
+          onError: () => { if (voiceActive.current) listen(); } }); return; }
+      }
+      listen();
+    };
     if (mp3) {
       setVState("speaking");
-      if (playClip(mp3, () => { if (voiceActive.current) listen(); })) return;
+      if (playClip(mp3, afterFirst)) return;
+      restAudio.current = null;
     }
     // frase fixa ainda sem a voz natural: não mistura com a voz robótica, só volta a ouvir
     if (!Speech || (phrase && me?.natural_voice && createPlayer)) { setTimeout(listen, phrase ? 150 : 1200); return; }
@@ -1123,12 +1152,17 @@ function FidusApp() {
       const txt = (e?.results?.[0]?.transcript || "").trim();
       if (txt) { sr.current.text = txt; setVHeard(txt); }
     },
+    volumechange: (e: any) => {
+      const v = Math.max(0, Math.min(1, ((e?.value ?? -2) + 2) / 12));
+      Animated.spring(orbLevel, { toValue: 1 + v * 0.28, speed: 40, bounciness: 0, useNativeDriver: true }).start();
+    },
     end: () => {
+      Animated.spring(orbLevel, { toValue: 1, useNativeDriver: true }).start();
       if (!sr.current.on) return;
       sr.current.on = false;
       if (!voiceActive.current) return;
       const txt = sr.current.text.trim();
-      if (txt) { sr.current.empty = 0; submitVoiceText(txt); return; }
+      if (txt) { sr.current.empty = 0; try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {} ; submitVoiceText(txt); return; }
       sr.current.empty += 1;  // ninguém falou: volta a ouvir (e para de insistir depois de um tempo)
       if (sr.current.empty <= 6) setTimeout(listen, 250);
       else { setVState("idle"); setVReply(t("Toque no círculo quando quiser falar.")); }
@@ -1143,20 +1177,24 @@ function FidusApp() {
   };
   useEffect(() => {
     if (!SpeechRec?.addListener) return;
-    const subs = ["result", "end", "error"].map((ev) =>
+    const subs = ["result", "end", "error", "volumechange"].map((ev) =>
       opt(() => SpeechRec.addListener(ev, (e: any) => srHandlers.current[ev]?.(e))));
     return () => subs.forEach((x: any) => { try { x?.remove(); } catch {} });
   }, []);
 
   async function listen() {
     if (!voiceActive.current) return;
+    if (vMutedRef.current) { setVState("idle"); return; }
     if (SpeechRec && !sr.current.failed) {
       try {
         if (!SpeechRec.isRecognitionAvailable || SpeechRec.isRecognitionAvailable()) {
           sr.current.text = ""; sr.current.on = true;
           SpeechRec.start({
             lang: ttsLanguage(), interimResults: true, continuous: false, addsPunctuation: true,
-            androidIntentOptions: { EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 1200 },
+            volumeChangeEventOptions: { enabled: true, intervalMillis: 90 },
+            // pausa curta já encerra a sua vez (como no ChatGPT); pausa no meio da frase não corta
+            androidIntentOptions: { EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 850,
+              EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 700 },
           });
           setVState("listening");
           return;
@@ -1197,7 +1235,7 @@ function FidusApp() {
       const mp3 = phraseAudio.current[`${LANG}|${k}`];
       if (mp3 && playClip(mp3)) return;
       if (Speech && !me?.natural_voice) { try { Speech.speak(t(k), { language: ttsLanguage(), rate: 1.05 }); } catch {} }
-    }, 2500);
+    }, 3500);
   }
 
   async function handleVoiceReply(r: any, heard: string) {
@@ -1208,7 +1246,7 @@ function FidusApp() {
     if (r.cancelled) return;
     showResult(r);  // vai também para a conversa, com cartões de rascunho, documentos etc.
     setVReply(r.reply || "");
-    speak(r.speech || r.reply || t("Feito."), r.speech_audio);
+    speak(r.speech || r.reply || t("Feito."), r.speech_audio, undefined, r.speech_rest);
   }
 
   // texto já transcrito no celular: vai direto para o Fidus (sem mandar áudio)
@@ -1225,7 +1263,7 @@ function FidusApp() {
       if (r.cancelled) return;
       showResult(r, false);
       setVReply(r.reply || "");
-      speak(r.speech || r.reply || t("Feito."), r.speech_audio);
+      speak(r.speech || r.reply || t("Feito."), r.speech_audio, undefined, r.speech_rest);
     } catch (e: any) {
       clearTimeout(filler);
       setVReply(`${t("Falha de conexão")}: ${e?.message ?? e}`);
@@ -1255,7 +1293,18 @@ function FidusApp() {
     }
   }
 
+  function toggleVoiceMute() {
+    const m = !vMutedRef.current;
+    vMutedRef.current = m; setVMuted(m);
+    if (m) {
+      if (sr.current.on) { try { SpeechRec.abort(); } catch {} ; sr.current.on = false; }
+      clearInterval(vad.current.timer); voiceRec.stop().catch(() => {});
+      if (vState === "listening") setVState("idle");
+    } else if (vState === "idle" || vState === "listening") { sr.current.empty = 0; listen(); }
+  }
+
   function tapVoiceCircle() {
+    if (vMutedRef.current) return toggleVoiceMute();
     if (vState === "speaking") { try { Speech?.stop(); } catch {} ; stopClip(); listen(); }
     else if (vState === "listening") finishUtterance();
     else if (vState === "idle" && voiceActive.current) { sr.current.empty = 0; listen(); }
@@ -1384,7 +1433,10 @@ function FidusApp() {
 
   function sayReply(r: any) {  // resposta a um áudio gravado (fora do modo conversa)
     if (!speakAudio || voiceActive.current) return;
-    if (r?.speech_audio && playClip(r.speech_audio)) return;
+    if (r?.speech_audio) {
+      const rest = r.speech_rest ? post("/v1/tts_text", { text: r.speech_rest }, 20000).then((x: any) => x?.audio || null).catch(() => null) : null;
+      if (playClip(r.speech_audio, rest ? () => { rest.then((a) => { if (a) playClip(a); else if (Speech) Speech.speak(r.speech_rest, { language: ttsLanguage(), rate: 1.02 }); }); } : undefined)) return;
+    }
     const text = r?.speech || r?.reply;
     if (!text || !Speech) return;
     try { Speech.stop(); Speech.speak(text, { language: ttsLanguage(), rate: 1.02 }); } catch {}
@@ -2426,7 +2478,7 @@ function FidusApp() {
           <Text style={{ color: c.sub, fontSize: 12, marginTop: 6 }}>
             {SpeechRec ? "✅" : "❌"} {t("Transcrição no celular")}{SpeechRec ? "" : ` (${t("precisa do APK novo")})`}{"\n"}
             {me?.natural_voice ? "✅" : "❌"} {t("Voz natural")}{me?.natural_voice ? "" : ` (${t("falta a chave no servidor")})`}{"\n"}
-            {t("Versão")}: 0.10.1 · {UPDATE_ID.slice(0, 8)}</Text>
+            {t("Versão")}: 0.10.3 · {UPDATE_ID.slice(0, 8)}</Text>
           <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
         </Card>
         <Card c={c} onPress={() => { setScreen("chat"); startOnboarding(true); }}>
@@ -2738,29 +2790,35 @@ function FidusApp() {
       </Modal>
 
       <Modal visible={voiceOpen} animationType="fade" onRequestClose={closeVoice} statusBarTranslucent>
-        <View style={{ flex: 1, backgroundColor: "#0F0F0F", paddingTop: insets.top + 12, paddingBottom: insets.bottom + 20, paddingHorizontal: 24 }}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Text style={{ color: "#F2F5F7", fontSize: 18, fontWeight: "700", flex: 1 }}>{t("Modo conversa")}</Text>
-            <Pressable onPress={closeVoice} accessibilityLabel={t("Fechar modo conversa")} hitSlop={10}
-              style={[s.iconBtn, { backgroundColor: "#1F1F1F" }]}><CloseIcon color="#F2F5F7" /></Pressable>
-          </View>
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 28 }}>
+        <View style={{ flex: 1, backgroundColor: "#000000", paddingTop: insets.top + 16, paddingBottom: insets.bottom + 28, paddingHorizontal: 28 }}>
+          <Text style={{ color: "#6B6B6B", fontSize: 15, textAlign: "center" }}>Fidus</Text>
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
             <Pressable onPress={tapVoiceCircle} accessibilityLabel={t("Enviar agora ou interromper")}>
-              <Animated.View style={{ width: 190, height: 190, borderRadius: 95, alignItems: "center", justifyContent: "center",
-                backgroundColor: vState === "thinking" ? "#262626" : vState === "speaking" ? "#FFFFFF" : "#E8E8E8",
-                transform: [{ scale: pulse }] }}>
-                {vState === "thinking" ? <ActivityIndicator color="#F2F5F7" size="large" /> : <WaveIcon color="#0F0F0F" size={56} />}
+              <Animated.View style={{ width: 210, height: 210, borderRadius: 105, overflow: "hidden",
+                opacity: vState === "thinking" || vMuted ? 0.6 : 1,
+                transform: [{ scale: Animated.multiply(pulse, orbLevel) }],
+                backgroundColor: SvgXml ? "transparent" : (vState === "thinking" || vMuted ? "#3A3A3A" : "#E8EEF5") }}>
+                {!!SvgXml && <SvgXml xml={vState === "thinking" || vMuted ? ORB_DIM : ORB_LIVE} width={210} height={210} />}
               </Animated.View>
             </Pressable>
-            <Text style={{ color: "#F2F5F7", fontSize: 22, fontWeight: "700" }}>
-              {vState === "listening" ? t("Ouvindo…") : vState === "thinking" ? t("Pensando…") : vState === "speaking" ? t("Falando…") : ""}</Text>
-            {!!vHeard && <Text style={{ color: "#8A8A8A", fontSize: 16, textAlign: "center" }} numberOfLines={3}>“{vHeard}”</Text>}
-            {!!vReply && <Text style={{ color: "#F2F5F7", fontSize: 20, lineHeight: 28, textAlign: "center" }} numberOfLines={7}>{vReply}</Text>}
+            <Text style={{ color: "#8A8A8A", fontSize: 15, marginTop: 36 }}>
+              {vMuted ? t("Microfone pausado") : vState === "listening" ? t("Ouvindo…") : vState === "thinking" ? t("Pensando…")
+                : vState === "speaking" ? t("Toque para interromper") : t("Toque na bolinha para falar")}</Text>
+            <View style={{ minHeight: 150, marginTop: 22, alignItems: "center", gap: 10 }}>
+              {!!vHeard && vState !== "speaking" && <Text style={{ color: "#7A7A7A", fontSize: 16, textAlign: "center" }} numberOfLines={2}>{vHeard}</Text>}
+              {!!vReply && vState !== "listening" && <Text style={{ color: "#EDEDED", fontSize: 19, lineHeight: 27, textAlign: "center" }} numberOfLines={5}>{vReply}</Text>}
+            </View>
           </View>
-          <Text style={{ color: "#7A7A7A", textAlign: "center", marginBottom: 14 }}>
-            {t("Fale normalmente: quando você parar, eu respondo. Toque no círculo para enviar na hora ou para me interromper. Diga “tchau” para sair.")}</Text>
-          <Pressable onPress={closeVoice} style={{ backgroundColor: "#1F1F1F", borderRadius: 18, paddingVertical: 18, alignItems: "center" }}>
-            <Text style={{ color: "#F2F5F7", fontSize: 18, fontWeight: "700" }}>{t("Encerrar")}</Text></Pressable>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20 }}>
+            <Pressable onPress={toggleVoiceMute} accessibilityLabel={vMuted ? t("Ligar o microfone") : t("Pausar o microfone")} hitSlop={10}
+              style={{ width: 68, height: 68, borderRadius: 34, alignItems: "center", justifyContent: "center", backgroundColor: vMuted ? "#FFFFFF" : "#1C1C1C" }}>
+              {SvgXml ? <Icon name={vMuted ? "micoff" : "mic"} color={vMuted ? "#000000" : "#FFFFFF"} size={28} /> : <MicIcon color={vMuted ? "#000000" : "#FFFFFF"} />}
+            </Pressable>
+            <Pressable onPress={closeVoice} accessibilityLabel={t("Fechar modo conversa")} hitSlop={10}
+              style={{ width: 68, height: 68, borderRadius: 34, alignItems: "center", justifyContent: "center", backgroundColor: "#1C1C1C" }}>
+              <CloseIcon color="#FFFFFF" size={24} />
+            </Pressable>
+          </View>
         </View>
       </Modal>
 
@@ -3249,12 +3307,15 @@ const I18N_KEYS: string[] = [
   "Gravar áudio",
   "Modo conversa",
   "Recentes",
-  "Fechar modo conversa",
   "Enviar agora ou interromper",
+  "Microfone pausado",
   "Ouvindo…",
   "Pensando…",
-  "Falando…",
-  "Fale normalmente: quando você parar, eu respondo. Toque no círculo para enviar na hora ou para me interromper. Diga “tchau” para sair.",
+  "Toque para interromper",
+  "Toque na bolinha para falar",
+  "Ligar o microfone",
+  "Pausar o microfone",
+  "Fechar modo conversa",
   "Use sua digital ou rosto para abrir.",
   "Desbloquear",
   "Você vai precisar entrar de novo com o Google ou o e-mail.",
