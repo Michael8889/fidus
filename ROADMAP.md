@@ -55,7 +55,7 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 ## Fase 1 — Empresa e contas (em paralelo)
 - [x] **Você**: conta bancária da empresa (Revolut Business)
 - [ ] **Você**: D-U-N-S grátis pela ferramenta da Apple (developer.apple.com/enroll/duns-lookup), nome e endereço iguais ao Companies House
-- [ ] **Você**: registro no ICO (proteção de dados, taxa anual pequena)
+- [x] **Você**: registro no ICO pedido (10/10, tier 1). Falta o número ZB… para a página de privacidade
 - [x] **Você**: busca de marca no Reino Unido (08/10): nenhuma "FIDUS" viva em software (classes 9/42); atenção a
       "FEEDUS" (classes 35/42, parecida no som)
 - [ ] **Você**: busca na União Europeia (TMview), pedir registro da marca FIDUS (UK, classes 9 e 42)
