@@ -22,7 +22,7 @@ PLANS = {
     },
     "premium": {
         "rank": 3, "name": "Premium", "month": 69.90,
-        "highlights": ["Banco conectado: gastos entram sozinhos", "Cobrança e fatura para clientes",
+        "highlights": ["Pagar por voz: Pix e transferências preparados para você", "Cobrança e fatura para clientes",
                        "Mais 1 pessoa na conta + acesso do contador", "Atas sem limite e suporte prioritário"],
     },
 }
@@ -72,6 +72,8 @@ FEATURE_MIN = {
     "extra_business": "negocio",
     "voice_conversation": "negocio",
     "bank_connection": "premium",
+    "prepare_payment": "premium",
+    "save_payment_contact": "premium",
     "client_invoices": "premium",
     "extra_user": "premium",
 }
@@ -83,6 +85,7 @@ FEATURE_LABEL = {
     "list_subscriptions": "alerta de assinaturas", "weekly_review": "resumo da semana",
     "extra_business": "gastos de mais de uma empresa",
     "voice_conversation": "modo conversa por voz", "bank_connection": "banco conectado",
+    "prepare_payment": "pagar por voz", "save_payment_contact": "pagar por voz",
     "client_invoices": "cobrança e fatura para clientes", "extra_user": "mais uma pessoa na conta",
 }
 

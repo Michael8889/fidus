@@ -37,7 +37,9 @@ COMPLEX = re.compile(
     r"e-?mail|\bmail\b|escrev|redig|redaç|rascunho|respond|responde|mensagem pr|convite|convida|\bata\b|"
     r"proposta|carta|contrato|or[çc]amento|pesquis|procur\w* n[ao] (internet|web|google)|not[ií]cia|"
     r"compar|anali[sz]|planilha|sheet|https?://|www\.|resum|traduz|explic|por ?que|estrat[eé]g|plano de|"
-    r"\b(write|draft|reply|email|search|research|compare|analy[sz]e|summari[sz]e|translate|explain|why)\b", re.I)
+    r"\bpix\b|\bpaga\s+(o|a|ao|à|pro|pra|para)\b|pagamento (para|pro|pra|ao)|transfer[eêi]|transfira|"
+    r"\bmanda\s+(r\$|€|£)?\s*\d[\d.,]*\s*(reais|euros|libras|pounds)?\s*(pro|pra|para|ao)\b|chave pix|\biban\b|sort code|"
+    r"\b(write|draft|reply|email|search|research|compare|analy[sz]e|summari[sz]e|translate|explain|why|transfer)\b|\bpay\s+(the|him|her|my|\w+\s+\d)", re.I)
 MULTI = re.compile(r"\b(e depois|depois disso|e tamb[eé]m|al[eé]m disso|and then|and also)\b|;", re.I)
 
 
@@ -233,6 +235,11 @@ def _history(limit: int = 10) -> list[dict]:
 
 def _describe(name: str, args: dict, result: dict) -> str:
     status = "erro" if result.get("error") else "ok"
+    if name == "prepare_payment":
+        if result.get("ambiguous"):
+            return f"pagamento para '{args.get('to')}' não preparado: mais de um contato, perguntou qual"
+        return (f"preparou pagamento de {args.get('amount')} para {args.get('to')} ({status}; NÃO pagou: o usuário "
+                f"paga no app do banco e toca em 'Já paguei')")
     if name == "create_calendar_event":
         if result.get("already_existed"):
             return f"evento '{args.get('title')}' em {args.get('start')} já existia, não duplicou"
@@ -489,7 +496,7 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
                 docs[result["document_id"]] = {"document_id": result["document_id"], "title": result["title"],
                                                "expires_on": result.get("expires_on")}
             if call["name"] in ("prepare_email_reply", "prepare_new_email", "prepare_event_invite",
-                                "prepare_minutes_email") \
+                                "prepare_minutes_email", "prepare_payment") \
                     and result.get("pending_action_id"):
                 pending_ids.append(result["pending_action_id"])
             if call["name"] == "create_calendar_event" and result.get("ok"):

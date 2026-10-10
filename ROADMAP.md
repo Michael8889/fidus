@@ -27,7 +27,9 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - **Pagar por voz (Premium, a "cereja do bolo")**: protótipo no canvas "Fidus — Pagar por voz". Contas ligadas por
   carteira, contatos de pagamento, Fidus escolhe a conta pelo contato; sempre confirma com digital (Pix por Open
   Finance sem sair do app) ou aprovação no app do banco (UK/EU); pedido ambíguo pergunta; gasto lançado sozinho.
-  Fase 1 sem custo: contatos + Pix copia e cola por voz. Fase 2: Pluggy (Pix, provável CNPJ BR) e TrueLayer/Yapily (UK/EU)
+  - [x] Fase 1 (v0.11.0): contatos que o Fidus aprende (pergunta a chave 1 vez no cartão ou escolhe da agenda),
+    Pix copia e cola por voz, dados UK/IBAN para copiar, "Já paguei" lança o gasto. Só Premium.
+  - Fase 2: Pluggy (Pix de dentro do app com digital, provável CNPJ BR) e TrueLayer/Yapily (UK/EU)
 - Open banking no Premium (importar gastos do banco sozinho): adiado; no lugar, recibos do e-mail + extrato PDF/CSV
   - provedor: **Enable Banking** (licença da Finlândia, cobre PT/ES/FR/DE/IE/NL/IT; teste grátis com as suas
     contas). Reserva: **Yapily Connect** (UK + UE num contrato só). GoCardless (Nordigen) fechou para novos em 07/2025

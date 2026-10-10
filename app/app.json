@@ -71,6 +71,12 @@
         {
           "microphonePermission": "O Fidus usa o microfone para ouvir seus pedidos."
         }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "O Fidus usa a agenda só quando você escolhe um contato para pagar."
+        }
       ]
     ],
     "icon": "./assets/icon.png",

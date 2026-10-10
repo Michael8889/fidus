@@ -105,6 +105,10 @@ def _create(path: str) -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, description TEXT, tags TEXT,
                 path TEXT NOT NULL, media_type TEXT, expires_on TEXT, event_id TEXT,
                 deleted INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS payment_contacts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, method TEXT NOT NULL, pix_key TEXT,
+                pix_key_type TEXT, iban TEXT, sort_code TEXT, account_number TEXT, wallet TEXT, category TEXT,
+                note TEXT, deleted INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS bills (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, amount REAL, currency TEXT,
                 business TEXT, category TEXT, day_of_month INTEGER NOT NULL, event_id TEXT,

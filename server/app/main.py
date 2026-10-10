@@ -922,7 +922,56 @@ def conversation_open(cid: int):
 @app.get("/v1/actions", dependencies=[Depends(auth)])
 def list_actions():
     """Rascunhos ainda esperando o usuário (o app mostra os cartões de novo ao reabrir)."""
-    return {"actions": actions.waiting(None)}
+    from . import payments
+    return {"actions": actions.waiting(None) + payments.waiting()}
+
+
+# ---------- Pagar por voz (Premium): o Fidus prepara, o usuário paga no banco ----------
+class PayKeyIn(BaseModel):
+    pix_key: str | None = None
+    pix_key_type: str | None = None
+    iban: str | None = None
+    sort_code: str | None = None
+    account_number: str | None = None
+
+
+@app.post("/v1/payments/{pid}/key", dependencies=[Depends(auth)])
+def payment_key(pid: str, body: PayKeyIn):
+    """Primeira vez com esse contato: o usuário informa a chave no cartão (ou escolhe da agenda); o Fidus lembra."""
+    from . import payments
+    if not plans.allows("prepare_payment"):
+        raise HTTPException(402, "pagar por voz faz parte do plano Premium")
+    try:
+        return payments.set_key(pid, **body.model_dump())
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/v1/payments/{pid}/paid", dependencies=[Depends(auth)])
+def payment_paid(pid: str):
+    """O usuário tocou em 'Já paguei' (pagou no app do banco): lança o gasto na carteira."""
+    from . import payments
+    try:
+        return payments.mark_paid(pid)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+@app.get("/v1/payments/contacts", dependencies=[Depends(auth)])
+def payment_contacts():
+    from . import payments
+    return {"contacts": [{"id": c["id"], "name": c["name"], "how": payments.mask(c), "wallet": c.get("wallet"),
+                          "method": c["method"]} for c in payments.contacts()]}
+
+
+class PayContactDel(BaseModel):
+    id: int
+
+
+@app.post("/v1/payments/contacts/remove", dependencies=[Depends(auth)])
+def payment_contact_remove(body: PayContactDel):
+    store.update("payment_contacts", body.id, deleted=1)
+    return {"ok": True}
 
 
 @app.get("/v1/actions/{pid}", dependencies=[Depends(auth)])

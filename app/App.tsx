@@ -17,6 +17,8 @@ const KeepAwake: any = opt(() => require("expo-keep-awake"));
 const Speech: any = opt(() => require("expo-speech"));  // voz do Fidus no modo conversa (APK com expo-speech)
 const DocumentPicker: any = opt(() => require("expo-document-picker"));
 const Clipboard: any = opt(() => require("expo-clipboard"));  // botão copiar (sem ele, abre o compartilhar)
+// agenda do celular (APK com expo-contacts): escolher o contato e usar o celular dele como chave Pix
+const Contacts: any = (globalThis as any).expo?.modules?.ExpoContacts ? opt(() => require("expo-contacts")) : null;
 // Assinatura pela Google Play / App Store (RevenueCat). Só funciona no APK com o módulo e com as chaves no servidor.
 // só usa se o módulo nativo existir no APK (num APK antigo a biblioteca entraria em "modo de demonstração")
 const hasNativePurchases = !!opt(() => {
@@ -579,6 +581,7 @@ function FidusApp() {
   const [loadingScreen, setLoadingScreen] = useState(false);
   const [reader, setReader] = useState<{ title: string; text: string } | null>(null);
   const [toast, setToast] = useState("");
+  const [payIn, setPayIn] = useState<Record<string, { key: string; type: string }>>({});  // chave digitada no cartão
   const [atBottom, setAtBottom] = useState(true);
   const [nameEdit, setNameEdit] = useState("");
   const [pendingMeet, setPendingMeet] = useState<string | null>(null);
@@ -1953,6 +1956,57 @@ function FidusApp() {
     ]);
   }
 
+  // ---------- Pagar por voz (Premium): o Fidus prepara, você paga no app do banco ----------
+  const PAY_TYPES: [string, string][] = [["celular", "Celular"], ["cpf", "CPF"], ["cnpj", "CNPJ"], ["email", "E-mail"],
+    ["aleatoria", "Aleatória"], ["iban", "IBAN"], ["uk", "Conta UK"]];
+
+  async function paySaveKey(a: Action, key?: string, type?: string) {
+    const v = payIn[a.id] || { key: "", type: "celular" };
+    const k = (key ?? v.key).trim(), tp = type ?? v.type;
+    if (!k) return Alert.alert(t("Pagamento"), t("Digite a chave ou os dados do banco."));
+    let body: any = { pix_key: k, pix_key_type: tp };
+    if (tp === "iban") body = { iban: k };
+    if (tp === "uk") { const [sc, acc] = k.split(/[\s,;/]+/); body = { sort_code: sc, account_number: acc }; }
+    try {
+      const upd = await post(`/v1/payments/${a.id}/key`, body, 20000);
+      updateAction(a.id, { payload: upd.payload, status: upd.status });
+      flash(t("Guardei para as próximas vezes"));
+    } catch (e: any) { Alert.alert(t("Pagamento"), errMsg(e)); }
+  }
+
+  async function payFromContacts(a: Action) {
+    if (!Contacts) return Alert.alert(t("Agenda"), t("Disponível no app atualizado."));
+    try {
+      const perm = await Contacts.requestPermissionsAsync();
+      if (!perm?.granted) return;
+      const ct = await Contacts.presentContactPickerAsync();
+      const phone = ct?.phoneNumbers?.[0]?.number;
+      if (!phone) return Alert.alert(t("Agenda"), t("Esse contato não tem celular."));
+      Alert.alert(t("Usar como chave Pix?"), `${ct.name || ""}\n${phone}`, [
+        { text: t("Cancelar"), style: "cancel" },
+        { text: t("Usar"), onPress: () => paySaveKey(a, phone, "celular") },
+      ]);
+    } catch (e: any) { Alert.alert(t("Agenda"), errMsg(e)); }
+  }
+
+  async function payCopy(a: Action) {
+    const p = a.payload as any;
+    const text = p.method === "pix" ? p.pix_code
+      : p.method === "uk" ? `${p.to}\nSort code: ${p.sort_code}\nAccount: ${p.account_number}\nRef: ${p.description || ""}\n${p.amount.toFixed(2)} ${p.currency}`
+      : `${p.to}\nIBAN: ${p.iban}\n${p.description || ""}\n${p.amount.toFixed(2)} ${p.currency}`;
+    await copyText(text);
+    flash(p.method === "pix" ? t("Pix copiado: cole no app do seu banco") : t("Dados copiados: cole no app do seu banco"));
+  }
+
+  async function payDone(a: Action) {
+    try {
+      const r = await post(`/v1/payments/${a.id}/paid`, {}, 20000);
+      updateAction(a.id, { status: r.status });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      flash(t("Lançado nos gastos"));
+    } catch (e: any) { Alert.alert(t("Pagamento"), errMsg(e)); }
+  }
+
   async function cancel(a: Action) {
     try { await api(`/v1/actions/${a.id}/cancel`, { method: "POST" }); updateAction(a.id, { status: "cancelled" }); }
     catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
@@ -2816,6 +2870,50 @@ function FidusApp() {
               );
             }
             const a = item.action;
+            if (a.kind === "payment") {
+              const p = a.payload as any;
+              const pin = payIn[a.id] || { key: "", type: "celular" };
+              const amt = `${p.currency === "BRL" ? "R$ " : p.currency === "GBP" ? "£" : p.currency === "EUR" ? "€" : ""}${Number(p.amount).toFixed(2)}${p.currency && !["BRL", "GBP", "EUR"].includes(p.currency) ? " " + p.currency : ""}`;
+              return (
+                <View style={[s.draft, { backgroundColor: c.card, borderColor: c.line, gap: 6 }]}>
+                  <Text style={[s.draftLabel, { color: c.sub }]}>{p.method === "pix" ? "Pix" : p.method ? t("Transferência") : t("Pagamento")} · {a.status === "pending" ? t("aguardando você") : a.status === "paid" ? t("pago ✓") : t("cancelado")}</Text>
+                  <Text style={{ color: c.text, fontSize: 28, fontWeight: "600" }}>{amt}</Text>
+                  <View style={s.kv}><Text style={{ color: c.sub }}>{t("Para")}</Text><Text style={{ color: c.text, fontWeight: "600" }}>{p.to}</Text></View>
+                  {!!p.masked && <View style={s.kv}><Text style={{ color: c.sub }}>{p.method === "pix" ? t("Chave") : t("Conta")}</Text><Text style={{ color: c.text }}>{p.masked}</Text></View>}
+                  {!!p.wallet && <View style={s.kv}><Text style={{ color: c.sub }}>{t("Sai da conta")}</Text><Text style={{ color: c.text }}>{p.wallet}</Text></View>}
+                  {!!p.description && <View style={s.kv}><Text style={{ color: c.sub }}>{t("Descrição")}</Text><Text style={{ color: c.text }}>{p.description}</Text></View>}
+                  {a.status === "pending" && p.needs_key && (
+                    <View style={{ gap: 8, marginTop: 4 }}>
+                      <Text style={{ color: c.text }}>{t("Primeira vez com {0}: qual a chave Pix ou os dados do banco? Eu guardo para as próximas.", p.to)}</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                        {PAY_TYPES.map(([k, label]) => (
+                          <Pressable key={k} onPress={() => setPayIn({ ...payIn, [a.id]: { ...pin, type: k } })}
+                            style={[s.chip, { borderColor: pin.type === k ? NAVY : c.line, backgroundColor: pin.type === k ? NAVY : c.card }]}>
+                            <Text style={{ color: pin.type === k ? ON_INK : c.text }}>{t(label)}</Text></Pressable>))}
+                      </ScrollView>
+                      <TextInput value={pin.key} onChangeText={(v) => setPayIn({ ...payIn, [a.id]: { ...pin, key: v } })}
+                        placeholder={pin.type === "uk" ? "04-00-04 12345678" : pin.type === "iban" ? "PT50 …" : t("Chave Pix")}
+                        placeholderTextColor={c.sub} autoCapitalize="none"
+                        style={[s.input, { color: c.text, backgroundColor: c.bg, marginBottom: 0 }]} />
+                      <View style={s.row}>
+                        <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => payFromContacts(a)}>
+                          <Text style={{ color: c.text }}>{t("Escolher da agenda")}</Text></Pressable>
+                        <Pressable style={s.primarySm} onPress={() => paySaveKey(a)}><Text style={s.primaryText}>{t("Guardar")}</Text></Pressable>
+                      </View>
+                    </View>)}
+                  {a.status === "pending" && !p.needs_key && (
+                    <View style={{ gap: 8, marginTop: 4 }}>
+                      <Pressable style={[s.primary, { padding: 12 }]} onPress={() => payCopy(a)}>
+                        <Text style={s.primaryText}>{p.method === "pix" ? t("Copiar Pix copia e cola") : t("Copiar dados do pagamento")}</Text></Pressable>
+                      <View style={s.row}>
+                        <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => cancel(a)}><Text style={{ color: c.text }}>{t("Cancelar")}</Text></Pressable>
+                        <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => payDone(a)}><Text style={{ color: c.text, fontWeight: "600" }}>{t("Já paguei")}</Text></Pressable>
+                      </View>
+                      <Text style={{ color: c.sub, fontSize: 12 }}>{t("Cole no app do seu banco e confirme lá: o banco mostra o nome de quem recebe. Depois toque em Já paguei para lançar o gasto.")}</Text>
+                    </View>)}
+                </View>
+              );
+            }
             if (a.kind === "calendar_invite") {
               return (
                 <View style={[s.draft, { backgroundColor: c.card, borderColor: c.line }]}>
@@ -3271,6 +3369,16 @@ const I18N_KEYS: string[] = [
   "Rascunho salvo",
   "Rascunho",
   "Enviar e-mail?",
+  "Pagamento",
+  "Digite a chave ou os dados do banco.",
+  "Guardei para as próximas vezes",
+  "Disponível no app atualizado.",
+  "Esse contato não tem celular.",
+  "Usar como chave Pix?",
+  "Usar",
+  "Pix copiado: cole no app do seu banco",
+  "Dados copiados: cole no app do seu banco",
+  "Lançado nos gastos",
   "Copiado",
   "Carteira",
   "Moeda com 3 letras, ex. GBP, EUR, BRL",
@@ -3395,7 +3503,6 @@ const I18N_KEYS: string[] = [
   "sem desconto",
   "Como funciona: o desconto entra quando o amigo paga o primeiro mês. Os descontos não somam: vale um por cobrança, e os que sobram ficam para as cobranças seguintes.",
   "Alguém te convidou?",
-  "Usar",
   "Você entrou pelo convite de {0} 🎁",
   "O painel mostra a saúde do sistema, o uso do Fidus (HEART), o negócio e a equipe. Abra no computador e digite o código.",
   "Gerar código de acesso",
@@ -3466,10 +3573,24 @@ const I18N_KEYS: string[] = [
   "Resposta ruim",
   "De 0 a 10, quanto você indicaria o Fidus a um amigo?",
   "O que faria o Fidus ser ainda melhor? (opcional)",
+  "Transferência",
   "aguardando você",
+  "pago ✓",
+  "cancelado",
+  "Chave",
+  "Conta",
+  "Sai da conta",
+  "Descrição",
+  "Primeira vez com {0}: qual a chave Pix ou os dados do banco? Eu guardo para as próximas.",
+  "Chave Pix",
+  "Escolher da agenda",
+  "Guardar",
+  "Copiar Pix copia e cola",
+  "Copiar dados do pagamento",
+  "Já paguei",
+  "Cole no app do seu banco e confirme lá: o banco mostra o nome de quem recebe. Depois toque em Já paguei para lançar o gasto.",
   "enviando…",
   "enviado ✓",
-  "cancelado",
   "Ir para o fim da conversa",
   "Gravando a reunião. Mantenha o Fidus aberto.",
   "Encerrar",

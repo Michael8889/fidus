@@ -12,7 +12,7 @@ import re
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from . import booking, config, features, google_client, meetings, plans, store, web_tools
+from . import booking, config, features, google_client, meetings, payments, plans, store, web_tools
 
 TOOLS = [
     {
@@ -157,7 +157,7 @@ PROFILE_TOOL = {
         "remove_business": {"type": "string"}}},
 }
 
-TOOLS += features.TOOLS + meetings.TOOLS + booking.TOOLS + web_tools.TOOLS + [plans.UPSELL_TOOL, PROFILE_TOOL]
+TOOLS += features.TOOLS + meetings.TOOLS + booking.TOOLS + web_tools.TOOLS + payments.TOOLS + [plans.UPSELL_TOOL, PROFILE_TOOL]
 
 # foto de recibo da mensagem atual (definida pelo agente antes de rodar as ferramentas)
 class _PerRequest(threading.local):
@@ -193,7 +193,7 @@ def run(name: str, args: dict) -> dict:
         "prepare_email_reply": _prepare_reply,
         "prepare_new_email": _prepare_new,
     }.get(name) or features.DISPATCH.get(name) or meetings.DISPATCH.get(name) or booking.DISPATCH.get(name) \
-        or web_tools.DISPATCH.get(name)
+        or web_tools.DISPATCH.get(name) or payments.DISPATCH.get(name)
     if name == "save_document":
         fn = lambda **a: features.save_document(**a, _path=CURRENT_RECEIPT.get("path"))  # noqa: E731
     if name == "offer_upgrade":
