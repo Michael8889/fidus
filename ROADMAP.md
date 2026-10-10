@@ -73,8 +73,8 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
       endereço @heyfidus.com encaminham para michael@homb.io
 - [x] **Claude**: v0.10.1 passa a usar app.heyfidus.com (servidor, painel, links) e heyfidus.com (página da
       empresa), mantendo o endereço antigo funcionando até todos os celulares atualizarem
-- [ ] **Você**: Google Cloud › OAuth: redirect `https://app.heyfidus.com/auth/google/callback` + domínio
-      autorizado heyfidus.com (ANTES de instalar a v0.10.1)
+- [x] **Você**: Google Cloud › OAuth: redirect `https://app.heyfidus.com/auth/google/callback` + domínio heyfidus.com
+- [x] **Você**: v0.10.1 instalada (servidor nos 4 endereços + app). Pasta de sempre: `Downloads\fidus-v0.2\fidus`
 - [x] **Você**: abrir a empresa: **Fidus Labs Limited** (número 17510962, registrada na Companies House em 09/10/2026)
 - [ ] **Você**: conta Google Play Console no nome da empresa (US$ 25)
 - [x] **Você**: conta Resend + domínio verificado (Irlanda), chave no `.env` (falta só o deploy) → liga os e-mails e a entrada por e-mail (`.env`)

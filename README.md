@@ -194,6 +194,10 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
   3. No `.env` do servidor: `FIDUS_REVENUECAT_ANDROID_KEY` e `FIDUS_BILLING_WEBHOOK_SECRET`. Gerar e instalar o APK novo.
 - Sem as chaves, o botão de assinar mostra "em breve" (como antes).
 
+## Pasta no computador do Mike
+- `Downloads\fidus-v0.2\fidus` (app, server, site) e, ao lado, `fidus-app` (projeto Expo com o projectId do
+  EAS: nunca recriar). Extrair cada zip novo em `Downloads\fidus-v0.2\fidus` com `Expand-Archive ... -Force`.
+
 ## Site
 - `site/landing.dc.html` (cópia do site no Claude Design). Idioma e moeda do visitante; botões da Google Play e da
   App Store conforme o celular (os links entram nas Tweaks do site: `playStoreUrl`, `appStoreUrl`). Loja sem link =
