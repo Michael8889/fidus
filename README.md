@@ -47,8 +47,13 @@ Do Windows (pasta `server`): `powershell -ExecutionPolicy Bypass -File .\deploy-
 
 Ou direto no servidor, com o código em `/tmp/fidus`:
 ```bash
-cp -r /tmp/fidus/server/. /opt/fidus/server/ && bash /opt/fidus/server/deploy/install.sh fidus.148-230-123-44.sslip.io
+cp -r /tmp/fidus/server/. /opt/fidus/server/ && bash /opt/fidus/server/deploy/install.sh app.heyfidus.com 'heyfidus.com www.heyfidus.com fidus.148-230-123-44.sslip.io'
 ```
+Domínio: heyfidus.com no Cloudflare (DNS only). `app.heyfidus.com` = servidor e painel; `heyfidus.com` = página
+simples da empresa (rota `/`) até o site completo; e-mails saem de `ola@heyfidus.com` (Resend, Irlanda) e
+qualquer endereço @heyfidus.com chega no e-mail do Mike (Cloudflare Email Routing). O app troca sozinho o
+endereço antigo salvo pelo novo assim que o novo responde.
+
 O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fidus no Nginx (testa com
 `nginx -t` e desfaz se falhar) e pede o HTTPS. O `.env`, o banco e os modelos em `deploy/data` e
 `deploy/models` não são tocados.
@@ -103,7 +108,7 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
   Cadastre esse endereço num monitor grátis (ex. UptimeRobot) para receber alerta se o Fidus cair.
 
 ## Painel da empresa (/admin)
-- Endereço: `https://<servidor>/admin` (hoje `https://fidus.148-230-123-44.sslip.io/admin`). Em inglês britânico,
+- Endereço: `https://<servidor>/admin` (hoje `https://app.heyfidus.com/admin`; o endereço antigo sslip.io continua respondendo). Em inglês britânico,
   com botão para português.
 - Entrada: no app, menu › Painel da empresa › gerar código (8 letras, vale 5 min, uma vez). Sessão de 12 h no
   navegador. Só aparece para o dono (`FIDUS_OWNER_EMAIL`) e para a equipe cadastrada.

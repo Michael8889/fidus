@@ -14,6 +14,15 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [ ] **Você**: Google Cloud: ativar a Google Sheets API + escopo de planilhas; todos tocam em Reconectar Google
 
 ## Anotado para a próxima versão (juntar e rodar uma vez só)
+- [x] v0.10.1: Configurações mostram só "Meu plano: X"; tocar abre a tela do plano (trocar ou cancelar)
+- Open banking no Premium (importar gastos do banco sozinho):
+  - provedor: **Enable Banking** (licença da Finlândia, cobre PT/ES/FR/DE/IE/NL/IT; teste grátis com as suas
+    contas). Reserva: **Yapily Connect** (UK + UE num contrato só). GoCardless (Nordigen) fechou para novos em 07/2025
+  - **Você**: criar conta em enablebanking.com (sandbox grátis), registrar o app e perguntar: cobertura no
+    Reino Unido, mínimo mensal, ActivoBank/Revolut/Wise
+  - **Claude**: conectar banco (tela do banco abre no celular), importar transações como gastos na carteira
+    certa sem duplicar, aviso para reconectar a cada 90/180 dias, desligar/apagar dados; plano mínimo Premium
+  - Privacidade: atualizar política (dados bancários, o provedor como parceiro) e avaliar DPIA
 - Site: página "Membro fundador" (lista de espera com código aplicado) e página "Seja parceiro" (candidatura)
 - Voz ainda mais rápida conforme a medição do painel (começar a falar antes de terminar, etc.)
 - Chamar o Fidus com a tela bloqueada, para anotação rápida com confirmação por voz:
@@ -62,8 +71,10 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [x] **Você**: domínio **heyfidus.com** comprado (10/10). fidus.ai, fidus.app já têm dono
 - [x] DNS no Cloudflare (ativo): `app` e `@` → 148.230.123.44, `www` → heyfidus.com; suporte@ e qualquer outro
       endereço @heyfidus.com encaminham para michael@homb.io
-- [ ] **Claude**: próxima versão passa a usar app.heyfidus.com (servidor, painel, e-mails) e heyfidus.com (site),
-      mantendo o endereço antigo funcionando até todos os celulares atualizarem
+- [x] **Claude**: v0.10.1 passa a usar app.heyfidus.com (servidor, painel, links) e heyfidus.com (página da
+      empresa), mantendo o endereço antigo funcionando até todos os celulares atualizarem
+- [ ] **Você**: Google Cloud › OAuth: redirect `https://app.heyfidus.com/auth/google/callback` + domínio
+      autorizado heyfidus.com (ANTES de instalar a v0.10.1)
 - [x] **Você**: abrir a empresa: **Fidus Labs Limited** (número 17510962, registrada na Companies House em 09/10/2026)
 - [ ] **Você**: conta Google Play Console no nome da empresa (US$ 25)
 - [x] **Você**: conta Resend + domínio verificado (Irlanda), chave no `.env` (falta só o deploy) → liga os e-mails e a entrada por e-mail (`.env`)

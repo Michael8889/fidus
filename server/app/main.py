@@ -148,6 +148,30 @@ a{{color:#1E5BD8}}.small{{color:#6B6B6B;font-size:14px}}li{{margin:6px 0}}
 </head><body><main>{body}</main></body></html>""")
 
 
+HOME_TEXT = {
+    "pt": ("Fale. O Fidus resolve.",
+           "Seu assessor pessoal por voz: agenda, e-mails, gastos e lembretes, num só lugar.",
+           "Em breve na Google Play e na App Store.", "Suporte", "Privacidade", "Termos"),
+    "en": ("Just say it. Fidus handles it.",
+           "Your voice-first personal assistant: calendar, email, expenses and reminders in one place.",
+           "Coming soon to Google Play and the App Store.", "Support", "Privacy", "Terms"),
+}
+
+
+@app.get("/", response_class=HTMLResponse)
+def home(request: Request):
+    """Página do domínio (heyfidus.com) até o site completo entrar no ar. Também serve de site da empresa nas lojas."""
+    al = (request.headers.get("accept-language") or "").lower()
+    lang = "pt" if al.startswith("pt") else "en"
+    head, sub, soon, sup, priv, terms_ = HOME_TEXT[lang]
+    mail = html.escape(config.SUPPORT_EMAIL or "suporte@heyfidus.com")
+    body = (f'<h1 style="font-size:40px;margin-bottom:4px">Fidus</h1><h1>{head}</h1><p>{sub}</p><p><b>{soon}</b></p>'
+            f'<p>{sup}: <a href="mailto:{mail}">{mail}</a></p>'
+            f'<p><a href="/privacy?lang={lang}">{priv}</a> · <a href="/terms?lang={lang}">{terms_}</a></p>'
+            f'<p style="font-size:13px">Fidus Labs Limited · Company no. 17510962 · England &amp; Wales</p>')
+    return _page("Fidus", body)
+
+
 @app.get("/privacy", response_class=HTMLResponse)
 def privacy(lang: str = "en"):
     from . import legal

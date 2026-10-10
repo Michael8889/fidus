@@ -33,7 +33,7 @@ const SpeechRec: any = opt(() => require("expo-speech-recognition").ExpoSpeechRe
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},js=0.10.0,ota=${UPDATE_ID.slice(0, 8)}`;
+const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},js=0.10.1,ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
 
@@ -144,8 +144,10 @@ function randomSecret(): string {
   return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-const DEFAULT_SERVER = "https://fidus.148-230-123-44.sslip.io";
-const SUPPORT_EMAIL = "suporte@homb.io";
+const DEFAULT_SERVER = "https://app.heyfidus.com";
+// endereços antigos do mesmo servidor: quem entrou por eles passa para o novo assim que ele responder
+const LEGACY_SERVERS = ["https://fidus.148-230-123-44.sslip.io"];
+const SUPPORT_EMAIL = "suporte@heyfidus.com";
 const PLAN_NAMES: Record<string, string> = { essencial: "Essencial", negocio: "Negócio", premium: "Premium" };
 const fmtClock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 const money = (n: number, sym = "€") => `${sym}${LANG === "pt" ? n.toFixed(2).replace(".", ",") : n.toFixed(2)}`;
@@ -164,7 +166,7 @@ type Item =
   | { id: string; type: "upsell"; up: Upsell }
   | { id: string; type: "nps" }
   | { id: string; type: "onb"; q: any };
-type Screen = "chat" | "convs" | "tasks" | "docs" | "meetings" | "expenses" | "booking" | "activity" | "invite" | "admin" | "settings" | "panel";
+type Screen = "chat" | "convs" | "tasks" | "docs" | "meetings" | "expenses" | "booking" | "activity" | "invite" | "admin" | "settings" | "panel" | "plan";
 
 // Visual limpo: neutros + uma única cor de ação (preto no claro, quase branco no escuro).
 // São trocadas a cada render conforme o tema do celular (ver FidusApp).
@@ -812,6 +814,14 @@ function FidusApp() {
       const sv = await SecureStore.getItemAsync("server");
       const tk = await SecureStore.getItemAsync("token");
       if (sv && tk) { setServer(sv); setToken(tk); setConfigured(true); }
+      if (sv && LEGACY_SERVERS.includes(sv.replace(/\/$/, ""))) {
+        try {  // só troca se o endereço novo já está no ar (o antigo continua funcionando)
+          const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 6000);
+          const r = await fetch(DEFAULT_SERVER + "/health", { signal: ctl.signal }); clearTimeout(tm);
+          const j = await r.json().catch(() => null);
+          if (j && "ok" in j && "backup_age_hours" in j) { await SecureStore.setItemAsync("server", DEFAULT_SERVER); setServer(DEFAULT_SERVER); }
+        } catch { /* endereço novo ainda não responde: segue no antigo */ }
+      }
     })();
   }, []);
 
@@ -1931,7 +1941,7 @@ function FidusApp() {
   const SCREEN_TITLE = (): Record<Screen, string> => ({
     chat: "Fidus", convs: t("Conversas"), tasks: t("Tarefas"), docs: t("Documentos"), meetings: t("Reuniões e atas"),
     expenses: t("Gastos e contas"), booking: t("Link de agendamento"), activity: t("Atividade"),
-    invite: t("Convide e ganhe"), admin: t("Clientes"), settings: t("Configurações"), panel: t("Painel da empresa"),
+    invite: t("Convide e ganhe"), admin: t("Clientes"), settings: t("Configurações"), panel: t("Painel da empresa"), plan: t("Meu plano"),
   });
 
   // ---------- Telas ----------
@@ -2341,6 +2351,31 @@ function FidusApp() {
           </Card>)}
       </ScrollView>
     );
+    if (screen === "plan") return (
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+        <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
+          <Text style={{ color: c.sub, fontSize: 12 }}>{t("SEU PLANO")}</Text>
+          <Text style={{ color: c.text, fontSize: 22, fontWeight: "600" }}>{plan ? t(plan.name) : "…"}</Text>
+        </Card>
+        <Text style={{ color: c.sub, fontSize: 12, marginTop: 8 }}>{t("MUDAR DE PLANO")}</Text>
+        {(plan?.plans || []).map((p: any) => (
+          <View key={p.id} style={[s.planRow, { borderColor: p.id === plan.plan ? MINT : c.line }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: c.text, fontWeight: "700" }}>{t(p.name)} · {money(p.month, plan.symbol)}<Text style={{ color: c.sub, fontWeight: "400" }}>{t("/mês")}</Text></Text>
+              <Text style={{ color: c.sub, fontSize: 12 }}>{t("ou {0}/ano (2 meses grátis)", money(p.year, plan.symbol))}</Text>
+              {p.highlights.slice(0, 3).map((h: string) => <Text key={h} style={{ color: c.sub, fontSize: 12 }}>✓ {t(h)}</Text>)}
+            </View>
+            {p.id === plan.plan ? <Text style={{ color: GREEN, fontWeight: "700" }}>{t("Atual")}</Text> :
+              <Pressable style={[s.chip, { borderColor: c.sub }]} onPress={() => subscribe(p)}><Text style={{ color: c.text }}>{t("Escolher")}</Text></Pressable>}
+          </View>))}
+        <Card c={c} onPress={() => storeReady ? Linking.openURL(MANAGE_SUBS_URL).catch(() => {})
+          : Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Fidus`).catch(() => {})}>
+          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Cancelar ou gerenciar assinatura")}</Text>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{storeReady ? t("Trocar forma de pagamento ou cancelar, direto na loja") : t("Fale com o suporte")}</Text></View>
+          <Text style={{ color: c.sub }}>›</Text></Card>
+        {storeReady && <Card c={c} onPress={restorePurchases}><Text style={{ color: c.text, flex: 1, fontSize: 15 }}>{t("Restaurar compras")}</Text></Card>}
+      </ScrollView>
+    );
     if (screen === "settings") return (
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
         <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
@@ -2355,27 +2390,10 @@ function FidusApp() {
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Idioma")}</Text>
             <Text style={{ color: c.sub, fontSize: 14 }}>{(LANG_CHOICES.find(([k]) => k === LANG) || [LANG, LANG])[1]}</Text></View>
           <Text style={{ color: c.sub }}>›</Text></Card>
-        <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
-          <Text style={{ color: c.sub, fontSize: 12 }}>{t("SEU PLANO")}</Text>
-          <Text style={{ color: c.text, fontSize: 18, fontWeight: "600" }}>{plan ? t(plan.name) : "…"}</Text>
-          {(plan?.plans || []).map((p: any) => (
-            <View key={p.id} style={[s.planRow, { borderColor: p.id === plan.plan ? MINT : c.line }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: c.text, fontWeight: "700" }}>{t(p.name)} · {money(p.month, plan.symbol)}<Text style={{ color: c.sub, fontWeight: "400" }}>{t("/mês")}</Text></Text>
-                <Text style={{ color: c.sub, fontSize: 12 }}>{t("ou {0}/ano (2 meses grátis)", money(p.year, plan.symbol))}</Text>
-                {p.highlights.slice(0, 3).map((h: string) => <Text key={h} style={{ color: c.sub, fontSize: 12 }}>✓ {t(h)}</Text>)}
-              </View>
-              {p.id === plan.plan ? <Text style={{ color: GREEN, fontWeight: "700" }}>{t("Atual")}</Text> :
-                <Pressable style={[s.chip, { borderColor: c.sub }]} onPress={() => subscribe(p)}><Text style={{ color: c.text }}>{t("Escolher")}</Text></Pressable>}
-            </View>))}
-        </Card>
-        {storeReady && (<>
-          <Card c={c} onPress={() => Linking.openURL(MANAGE_SUBS_URL).catch(() => {})}>
-            <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Gerenciar assinatura")}</Text>
-              <Text style={{ color: c.sub, fontSize: 14 }}>{t("Trocar forma de pagamento ou cancelar, direto na loja")}</Text></View>
-            <Text style={{ color: c.sub }}>›</Text></Card>
-          <Card c={c} onPress={restorePurchases}><Text style={{ color: c.text, flex: 1, fontSize: 15 }}>{t("Restaurar compras")}</Text></Card>
-        </>)}
+        <Card c={c} onPress={() => setScreen("plan")}>
+          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Meu plano")}</Text>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{plan ? t(plan.name) : t(me?.plan_name || PLAN_NAMES[me?.plan] || "…")}</Text></View>
+          <Text style={{ color: c.sub }}>›</Text></Card>
         {!!me?.natural_voice && (
           <Card c={c} onPress={async () => {
             const g = me.voice_gender === "male" ? "female" : "male";
@@ -2408,7 +2426,7 @@ function FidusApp() {
           <Text style={{ color: c.sub, fontSize: 12, marginTop: 6 }}>
             {SpeechRec ? "✅" : "❌"} {t("Transcrição no celular")}{SpeechRec ? "" : ` (${t("precisa do APK novo")})`}{"\n"}
             {me?.natural_voice ? "✅" : "❌"} {t("Voz natural")}{me?.natural_voice ? "" : ` (${t("falta a chave no servidor")})`}{"\n"}
-            {t("Versão")}: 0.10.0 · {UPDATE_ID.slice(0, 8)}</Text>
+            {t("Versão")}: 0.10.1 · {UPDATE_ID.slice(0, 8)}</Text>
           <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
         </Card>
         <Card c={c} onPress={() => { setScreen("chat"); startOnboarding(true); }}>
@@ -2472,7 +2490,7 @@ function FidusApp() {
             <Pressable onPress={newChat} hitSlop={10} style={s.iconBtn} accessibilityLabel={t("Nova conversa")}>
               <ComposeIcon color={c.text} /></Pressable>
           </>) : (
-            <Pressable onPress={() => setScreen("chat")} hitSlop={10} style={[s.chip, { borderColor: c.line }]}>
+            <Pressable onPress={() => setScreen(screen === "plan" ? "settings" : "chat")} hitSlop={10} style={[s.chip, { borderColor: c.line }]}>
               <Text style={{ color: c.text, fontSize: 13 }}>{t("Conversa")}</Text></Pressable>
           )}
         </View>
@@ -3055,6 +3073,7 @@ const I18N_KEYS: string[] = [
   "Link de agendamento",
   "Convide e ganhe",
   "Configurações",
+  "Meu plano",
   "Fale. O Fidus resolve.",
   "Entrar com o Google",
   "Entrar com e-mail",
@@ -3150,16 +3169,18 @@ const I18N_KEYS: string[] = [
   "Vale 5 minutos e só uma vez.",
   "Copiar endereço",
   "Abrir aqui",
-  "SEU NOME",
-  "Idioma",
   "SEU PLANO",
+  "MUDAR DE PLANO",
   "/mês",
   "ou {0}/ano (2 meses grátis)",
   "Atual",
   "Escolher",
-  "Gerenciar assinatura",
+  "Cancelar ou gerenciar assinatura",
   "Trocar forma de pagamento ou cancelar, direto na loja",
+  "Fale com o suporte",
   "Restaurar compras",
+  "SEU NOME",
+  "Idioma",
   "Voz masculina",
   "Voz feminina",
   "Voz do Fidus",
