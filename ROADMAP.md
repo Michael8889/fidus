@@ -16,6 +16,16 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 ## Anotado para a próxima versão (juntar e rodar uma vez só)
 - Site: página "Membro fundador" (lista de espera com código aplicado) e página "Seja parceiro" (candidatura)
 - Voz ainda mais rápida conforme a medição do painel (começar a falar antes de terminar, etc.)
+- Chamar o Fidus com a tela bloqueada, para anotação rápida com confirmação por voz:
+  - link direto que abre já no modo conversa (fidus://falar) + atalho de tela inicial
+  - Android: bloco nas Configurações rápidas (desce a barra, toca "Fidus", fala) e botão na notificação; no
+    Samsung, botão lateral (2 toques) abrindo o Fidus direto no modo conversa
+  - iPhone: atalho da Siri ("E aí Siri, anota no Fidus …") que funciona com a tela bloqueada, mais botão de Ação
+    (iPhone 15 Pro+) e controle na Central de Controle
+  - modo "anotação rápida" na tela bloqueada: só CRIA (lembrete, tarefa, gasto, nota) e confirma falando; para LER
+    agenda, e-mails ou gastos, pede para desbloquear (privacidade)
+  - "Ei Fidus" sempre ouvindo: no iPhone a Apple não permite; no Android dá, mas gasta bateria e exige licença
+    paga do detector de palavra; deixar para depois
 
 ## Funil Fidus → mentoria (HARVEST Framework) — discreto, por e-mail (nada de mentoria dentro do app)
 - [ ] **Você**: conteúdo com a sua imagem (@michael.gbd) mostrando o Fidus; CTA para baixar com o código MIKE
