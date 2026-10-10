@@ -114,7 +114,8 @@ def _footer(row: dict) -> str:
     txt = {"pt": "Você recebe este e-mail porque pediu dicas do Fidus. <a href='{u}'>Não quero mais receber</a>.",
            "en": "You get this email because you asked for Fidus tips. <a href='{u}'>Unsubscribe</a>.",
            "es": "Recibes este correo porque pediste consejos de Fidus. <a href='{u}'>Darme de baja</a>."}
-    company = "Fidus Labs Limited · Company no. 17510962 · England &amp; Wales"
+    company = ("Fidus Labs Limited · Company no. 17510962 · England &amp; Wales · "
+               + html.escape(config.COMPANY_ADDRESS))
     return (f"<p style='color:#8A8A8A;font-size:12px;margin-top:28px'>{txt.get(lang, txt['en']).format(u=html.escape(url))}"
             f"<br>{company}</p>")
 

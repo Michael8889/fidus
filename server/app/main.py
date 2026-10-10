@@ -149,12 +149,22 @@ a{{color:#1E5BD8}}.small{{color:#6B6B6B;font-size:14px}}li{{margin:6px 0}}
 
 
 HOME_TEXT = {
-    "pt": ("Fale. O Fidus resolve.",
-           "Seu assessor pessoal por voz: agenda, e-mails, gastos e lembretes, num só lugar.",
-           "Em breve na Google Play e na App Store.", "Suporte", "Privacidade", "Termos"),
-    "en": ("Just say it. Fidus handles it.",
-           "Your voice-first personal assistant: calendar, email, expenses and reminders in one place.",
-           "Coming soon to Google Play and the App Store.", "Support", "Privacy", "Terms"),
+    "pt": {"head": "Fale. O Fidus resolve.",
+           "sub": "Seu assessor pessoal por voz para quem vive entre empresas, países e moedas.",
+           "feats": [("Agenda e lembretes", "“Marca o contador sexta às 10 e me lembra uma hora antes.”"),
+                     ("E-mails escritos por você aprovar", "Ele escreve e responde; só sai quando você diz “envia”."),
+                     ("Gastos por voz ou foto", "Carteiras por empresa e moeda, pacote pronto para o contador."),
+                     ("Modo conversa", "Fale com o Fidus como numa ligação, e interrompa quando quiser."),
+                     ("Pagar por voz", "“Faz um Pix de 350 pro João”: ele prepara, você confirma no banco.")],
+           "soon": "Em breve na Google Play e na App Store.", "sup": "Suporte", "priv": "Privacidade", "terms": "Termos"},
+    "en": {"head": "Just say it. Fidus handles it.",
+           "sub": "Your voice-first personal assistant for people who run more than one business, country or currency.",
+           "feats": [("Calendar and reminders", "“Book the accountant Friday at 10 and remind me an hour before.”"),
+                     ("Emails written for your approval", "It drafts and replies; nothing goes out until you say “send”."),
+                     ("Expenses by voice or photo", "Wallets per business and currency, ready for your accountant."),
+                     ("Conversation mode", "Talk to Fidus like a phone call, and interrupt whenever you like."),
+                     ("Pay by voice", "“Pay the supplier 120 pounds”: Fidus prepares it, you approve in your bank.")],
+           "soon": "Coming soon to Google Play and the App Store.", "sup": "Support", "priv": "Privacy", "terms": "Terms"},
 }
 
 
@@ -163,12 +173,16 @@ def home(request: Request):
     """Página do domínio (heyfidus.com) até o site completo entrar no ar. Também serve de site da empresa nas lojas."""
     al = (request.headers.get("accept-language") or "").lower()
     lang = "pt" if al.startswith("pt") else "en"
-    head, sub, soon, sup, priv, terms_ = HOME_TEXT[lang]
+    T = HOME_TEXT[lang]
     mail = html.escape(config.SUPPORT_EMAIL or "suporte@heyfidus.com")
-    body = (f'<h1 style="font-size:40px;margin-bottom:4px">Fidus</h1><h1>{head}</h1><p>{sub}</p><p><b>{soon}</b></p>'
-            f'<p>{sup}: <a href="mailto:{mail}">{mail}</a></p>'
-            f'<p><a href="/privacy?lang={lang}">{priv}</a> · <a href="/terms?lang={lang}">{terms_}</a></p>'
-            f'<p style="font-size:13px">Fidus Labs Limited · Company no. 17510962 · England &amp; Wales</p>')
+    feats = "".join(f'<div style="text-align:left;padding:14px 0;border-top:1px solid #8883"><b>{html.escape(a)}</b>'
+                    f'<div style="color:#777;margin-top:2px">{html.escape(b)}</div></div>' for a, b in T["feats"])
+    body = (f'<h1 style="font-size:40px;margin-bottom:4px">Fidus</h1><h1>{T["head"]}</h1><p>{T["sub"]}</p>'
+            f'<div style="margin:22px 0">{feats}</div><p><b>{T["soon"]}</b></p>'
+            f'<p>{T["sup"]}: <a href="mailto:{mail}">{mail}</a></p>'
+            f'<p><a href="/privacy?lang={lang}">{T["priv"]}</a> · <a href="/terms?lang={lang}">{T["terms"]}</a></p>'
+            f'<p style="font-size:13px">Fidus Labs Limited · Company no. 17510962 · England &amp; Wales<br>'
+            f'{html.escape(config.COMPANY_ADDRESS)}</p>')
     return _page("Fidus", body)
 
 
@@ -666,6 +680,19 @@ def realtime_session():
     if r.get("error"):
         raise HTTPException(503, r["error"])
     return r
+
+
+class RtErrIn(BaseModel):
+    message: str = ""
+
+
+@app.post("/v1/realtime/error", dependencies=[Depends(auth)])
+def realtime_error(body: RtErrIn):
+    """O app conta por que a ligação em tempo real não abriu (fica no log para o suporte)."""
+    import logging
+    logging.getLogger("fidus.realtime").warning("tempo real falhou no app (%s): %s", store.current().get("id"),
+                                                (body.message or "")[:300])
+    return {"ok": True}
 
 
 class RtToolIn(BaseModel):

@@ -9,7 +9,7 @@ from . import config
 
 COMPANY = "Fidus Labs Limited"
 NUMBER = "17510962"
-UPDATED = "9 October 2026"
+UPDATED = "10 October 2026"
 
 
 def _vals() -> dict:

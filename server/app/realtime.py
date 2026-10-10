@@ -90,6 +90,7 @@ def session() -> dict:
         return {"error": "resposta inesperada da OpenAI"}
     with _lock:
         _ACTIONS[_uid()] = []
+    log.warning("sessão tempo real criada (%s, %s)", _uid(), config.REALTIME_MODEL)
     return {"client_secret": value, "model": config.REALTIME_MODEL, "expires_at": j.get("expires_at"),
             "calls_url": f"{API}/realtime/calls"}
 

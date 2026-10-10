@@ -17,7 +17,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 def test_home_page_languages():
     r = client.get("/", headers={"accept-language": "pt-BR,pt;q=0.9"})
-    assert r.status_code == 200 and "Fale. O Fidus resolve." in r.text and "17510962" in r.text
+    assert r.status_code == 200 and "Fale. O Fidus resolve." in r.text and "17510962" in r.text and "Connaught" in r.text and "Pagar por voz" in r.text
     assert "/privacy?lang=pt" in r.text
     r = client.get("/", headers={"accept-language": "en-GB"})
     assert "Fidus handles it" in r.text and "/terms?lang=en" in r.text

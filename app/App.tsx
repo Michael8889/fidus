@@ -36,13 +36,14 @@ const hasNative = (name: string) => !!opt(() => {
   const RN = require("react-native");
   return RN.NativeModules?.[name] || RN.TurboModuleRegistry?.get?.(name);
 });
-const RTC: any = hasNative("WebRTCModule") ? opt(() => require("react-native-webrtc")) : null;
+// (a biblioteca acusa erro sozinha se o APK não tiver o módulo nativo; aí fica null e o modo normal assume)
+const RTC: any = opt(() => { const m = require("react-native-webrtc"); return m?.RTCPeerConnection && m?.mediaDevices ? m : null; });
 const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native-incall-manager").default) : null;
 // tocar a voz natural (MP3 que vem do servidor)
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=0.11.0,ota=${UPDATE_ID.slice(0, 8)}`;
+const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=0.11.2,ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
 
@@ -541,6 +542,7 @@ function FidusApp() {
   const restAudio = useRef<{ text: string; p: Promise<string | null> } | null>(null);
   const rt = useRef<any>(null);  // ligação em tempo real aberta (pc, dc, microfone, fala atual)
   const rtFailed = useRef(false);
+  const [rtErr, setRtErr] = useState("");  // por que a conversa em tempo real não abriu (aparece no Diagnóstico)
   const srHandlers = useRef<any>({});
   const clip = useRef<any>(null);       // voz natural tocando agora
   const phraseAudio = useRef<Record<string, string>>({});  // frases fixas já em voz natural
@@ -1147,7 +1149,10 @@ function FidusApp() {
       await pc.setRemoteDescription({ type: "answer", sdp: await resp.text() });
       return true;
     } catch (e: any) {
-      console.log("[Fidus] tempo real", e?.message ?? e);
+      const msg = String(e?.message ?? e).slice(0, 200);
+      console.log("[Fidus] tempo real", msg);
+      setRtErr(msg);
+      post("/v1/realtime/error", { message: msg }).catch(() => {});  // o servidor guarda no log (suporte)
       stopRealtime(false);
       rtFailed.current = true;  // nesta abertura do app, segue no modo normal
       return false;
@@ -2705,7 +2710,8 @@ function FidusApp() {
           <Text style={{ color: c.sub, fontSize: 12, marginTop: 6 }}>
             {SpeechRec ? "✅" : "❌"} {t("Transcrição no celular")}{SpeechRec ? "" : ` (${t("precisa do APK novo")})`}{"\n"}
             {me?.natural_voice ? "✅" : "❌"} {t("Voz natural")}{me?.natural_voice ? "" : ` (${t("falta a chave no servidor")})`}{"\n"}
-            {t("Versão")}: 0.11.0 · {UPDATE_ID.slice(0, 8)}</Text>
+            {RTC && me?.realtime && !rtErr ? "✅" : "❌"} {t("Conversa em tempo real")}{!RTC ? ` (${t("precisa do APK novo")})` : !me?.realtime ? ` (${t("desligada no servidor")})` : rtErr ? ` (${rtErr})` : ""}{"\n"}
+            {t("Versão")}: 0.11.2 · {UPDATE_ID.slice(0, 8)}</Text>
           <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
         </Card>
         <Card c={c} onPress={() => { setScreen("chat"); startOnboarding(true); }}>
@@ -3547,6 +3553,8 @@ const I18N_KEYS: string[] = [
   "precisa do APK novo",
   "Voz natural",
   "falta a chave no servidor",
+  "Conversa em tempo real",
+  "desligada no servidor",
   "Versão",
   "Sair de todos os aparelhos",
   "Refazer as boas-vindas",
