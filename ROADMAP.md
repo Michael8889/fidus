@@ -121,11 +121,12 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [ ] **Você**: colocar os links das lojas no site (Tweaks) e o domínio no lugar do endereço provisório
 
 ## Fase 4 — Crescer
-- [ ] Outlook / Microsoft 365 (muitas empresas no Reino Unido usam)
 - [ ] Página de agendamento em vários idiomas
 - [ ] Lançamento aberto e anúncios
 
 ## Já feito
+- [x] v0.13: Outlook / Microsoft 365 (agenda, lembretes, convites, link de agendamento e e-mails pelo Microsoft Graph).
+      **Você**: registrar o app no Microsoft Entra + chaves no `.env`; Partner Program + verificação de editor
 - [x] v0.12: o Fidus escreve a resposta ao vivo (e mostra o que está fazendo); backend do site: lista de espera com
       e-mail de confirmação e saída, plano e código de parceiro guardados, página de parceria, painel › Site com CSV
       e aviso de lançamento para a lista

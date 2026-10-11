@@ -156,6 +156,19 @@ def _prefs(prof: dict) -> str:
     return ("\n" + "\n".join(out)) if out else ""
 
 
+def _mail_line() -> str:
+    """Agenda e e-mail do Outlook: as mesmas ferramentas, com dois detalhes que mudam."""
+    try:
+        from . import google_client
+        if google_client.provider() == "microsoft":
+            return ("\n- Agenda e e-mail: OUTLOOK (Microsoft), não Google. As ferramentas de agenda e e-mail funcionam "
+                    "igual; diga 'Outlook' ao falar delas. Busca de e-mail: palavras, from:, to:, subject:, "
+                    "newer_than:7d. Reunião online gera link do Teams (contas de empresa), não do Meet.")
+    except Exception:  # noqa: BLE001
+        pass
+    return ""
+
+
 def _context() -> str:
     prof = store.profile()
     now = datetime.now(ZoneInfo(prof["timezone"]))
@@ -166,7 +179,7 @@ def _context() -> str:
 - Nome: {prof["name"] or "ainda não sabemos (pergunte quando fizer sentido)"}
 - Idioma: {i18n.name(prof.get("language") or "pt")}
 - Carteiras (empresas/contas): {", ".join(f'{w["name"]} ({w["currency"] or "moeda padrão"})' for w in store.wallets())}
-- Moeda padrão: {prof["currency"]}{_prefs(prof)}
+- Moeda padrão: {prof["currency"]}{_prefs(prof)}{_mail_line()}
 
 AGORA são {now.strftime('%H:%M')} ({prof["timezone"]}).
 HOJE é {dias[now.weekday()]}, {now.strftime('%d/%m/%Y')} ({now.strftime('%Y-%m-%d')}).

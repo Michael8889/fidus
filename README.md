@@ -228,6 +228,19 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
 - Streaming ("Fidus escreve"): o app mostra a resposta sendo escrita e o que o Fidus está fazendo
   (`GET /v1/partial/{request_id}`, alimentado por `llm.STREAM`).
 
+## Outlook / Microsoft 365
+- `server/app/ms_client.py`: conexão com a Microsoft (OAuth com PKCE) e adaptadores do Microsoft Graph no MESMO formato
+  das bibliotecas do Google. Com o Outlook conectado, `google_client.calendar()`/`gmail()` devolvem os adaptadores e
+  todas as funções (agenda, lembretes, convites, link de agendamento, e-mails) funcionam sem mudar nada nelas.
+  Planilhas continuam só no Google.
+- Quem usa Outlook entra com e-mail (código) e conecta em Configurações › Outlook (ou no aviso do chat). Vale o último
+  conectado (`kv mail_provider`); entrar com o Google num celular novo não tira o Outlook.
+- Envio: igual ao Gmail, só depois da confirmação (o MIME pronto vai por `/me/sendMail`).
+- Configuração: app no Microsoft Entra (contas de qualquer empresa + pessoais), redirect
+  `https://app.heyfidus.com/auth/microsoft/callback`, permissões delegadas `User.Read Calendars.ReadWrite Mail.Read
+  Mail.Send offline_access openid profile email`, e `FIDUS_MS_CLIENT_ID` / `FIDUS_MS_CLIENT_SECRET` no `.env`.
+  Para clientes de empresa conseguirem autorizar: verificação de editor (Microsoft AI Cloud Partner Program).
+
 ## Configuração
 Tudo no `server/.env` (modelo em `server/.env.example`). Trocar de IA = mudar `FIDUS_LLM_PROVIDER`.
 Reconectar o Google: no app, menu ⋯ › Reconectar Google.

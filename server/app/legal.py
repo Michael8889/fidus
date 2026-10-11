@@ -9,7 +9,7 @@ from . import config
 
 COMPANY = "Fidus Labs Limited"
 NUMBER = "17510962"
-UPDATED = "10 October 2026"
+UPDATED = "11 October 2026"
 
 
 def _vals() -> dict:
@@ -32,6 +32,8 @@ PRIVACY = {
 <p>We do not sell your data, we do not show ads, and we never use the content of your emails, diary, documents or spending for marketing.</p>
 <h2>Google user data</h2>
 <p>Fidus's use and transfer of information received from Google APIs to any other app will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements. Google data is used only to provide the features you request in Fidus, is not used for advertising, is not sold, and is not read by people except with your permission, for security reasons, or where the law requires.</p>
+<h2>Microsoft (Outlook) user data</h2>
+<p>If you connect Outlook or Microsoft 365, Fidus accesses your Microsoft calendar and email through Microsoft Graph with the permissions you approve (read and change calendar events, read email, and send email). The same rules apply as for Google data: it is used only to provide the features you ask for, never for advertising or model training, is not sold, and an email is only sent after you confirm it. You can disconnect at any time in Settings › Outlook, or remove Fidus from your Microsoft account permissions.</p>
 <h2>Who processes data for us</h2>
 <ul><li>Our server provider (Hetzner, in the European Union), where your data is stored.</li><li>Anthropic (the AI model that understands your requests). Content is processed to answer you and is not used to train models.</li><li>Google (Gemini), for simpler requests, and Google Cloud Text-to-Speech, for the natural voice (only the text of the answer being spoken). Content is not used to train models.</li><li>OpenAI, for the real-time conversation mode (your voice and the conversation, only while that mode is open). Content sent through the API is not used to train models.</li><li>Google Play / Apple App Store and RevenueCat, for subscriptions (we never see your card).</li><li>Resend, to send our emails.</li></ul>
 <p>Some of these providers may process data outside the UK/EU; when they do, appropriate safeguards (such as standard contractual clauses) apply.</p>
@@ -54,6 +56,8 @@ PRIVACY = {
 <p>Não vendemos seus dados, não mostramos anúncios e nunca usamos o conteúdo dos seus e-mails, agenda, documentos ou gastos para marketing.</p>
 <h2>Dados do Google</h2>
 <p>O uso e a transferência, pelo Fidus, de informações recebidas das APIs do Google para qualquer outro app seguem a <a href="https://developers.google.com/terms/api-services-user-data-policy">Política de Dados do Usuário dos Serviços de API do Google</a>, incluindo os requisitos de Uso Limitado. Os dados do Google são usados só para as funções que você pede no Fidus, não são usados para publicidade, não são vendidos e não são lidos por pessoas, exceto com a sua permissão, por segurança ou quando a lei exigir.</p>
+<h2>Dados da Microsoft (Outlook)</h2>
+<p>Se você conectar o Outlook ou o Microsoft 365, o Fidus acessa sua agenda e seus e-mails da Microsoft pelo Microsoft Graph, com as permissões que você aprovar (ler e mudar eventos da agenda, ler e-mails e enviar e-mails). Valem as mesmas regras dos dados do Google: usados só para as funções que você pede, nunca para publicidade nem para treinar modelos, não são vendidos, e um e-mail só sai depois que você confirma. Você pode desconectar quando quiser em Configurações › Outlook, ou tirar o Fidus das permissões da sua conta Microsoft.</p>
 <h2>Quem processa dados para nós</h2>
 <ul><li>Nosso provedor de servidores (Hetzner, na União Europeia), onde seus dados ficam guardados.</li><li>Anthropic (o modelo de IA que entende seus pedidos). O conteúdo é processado para te responder e não é usado para treinar modelos.</li><li>Google (Gemini), para os pedidos mais simples, e Google Cloud Text-to-Speech, para a voz natural (só o texto da resposta que vai ser falada). O conteúdo não é usado para treinar modelos.</li><li>OpenAI, para o modo conversa em tempo real (sua voz e a conversa, só enquanto esse modo está aberto). O conteúdo enviado pela API não é usado para treinar modelos.</li><li>Google Play / Apple App Store e RevenueCat, para as assinaturas (nunca vemos o seu cartão).</li><li>Resend, para enviar nossos e-mails.</li></ul>
 <p>Alguns desses fornecedores podem processar dados fora do Reino Unido/UE; nesses casos valem as garantias adequadas (como cláusulas contratuais padrão).</p>

@@ -149,6 +149,11 @@ def kv_set(k: str, v: str) -> None:
         c.execute("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", (k, v))
 
 
+def kv_del(k: str) -> None:
+    with _conn() as c:
+        c.execute("DELETE FROM kv WHERE k=?", (k,))
+
+
 def add_message(role: str, content: str) -> None:
     with _conn() as c:
         c.execute("INSERT INTO messages(role,content,created_at,conv) VALUES(?,?,?,?)",

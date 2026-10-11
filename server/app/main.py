@@ -352,7 +352,7 @@ def google_link():
 def google_start(u: str = store.OWNER_ID, exp: int = 0, sig: str = ""):
     import hmac
     import time
-    local_first_setup = u == store.OWNER_ID and not google_client.is_connected() \
+    local_first_setup = u == store.OWNER_ID and not google_client.google_connected() \
         and config.PUBLIC_BASE_URL.startswith(("http://localhost", "http://127.0.0.1"))
     if not local_first_setup:
         try:
@@ -403,13 +403,91 @@ def google_callback(request: Request, state: str = "", error: str = ""):
         had = store.kv_get("google_creds") is not None
         same = store.kv_get("google_email") == email
         if full_access and (not had or same):
-            google_client.save_credentials(creds, email)
+            from . import ms_client
+            # entrar com o Google num celular novo não tira o Outlook de quem escolheu o Outlook
+            google_client.save_credentials(creds, email, make_default=not ms_client.is_connected())
     code = accounts.new_login_code(user["id"], pending.get("app_challenge"))
     link = f"{config.APP_SCHEME}://login?code={code}"
     return _page("Fidus", f"""<h1>Pronto, {html.escape((who.get('name') or '').split(' ')[0])}!</h1>
 <p>Volte para o app do Fidus. Se ele não abrir sozinho, digite este código na tela de entrada:</p>
 <div class="code">{code[:4]}-{code[4:]}</div><a class="b" href="{link}">Abrir o Fidus</a>
 <p style="font-size:13px">O código vale 10 minutos e só funciona uma vez.</p>""")
+
+
+# ---------- Outlook / Microsoft 365 (agenda e e-mail) ----------
+def _ms():
+    from . import ms_client
+    return ms_client
+
+
+@app.get("/v1/auth/microsoft/link", dependencies=[Depends(auth)])
+def microsoft_link():
+    """Link de 10 minutos para o cliente logado conectar o Outlook."""
+    import time
+    if not _ms().enabled():
+        raise HTTPException(400, "Outlook ainda não está disponível")
+    uid = store.current()["id"]
+    exp = int(time.time()) + 600
+    return {"url": f"{config.PUBLIC_BASE_URL.rstrip('/')}/auth/microsoft/start?u={uid}&exp={exp}"
+                   f"&sig={_oauth_sig('ms:' + uid, exp)}"}
+
+
+@app.get("/auth/microsoft/start")
+def microsoft_start(u: str = "", exp: int = 0, sig: str = ""):
+    import hmac
+    import secrets
+    import time
+    try:
+        ok = exp > time.time() and hmac.compare_digest(_oauth_sig("ms:" + u, exp), sig)
+    except TypeError:
+        ok = False
+    if not ok or not accounts.use_link_once(sig, exp) or not _ms().enabled():
+        raise HTTPException(403, "Link expirado ou já usado. Abra de novo pelo app (⋯ › Configurações › Outlook).")
+    url, state, verifier = _ms().auth_url()
+    nonce = secrets.token_urlsafe(24)
+    accounts.new_pending(verifier, u, state, nonce)
+    resp = RedirectResponse(url)
+    resp.set_cookie("fidus_ms", nonce, max_age=900, httponly=True, samesite="lax",
+                    secure=config.PUBLIC_BASE_URL.startswith("https"), path="/auth/microsoft")
+    return resp
+
+
+@app.get("/auth/microsoft/callback")
+def microsoft_callback(request: Request, state: str = "", code: str = "", error: str = ""):
+    pending = accounts.take_pending(state, request.cookies.get("fidus_ms", ""))
+    if not pending or not pending.get("user_id"):
+        raise HTTPException(403, "Conexão não solicitada ou expirada. Comece de novo pelo app.")
+    if error or not code:
+        return _page("Fidus", "<h1>Conexão cancelada</h1><p>Você pode tentar de novo pelo app.</p>")
+    try:
+        got = _ms().exchange(code, pending.get("verifier"))
+    except Exception as e:  # noqa: BLE001
+        msg = str(e)
+        if "AADSTS65001" in msg or "consent" in msg.lower():
+            return _page("Fidus", "<h1>Precisa da aprovação do TI</h1><p>A sua empresa só deixa conectar apps aprovados "
+                                  "pelo administrador do Microsoft 365. Peça para ele aprovar o Fidus e tente de novo.</p>")
+        return _page("Fidus", f"<h1>Não deu certo</h1><p>A Microsoft recusou a conexão ({html.escape(msg[:140])}). "
+                              "Tente de novo pelo app.</p>")
+    if not got["full_access"]:
+        return _page("Fidus", "<h1>Faltou permissão</h1><p>Para o Fidus cuidar da agenda e dos e-mails, aceite todas as "
+                              "permissões na tela da Microsoft. Tente de novo pelo app.</p>")
+    user = accounts.get_user(pending["user_id"])
+    if not user:
+        raise HTTPException(403, "conta não encontrada")
+    with store.as_user(accounts.user_ctx(user)):
+        _ms().save(got["token"], got["email"])
+        store.kv_set("mail_provider", "microsoft")
+        store.add_activity("outlook_connected", "Outlook conectado", got["email"], "feito", "")
+    return _page("Fidus", f"<h1>Outlook conectado ✓</h1><p>{html.escape(got['email'])}: agenda e e-mails agora pelo "
+                          "Outlook. Pode voltar para o app.</p>")
+
+
+@app.post("/v1/auth/microsoft/disconnect", dependencies=[Depends(auth)])
+def microsoft_disconnect():
+    _ms().disconnect()
+    if google_client.google_connected():
+        store.kv_set("mail_provider", "google")
+    return {"ok": True, "mail_provider": google_client.provider()}
 
 
 class CodeIn(BaseModel):
@@ -433,7 +511,7 @@ def auth_exchange(body: CodeIn, request: Request):
 # ---------- Entrar com e-mail (código de 6 números) ----------
 @app.get("/v1/auth/options")
 def auth_options():
-    return {"google": True, "email": mailer.enabled()}
+    return {"google": True, "email": mailer.enabled(), "microsoft": _ms().enabled()}
 
 
 class EmailStartIn(BaseModel):
@@ -542,7 +620,9 @@ def me(request: Request):
     metrics.set_client(u["id"], request.headers.get("x-fidus-client", ""))
     return {"id": u["id"], "email": u.get("email"), "name": store.user_name(), "is_owner": bool(u.get("is_owner")),
             "plan": plans.current(), "plan_name": plans.PLANS[plans.current()]["name"],
-            "google_connected": google_client.is_connected(), "profile": store.profile(),
+            "google_connected": google_client.google_connected(), "profile": store.profile(),
+            "outlook_connected": _ms().is_connected(), "outlook_email": _ms().email(),
+            "outlook_available": _ms().enabled(), "mail_provider": google_client.provider(),
             "language": store.user_lang(), "currency": plans.user_currency(),
             "staff_role": admin.role_for({**u, "email": u.get("email")}),
             "nps_due": _nps_due(u), "natural_voice": _tts_on(), "realtime": _rt_on(), "onboarding_pending": _onb_pending(), "voice_gender": store.profile().get("voice_gender") or "female"}

@@ -43,7 +43,7 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=0.12.0,ota=${UPDATE_ID.slice(0, 8)}`;
+const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=0.13.0,ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
 
@@ -1592,6 +1592,16 @@ function FidusApp() {
     return () => sub.remove();
   }, []);
 
+  // voltou do navegador (conectou Google/Outlook): atualiza o estado da conta
+  useEffect(() => {
+    if (!token) return;
+    const sub = AppState.addEventListener("change", async (st) => {
+      if (st !== "active") return;
+      try { setMe(await api("/v1/me", {}, 15000)); } catch {}
+    });
+    return () => sub.remove();
+  }, [token]);
+
   async function unlock() {
     try {
       const enrolled = await LocalAuth.isEnrolledAsync();
@@ -1878,6 +1888,22 @@ function FidusApp() {
   async function reconnectGoogle() {
     try { await Linking.openURL((await api("/v1/auth/google/link", {}, 15000)).url); }
     catch (e: any) { Alert.alert("Google", errMsg(e)); }
+  }
+
+  // Outlook / Microsoft 365: abre a tela da Microsoft; ao voltar para o app, o /v1/me mostra conectado
+  async function connectOutlook() {
+    try { await Linking.openURL((await api("/v1/auth/microsoft/link", {}, 15000)).url); }
+    catch (e: any) { Alert.alert("Outlook", errMsg(e)); }
+  }
+
+  function outlookMenu() {
+    if (!me?.outlook_connected) return connectOutlook();
+    Alert.alert("Outlook", `${me.outlook_email || ""}`, [
+      { text: t("Reconectar"), onPress: connectOutlook },
+      { text: t("Desconectar"), style: "destructive", onPress: async () => {
+        try { const r = await post("/v1/auth/microsoft/disconnect", {}); setMe({ ...me, outlook_connected: false, outlook_email: "", mail_provider: r.mail_provider }); }
+        catch (e: any) { Alert.alert("Outlook", errMsg(e)); } } },
+      { text: t("Cancelar"), style: "cancel" }]);
   }
 
   async function sendText(preset?: string) {
@@ -2253,6 +2279,8 @@ function FidusApp() {
           {authOpts?.email && !emailMode && (
             <Pressable style={[s.secondary, { borderColor: c.sub, alignItems: "center", marginTop: 10, paddingVertical: 14 }]} onPress={() => setEmailMode(true)}>
               <Text style={{ color: c.text, fontSize: 16, fontWeight: "600" }}>{t("Entrar com e-mail")}</Text></Pressable>)}
+          {authOpts?.microsoft && !emailMode && (
+            <Text style={{ color: c.sub, fontSize: 13, textAlign: "center", marginTop: 8 }}>{t("Usa Outlook ou Microsoft 365? Entre com o e-mail e conecte o Outlook depois.")}</Text>)}
           {emailMode && (
             <View style={{ marginTop: 14 }}>
               {!emailSent ? (<>
@@ -2724,7 +2752,7 @@ function FidusApp() {
             {SpeechRec ? "✅" : "❌"} {t("Transcrição no celular")}{SpeechRec ? "" : ` (${t("precisa do APK novo")})`}{"\n"}
             {me?.natural_voice ? "✅" : "❌"} {t("Voz natural")}{me?.natural_voice ? "" : ` (${t("falta a chave no servidor")})`}{"\n"}
             {RTC && me?.realtime && !rtErr ? "✅" : "❌"} {t("Conversa em tempo real")}{!RTC ? ` (${t("precisa do APK novo")})` : !me?.realtime ? ` (${t("desligada no servidor")})` : rtErr ? ` (${rtErr})` : ""}{"\n"}
-            {t("Versão")}: 0.12.0 · {UPDATE_ID.slice(0, 8)}</Text>
+            {t("Versão")}: 0.13.0 · {UPDATE_ID.slice(0, 8)}</Text>
           <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
         </Card>
         <Card c={c} onPress={() => { setScreen("chat"); startOnboarding(true); }}>
@@ -2737,8 +2765,12 @@ function FidusApp() {
         </View>
         <Card c={c} onPress={reconnectGoogle}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>Google</Text>
-            <Text style={{ color: c.sub, fontSize: 14 }}>{me?.google_connected ? t("Conectado · tocar para reconectar") : t("Não conectado · tocar para conectar")}</Text></View>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{me?.google_connected ? (me?.mail_provider === "microsoft" ? t("Conectado · agenda e e-mail pelo Outlook") : t("Conectado · tocar para reconectar")) : t("Não conectado · tocar para conectar")}</Text></View>
           <Text style={{ color: c.sub }}>›</Text></Card>
+        {(me?.outlook_available || me?.outlook_connected) && <Card c={c} onPress={outlookMenu}>
+          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>Outlook · Microsoft 365</Text>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{me?.outlook_connected ? `${t("Conectado")} · ${me.outlook_email || ""}` : t("Não conectado · tocar para conectar")}</Text></View>
+          <Text style={{ color: c.sub }}>›</Text></Card>}
         {!!pendingMeet && <Card c={c} onPress={() => { const p = pendingMeet; setPendingMeet(null); setScreen("chat"); sendMeetingFile(p); }}>
           <Text style={{ color: c.text, flex: 1, fontSize: 15 }}>🎙 {t("Reenviar reunião")}</Text></Card>}
         <Card c={c} onPress={exportData}>
@@ -2796,6 +2828,16 @@ function FidusApp() {
         <View style={s.flex}>
         <FlatList
           ref={listRef} data={items} keyExtractor={(i) => i.id} contentContainerStyle={{ padding: 16, gap: 10 }}
+          ListHeaderComponent={me && !me.google_connected && !me.outlook_connected ? (
+            <View style={[s.bubble, { backgroundColor: c.card, maxWidth: "100%", gap: 10 }]}>
+              <Text style={{ color: c.text, fontSize: 15, fontWeight: "600" }}>{t("Conecte sua agenda e seu e-mail para o Fidus cuidar deles.")}</Text>
+              <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+                <Pressable onPress={reconnectGoogle} style={[s.secondary, { borderColor: c.sub, paddingVertical: 10, paddingHorizontal: 16 }]}>
+                  <Text style={{ color: c.text, fontWeight: "600" }}>Google</Text></Pressable>
+                {!!me.outlook_available && <Pressable onPress={connectOutlook} style={[s.secondary, { borderColor: c.sub, paddingVertical: 10, paddingHorizontal: 16 }]}>
+                  <Text style={{ color: c.text, fontWeight: "600" }}>Outlook · Microsoft 365</Text></Pressable>}
+              </View>
+            </View>) : null}
           keyboardShouldPersistTaps="handled" scrollEventThrottle={100}
           onScroll={(e) => {
             const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
@@ -3368,6 +3410,8 @@ const I18N_KEYS: string[] = [
   "arquivo grande demais (máx. 15 MB).",
   "Arquivo",
   "arquivo",
+  "Reconectar",
+  "Desconectar",
   "Pedido cancelado. Se algo já tinha sido feito, está na Atividade, com Desfazer.",
   "Enviar convite?",
   "O Google manda o convite por e-mail.",
@@ -3424,6 +3468,7 @@ const I18N_KEYS: string[] = [
   "Fale. O Fidus resolve.",
   "Entrar com o Google",
   "Entrar com e-mail",
+  "Usa Outlook ou Microsoft 365? Entre com o e-mail e conecte o Outlook depois.",
   "seu@email.com",
   "Mandar código",
   "Mandamos um código de 6 números para {0}. Ele vale 10 minutos.",
@@ -3561,8 +3606,10 @@ const I18N_KEYS: string[] = [
   "O Fidus pergunta de novo como você trabalha e se ajusta.",
   "Privacidade",
   "Termos de uso",
+  "Conectado · agenda e e-mail pelo Outlook",
   "Conectado · tocar para reconectar",
   "Não conectado · tocar para conectar",
+  "Conectado",
   "Reenviar reunião",
   "Exportar meus dados",
   "Um arquivo com tudo: conversas, gastos, recibos, documentos",
@@ -3575,6 +3622,7 @@ const I18N_KEYS: string[] = [
   "Sair da conta",
   "Menu",
   "Nova conversa",
+  "Conecte sua agenda e seu e-mail para o Fidus cuidar deles.",
   "Fidus está pensando…",
   "Toque no microfone, fale e toque de novo para enviar.\nEx.: “Marca visita técnica dia 12 às 4pm”,\n“Me lembra de pagar o IVA dia 5”,\n“Paguei 60 libras de gasolina, HomB” ou\n📷 mande a foto de um recibo ou documento.\n\n🎙 Reunião no topo grava e gera a ata.",
   "De 0 a 10, quanto você indicaria o Fidus a um amigo?",

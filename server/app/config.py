@@ -84,6 +84,13 @@ GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",  # planilhas: opcional (quem conectou antes reconecta para ganhar)
 ]
 
+# Microsoft (Outlook / Microsoft 365): app registrado no Microsoft Entra. Sem as chaves, a opção não aparece.
+MS_CLIENT_ID = (env("FIDUS_MS_CLIENT_ID", "") or "").strip()
+MS_CLIENT_SECRET = (env("FIDUS_MS_CLIENT_SECRET", "") or "").strip()
+MS_TENANT = (env("FIDUS_MS_TENANT", "") or "").strip() or "common"  # common = contas de empresa e pessoais
+MS_SCOPES = ["openid", "profile", "email", "offline_access", "User.Read",
+             "Calendars.ReadWrite", "Mail.Read", "Mail.Send"]
+
 DB_PATH = env("FIDUS_DB_PATH", "fidus.db")  # banco do dono (Mike); clientes têm um banco cada
 
 # Contas de clientes

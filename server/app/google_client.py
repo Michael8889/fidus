@@ -67,9 +67,11 @@ def has_required_scopes(creds: Credentials) -> bool:
     return REQUIRED.issubset(granted)
 
 
-def save_credentials(creds: Credentials, email: str | None = None) -> None:
-    """Guarda no banco do cliente atual (e de qual conta Google elas são)."""
+def save_credentials(creds: Credentials, email: str | None = None, make_default: bool = True) -> None:
+    """Guarda no banco do cliente atual (e de qual conta Google elas são). Conectar o Google faz dele a agenda/e-mail."""
     store.kv_set("google_creds", creds.to_json())
+    if make_default:
+        store.kv_set("mail_provider", "google")
     if email:
         store.kv_set("google_email", email.lower())
 
@@ -77,7 +79,7 @@ def save_credentials(creds: Credentials, email: str | None = None) -> None:
 def credentials() -> Credentials:
     raw = store.kv_get("google_creds")
     if not raw:
-        raise RuntimeError("Conta Google ainda não conectada. No app: menu ⋯ › Reconectar Google.")
+        raise RuntimeError("Agenda e e-mail ainda não conectados. No app: menu ⋯ › Configurações › Google ou Outlook.")
     # usa os escopos que o cliente autorizou (pedir outros no refresh dá erro)
     creds = Credentials.from_authorized_user_info(json.loads(raw))
     if creds.expired and creds.refresh_token:
@@ -86,15 +88,36 @@ def credentials() -> Credentials:
     return creds
 
 
-def is_connected() -> bool:
+def google_connected() -> bool:
     return store.kv_get("google_creds") is not None
 
 
+def provider() -> str | None:
+    """De onde vêm a agenda e o e-mail do cliente: 'google', 'microsoft' (Outlook) ou None (nada conectado).
+    Vale o último conectado; se só um estiver conectado, é ele."""
+    from . import ms_client
+    ms, g = ms_client.is_connected(), google_connected()
+    if ms and (store.kv_get("mail_provider") == "microsoft" or not g):
+        return "microsoft"
+    return "google" if g else None
+
+
+def is_connected() -> bool:
+    """Agenda e e-mail conectados (Google ou Outlook)."""
+    return provider() is not None
+
+
 def calendar():
+    if provider() == "microsoft":
+        from . import ms_client
+        return ms_client.Calendar()
     return build("calendar", "v3", credentials=credentials(), cache_discovery=False)
 
 
 def gmail():
+    if provider() == "microsoft":
+        from . import ms_client
+        return ms_client.Mail()
     return build("gmail", "v1", credentials=credentials(), cache_discovery=False)
 
 
