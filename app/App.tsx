@@ -43,7 +43,7 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const JS_VERSION = "0.17.0"; // única fonte da versão mostrada em Configurações e enviada ao servidor
+const JS_VERSION = "0.17.1"; // única fonte da versão mostrada em Configurações e enviada ao servidor
 const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=${JS_VERSION},ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
@@ -633,23 +633,32 @@ function FidusApp() {
   const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 1800); };
 
   // ---------- Idioma ----------
+  // Troca de idioma: só a última chamada vale. Antes, a tradução do idioma do celular (ex. pt-PT, mais lenta)
+  // podia chegar depois da do idioma escolhido (ex. inglês) e misturar os dois na tela.
+  const langSeq = useRef(0);
   async function loadLang(lang: string) {
+    const seq = ++langSeq.current;
     const raw = (lang || "pt").toLowerCase().replace("_", "-");
-    LANG = raw.startsWith("pt-pt") ? "pt-pt" : raw.split("-")[0];  // português de Portugal tem tradução própria
-    if (LANG === "pt") { TR = {}; bump(); return; }
+    const want = raw.startsWith("pt-pt") ? "pt-pt" : raw.split("-")[0];  // português de Portugal tem tradução própria
+    LANG = want;
+    if (want === "pt") { TR = {}; bump(); return; }
     let cacheFile: any = null;
+    let tr: Record<string, string> = {};
     try {
-      cacheFile = new File(Paths.document, `i18n-${LANG}.json`);
-      if (cacheFile.exists) { TR = JSON.parse(cacheFile.textSync()); bump(); }
+      cacheFile = new File(Paths.document, `i18n2-${want}.json`);  // i18n2: descarta cópias antigas que podiam estar misturadas
+      if (cacheFile.exists) tr = JSON.parse(cacheFile.textSync());
     } catch { /* sem cópia no celular */ }
+    TR = tr; bump();  // nunca herda textos do idioma anterior
     try {
       const r = await fetch(base() + "/v1/i18n", { method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token.trim()}` } : {}) },
-        body: JSON.stringify({ lang: LANG, strings: I18N_KEYS }) });
+        body: JSON.stringify({ lang: want, strings: I18N_KEYS }) });
       const j = await r.json();
+      if (seq !== langSeq.current || LANG !== want) return;  // o usuário já trocou de idioma
       if (j?.strings && Object.keys(j.strings).length) {
-        TR = { ...TR, ...j.strings }; bump();
-        try { if (cacheFile) { if (!cacheFile.exists) cacheFile.create(); cacheFile.write(JSON.stringify(TR)); } } catch {}
+        tr = { ...tr, ...j.strings };
+        TR = tr; bump();
+        try { if (cacheFile) { if (!cacheFile.exists) cacheFile.create(); cacheFile.write(JSON.stringify(tr)); } } catch {}
       }
     } catch { /* sem rede: fica com a cópia ou o português */ }
   }
