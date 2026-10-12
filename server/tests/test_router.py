@@ -218,3 +218,28 @@ def test_openai_stream_assembles_text_and_tool_calls(monkeypatch):
     assert out["text"] == "Vou ver." and got == ["Vou ", "ver."]
     assert out["tool_calls"][0]["name"] == "add_expense" and out["tool_calls"][0]["input"] == {"amount": 5}
     assert out["tool_calls"][0]["extra"] == {"extra_content": {"g": 1}} and out["usage"]["input"] == 10
+
+
+def test_search_requests_go_to_smart_model(monkeypatch):
+    _on(monkeypatch)
+    monkeypatch.setattr(store, "recent_pending", lambda hours=2: 0)
+    assert agent.route("Fidus, acha o hotel no Algarve para mim bem barato esta semana?") == "smart"
+    assert agent.route("procura um restaurante italiano em Harrow") == "smart"
+    assert agent.route("find me a cheap flight to Lisbon") == "smart"
+    assert agent.route("marca dentista amanhã às 10") == "cheap"
+
+
+def test_cheap_model_that_gives_up_is_redone_by_smart(monkeypatch):
+    _on(monkeypatch)
+    monkeypatch.setattr(store, "recent_pending", lambda hours=2: 0)
+    monkeypatch.setattr(agent, "route", lambda *a, **k: "cheap")
+    seen = []
+
+    def fake_chat(system, messages, tools_, web_search=True, model=None):
+        seen.append(model)
+        if len(seen) == 1:
+            return {"text": "Não consigo consultar preços em tempo real.", "tool_calls": [], "usage": {}}
+        return {"text": "Achei 3 opções em Faro a partir de 45 €.", "tool_calls": [], "usage": {}}
+    monkeypatch.setattr(agent.llm, "chat", fake_chat)
+    out = agent.handle("me vê umas opções")
+    assert seen == ["gemini:gemini-2.5-flash", None] and "3 opções" in out["reply"]

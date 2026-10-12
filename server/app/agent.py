@@ -86,7 +86,9 @@ SMALLTALK = re.compile(r"^\W*(oi|ol[aá]|e a[ií]|obrigad[oa]|muito obrigad[oa]|
 # Roteador: o que precisa do modelo forte. O resto (marcar, anotar gasto, lembrete, tarefa, consultar) vai no barato.
 COMPLEX = re.compile(
     r"e-?mail|\bmail\b|escrev|redig|redaç|rascunho|respond|responde|mensagem pr|convite|convida|\bata\b|"
-    r"proposta|carta|contrato|or[çc]amento|pesquis|procur\w* n[ao] (internet|web|google)|not[ií]cia|"
+    r"proposta|carta|contrato|or[çc]amento|pesquis|procur|\bach[ae]\b|encontr|\bbusc|not[ií]cia|"
+    r"hote(l|is)|hospedag|airbnb|\bvoos?\b|passage|restaurante|barat|pre[çc]o|cota[çc]|quanto (custa|t[aá])|"
+    r"\b(find|look up|cheap|hotels?|flights?|price|prices)\b|"
     r"compar|anali[sz]|planilha|sheet|https?://|www\.|resum|traduz|explic|por ?que|estrat[eé]g|plano de|"
     r"\bpix\b|\bpaga\s+(o|a|ao|à|pro|pra|para)\b|pagamento (para|pro|pra|ao)|transfer[eêi]|transfira|"
     r"\bmanda\s+(r\$|€|£)?\s*\d[\d.,]*\s*(reais|euros|libras|pounds)?\s*(pro|pra|para|ao)\b|chave pix|\biban\b|sort code|"
@@ -107,6 +109,11 @@ def route(user_text: str, image: bool = False) -> str:
     except Exception:  # noqa: BLE001
         pass
     return "cheap"
+
+
+# o modelo barato não tem busca na web: quando ele diz que "não consegue", o forte (com busca) refaz
+CANT = re.compile(r"n[ãa]o (consigo|posso|tenho (como|acesso))|em tempo real|n[ãa]o tenho acesso|"
+                  r"\bI (can(no|')t|don't have access|am unable)|real[- ]time", re.I)
 
 
 # frases de quem diz que JÁ fez algo; sem ferramenta usada no pedido, isso seria inventado
@@ -256,8 +263,9 @@ Como agir:
 - Gastos: se add_expense devolver "alerts" (duplicado, acima da média), avise em uma linha e, se for
   duplicado, pergunte se apaga. Em consultas, compare com previous_period e, no mês corrente, cite
   month_projection como previsão do mês.
-- Pesquisa na internet (preços, lojas, horários, notícias): use a busca na web quando disponível, cite
-  2 ou 3 opções com preço e loja, e diga a fonte em poucas palavras.
+- Pesquisa na internet (preços, lojas, hotéis, voos, restaurantes, horários, notícias): use a busca na web, cite
+  2 ou 3 opções com preço e loja (ou site), e diga a fonte em poucas palavras. Nunca responda só "não consigo
+  consultar": pesquise e traga opções; se o preço puder mudar, avise e mande o link para conferir/reservar.
 - Aniversários e datas anuais: create_reminder com recurrence 'RRULE:FREQ=YEARLY' e horário 09:00, alguns dias
   antes se o usuário pedir ("me avisa 3 dias antes" = 3 dias antes da data).
 - Reuniões gravadas: o app grava e o Fidus faz a ata sozinho. Para consultar, list_meetings/get_meeting.
@@ -532,6 +540,9 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
             light = None  # o barato está dando voltas: o forte termina o pedido
         if not out["tool_calls"]:
             reply = out["text"].strip()
+            if light and light == config.LLM_MODEL_CHEAP and CANT.search(reply):
+                light = None  # o barato desistiu (sem busca na web, por ex.): o forte tenta de verdade
+                continue
             if not actions and not nudged and CLAIM.search(reply):
                 # disse que fez algo sem usar nenhuma ferramenta: pede para fazer de verdade ou corrigir
                 nudged = True
