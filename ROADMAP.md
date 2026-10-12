@@ -125,6 +125,8 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [ ] Lançamento aberto e anúncios
 
 ## Já feito
+- [x] v0.14: conexões Google/Microsoft criptografadas no servidor (preparação para a avaliação CASA do Google);
+      app do Outlook registrado no Microsoft Entra; pedido de verificação do Google enviado (12/10)
 - [x] v0.13: Outlook / Microsoft 365 (agenda, lembretes, convites, link de agendamento e e-mails pelo Microsoft Graph).
       **Você**: registrar o app no Microsoft Entra + chaves no `.env`; Partner Program + verificação de editor
 - [x] v0.12: o Fidus escreve a resposta ao vivo (e mostra o que está fazendo); backend do site: lista de espera com

@@ -241,6 +241,13 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
   Mail.Send offline_access openid profile email`, e `FIDUS_MS_CLIENT_ID` / `FIDUS_MS_CLIENT_SECRET` no `.env`.
   Para clientes de empresa conseguirem autorizar: verificação de editor (Microsoft AI Cloud Partner Program).
 
+## Segurança dos dados dos clientes
+- As conexões com Google e Microsoft (chaves de acesso) ficam criptografadas no banco de cada cliente
+  (`app/crypto.py`, Fernet). A chave mestra fica em `/opt/fidus/server/deploy/keys/data.key` no servidor (criada
+  sozinha no primeiro uso, só o dono lê), fora de `/data` e dos backups; o deploy nunca sobrescreve essa pasta.
+- Guarde uma cópia dessa chave fora do servidor (ex. gerenciador de senhas). Sem ela, um backup restaurado funciona,
+  mas os clientes precisam reconectar Google/Outlook.
+
 ## Configuração
 Tudo no `server/.env` (modelo em `server/.env.example`). Trocar de IA = mudar `FIDUS_LLM_PROVIDER`.
 Reconectar o Google: no app, menu ⋯ › Reconectar Google.

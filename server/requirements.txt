@@ -12,3 +12,4 @@ google-auth-oauthlib>=1.2
 tzdata>=2024.1
 requests>=2.31
 openpyxl
+cryptography>=42

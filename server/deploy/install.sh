@@ -12,7 +12,7 @@ say() { echo -e "\n\033[1;32m==> $*\033[0m"; }
 warn() { echo -e "\033[1;33m[aviso] $*\033[0m"; }
 
 say "1/5 Dados (banco e recibos)"
-mkdir -p deploy/data/receipts deploy/models
+mkdir -p deploy/data/receipts deploy/models deploy/keys && chmod 700 deploy/keys  # keys: chave de criptografia, fora do backup
 if [ -f fidus.db ] && [ ! -f deploy/data/fidus.db ]; then
   mv fidus.db deploy/data/fidus.db && echo "Banco do seu computador copiado (histórico e conexão Google)."
 fi

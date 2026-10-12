@@ -12,6 +12,7 @@ services:
     volumes:
       - ./data:/data
       - ./models:/models
+      - ./keys:/keys  # chave que criptografa as conexões dos clientes (fora de /data e dos backups)
     ports:
       - "127.0.0.1:${FIDUS_PORT:-8095}:8000"
     mem_limit: 2g

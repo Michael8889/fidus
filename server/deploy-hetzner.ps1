@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 $pkg = Join-Path $env:TEMP "fidus-server.tgz"
 Write-Host "Empacotando (sem .venv e caches)..." -ForegroundColor Yellow
-tar -czf $pkg --exclude=.venv --exclude=__pycache__ --exclude=.pytest_cache --exclude=deploy/data --exclude=deploy/models -C .. server
+tar -czf $pkg --exclude=.venv --exclude=__pycache__ --exclude=.pytest_cache --exclude=deploy/data --exclude=deploy/models --exclude=deploy/keys -C .. server
 Write-Host "Enviando para $Server (vai pedir a senha)..." -ForegroundColor Yellow
 scp $pkg "${Server}:/tmp/fidus-server.tgz"
 Write-Host "Instalando no servidor (vai pedir a senha de novo)..." -ForegroundColor Yellow

@@ -138,13 +138,29 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# segredos dos clientes (chaves de acesso ao Google e à Microsoft): gravados criptografados (ver crypto.py)
+SECRET_KEYS = {"google_creds", "ms_tokens"}
+
+
 def kv_get(k: str) -> str | None:
     with _conn() as c:
         row = c.execute("SELECT v FROM kv WHERE k=?", (k,)).fetchone()
-        return row["v"] if row else None
+    if not row:
+        return None
+    v = row["v"]
+    if k in SECRET_KEYS and v:
+        from . import crypto
+        if not crypto.is_encrypted(v):
+            kv_set(k, v)  # gravado antes da criptografia: criptografa agora
+            return v
+        return crypto.decrypt(v)
+    return v
 
 
 def kv_set(k: str, v: str) -> None:
+    if k in SECRET_KEYS and v:
+        from . import crypto
+        v = crypto.encrypt(v)
     with _conn() as c:
         c.execute("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", (k, v))
 
