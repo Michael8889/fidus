@@ -62,5 +62,43 @@ def transcribe(path: str, initial_prompt: str | None = COMMAND_PROMPT, beam_size
     return " ".join(s.text.strip() for s in segments).strip()
 
 
+def _openai_ok() -> bool:
+    return config.TRANSCRIBE != "local" and bool((getattr(config, "OPENAI_API_KEY", "") or "").strip())
+
+
+def transcribe_fast(path: str, lang: str | None = None, initial_prompt: str | None = COMMAND_PROMPT) -> str:
+    """Pedido falado (segundos de áudio): OpenAI quando configurada (~1 s, entende melhor nomes e sotaque);
+    se falhar ou não houver chave, o Whisper local de sempre."""
+    import logging
+    import os
+    if _openai_ok() and os.path.getsize(path) < 24 * 1024 * 1024:
+        try:
+            import requests
+
+            from . import store
+            code = (lang or "").split("-")[0].lower()
+            data = {"model": config.TRANSCRIBE_MODEL, "response_format": "json"}
+            if code in ("pt", "en", "es", "fr", "de", "it", "ms"):
+                data["language"] = code
+            if initial_prompt:
+                data["prompt"] = initial_prompt
+            with open(path, "rb") as f:
+                r = requests.post("https://api.openai.com/v1/audio/transcriptions", data=data, timeout=20,
+                                  files={"file": (os.path.basename(path), f)},
+                                  headers={"Authorization": f"Bearer {config.OPENAI_API_KEY.strip()}"})
+            r.raise_for_status()
+            j = r.json()
+            u = j.get("usage") or {}
+            try:
+                store.add_usage({"model": config.TRANSCRIBE_MODEL, "calls": 1, "input": int(u.get("input_tokens") or 0),
+                                 "output": int(u.get("output_tokens") or 0)})
+            except Exception:  # noqa: BLE001
+                pass
+            return (j.get("text") or "").strip()
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger("fidus.transcribe").warning("transcrição OpenAI falhou (%s); usando a local", str(e)[:160])
+    return transcribe(path, initial_prompt, beam_size=1)
+
+
 def duration_seconds(path: str) -> float:
     return _load_audio(path).size / SAMPLE_RATE

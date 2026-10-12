@@ -59,7 +59,7 @@ def _call(spec, system, messages, tools, web_search):
         return _anthropic(system, messages, tools, web_search, model)
     sys_text = "\n\n".join(system) if isinstance(system, (tuple, list)) else system
     if prov == "gemini":
-        return _openai_compat(sys_text, messages, tools, model, GEMINI_BASE_URL, config.GEMINI_API_KEY)
+        return _openai_compat(sys_text, messages, tools, model, GEMINI_BASE_URL, config.GEMINI_API_KEY, gemini=True)
     if prov == "openai_compat":
         return _openai_compat(sys_text, messages, tools, model)
     raise ValueError(f"Provedor desconhecido: {prov}")
@@ -94,6 +94,7 @@ PRICES = {"claude-sonnet-5-5": (2.0, 10.0, 2.5, 0.2), "claude-haiku-4-5": (1.0, 
           "gemini-2.5-flash-lite": (0.10, 0.40, 0, 0), "gemini-2.5-flash": (0.25, 1.50, 0, 0),
           "gemini-3.8-flash": (0.75, 3.75, 0, 0.075),
           "gpt-5-mini": (0.25, 2.0, 0, 0),
+          "gpt-4o-mini-transcribe": (1.25, 5.0, 0, 0),  # transcrição dos pedidos falados (~US$ 0,003/min)
           # voz em tempo real (preço do áudio, que é o que pesa; set/2026)
           "realtime-gpt-realtime-2.1-mini": (10.0, 20.0, 0, 0.30), "realtime-gpt-realtime": (32.0, 64.0, 0, 0.40),
           # voz do Google: preço por milhão de letras (fica em "input"); o plano grátis mensal não é descontado aqui
@@ -174,8 +175,11 @@ def _anthropic(system, messages, tools, web_search=True, model=None):
             return client.messages.create(**kw)
         with client.messages.stream(**kw) as st:  # o texto aparece no app enquanto é escrito
             for ev in st:
-                if getattr(ev, "type", "") == "content_block_delta" and getattr(ev.delta, "type", "") == "text_delta":
+                et = getattr(ev, "type", "")
+                if et == "content_block_delta" and getattr(ev.delta, "type", "") == "text_delta":
                     _emit(ev.delta.text)
+                elif et == "content_block_start" and getattr(ev.content_block, "type", "") == "server_tool_use":
+                    _emit({"status": "web_search"})  # o app mostra "Pesquisando na web…"
             return st.get_final_message()
 
     for _ in range(3):  # "pause_turn": a busca longa pede para continuar a mesma resposta
@@ -208,7 +212,12 @@ def _anthropic(system, messages, tools, web_search=True, model=None):
 
 
 # ---------- OpenAI-compatível (OpenAI, Mistral, vLLM, Ollama, etc.) ----------
-def _openai_compat(system, messages, tools, model=None, base_url=None, api_key=None):
+# Gemini 3 "pensa" antes de responder (segundos a mais). Para o Fidus (pedidos curtos), o mínimo basta.
+# Se o modelo não aceitar o nível, tenta o próximo e lembra o que funcionou.
+_GEMINI_EFFORTS = ["minimal", "low", None]
+
+
+def _openai_compat(system, messages, tools, model=None, base_url=None, api_key=None, gemini=False):
     from openai import OpenAI
 
     client = OpenAI(base_url=base_url or config.OPENAI_COMPAT_BASE_URL,
@@ -230,9 +239,19 @@ def _openai_compat(system, messages, tools, model=None, base_url=None, api_key=N
         else:
             msgs.append({"role": m["role"], "content": m["content"]})
     extra = {"tools": [{"type": "function", "function": t} for t in tools]} if tools else {}
-    if STREAM.get():
-        return _openai_stream(client, model, msgs, extra)
-    resp = client.chat.completions.create(model=model or config.LLM_MODEL, messages=msgs, **extra)
+    while True:
+        effort = _GEMINI_EFFORTS[0] if gemini else None
+        kw = {**extra, **({"reasoning_effort": effort} if effort else {})}
+        try:
+            if STREAM.get():
+                return _openai_stream(client, model, msgs, kw)
+            resp = client.chat.completions.create(model=model or config.LLM_MODEL, messages=msgs, **kw)
+            break
+        except Exception as e:  # noqa: BLE001
+            if effort and "reasoning" in str(e).lower() and len(_GEMINI_EFFORTS) > 1:
+                _GEMINI_EFFORTS.pop(0)  # nível não aceito por este modelo: tenta o próximo
+                continue
+            raise
     choice = resp.choices[0].message
     import uuid
     # campos extras do provedor (ex. a "assinatura do raciocínio" do Gemini 3) voltam iguais na próxima chamada

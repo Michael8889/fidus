@@ -1036,9 +1036,9 @@ async def voice(audio: UploadFile = File(...)):
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
         f.write(await audio.read())
         path = f.name
-    from .transcribe import prompt_for
+    from .transcribe import prompt_for, transcribe_fast
     try:
-        text = transcribe(path, prompt_for(store.user_lang()))
+        text = transcribe_fast(path, store.user_lang(), prompt_for(store.user_lang()))
     finally:
         os.unlink(path)
     return _after_transcript(text, kind="voz")
@@ -1070,8 +1070,11 @@ def voice_b64(body: VoiceB64In):
         # modo conversa: transcrição mais rápida (busca simples); áudio gravado: busca mais cuidadosa
         import time as _tm
         _t0 = _tm.time()
-        text = transcribe(path, prompt_for(store.user_lang()), beam_size=1 if body.mode == "voice" else 5)
+        agent.partial_set(body.request_id, "_listen")  # o app já mostra "Ouvindo seu áudio…"
+        from .transcribe import transcribe_fast
+        text = transcribe_fast(path, store.user_lang(), prompt_for(store.user_lang()))
         metrics.record_stage("transcricao", int((_tm.time() - _t0) * 1000))
+        agent.partial_set(body.request_id, "_", transcript=text)  # e o que a pessoa disse, antes da resposta
     finally:
         os.unlink(path)
     if body.transcribe_only:  # boas-vindas respondidas por voz: só o texto, sem passar pelo assistente

@@ -33,13 +33,13 @@ STATUS = {  # o que aparece no app enquanto a ferramenta roda
            "create_reminder": "Criando o lembrete…", "add_expense": "Lançando o gasto…", "summarize_expenses": "Somando os gastos…",
            "search_emails": "Procurando nos e-mails…", "read_email": "Lendo o e-mail…", "prepare_new_email": "Escrevendo o e-mail…",
            "prepare_email_reply": "Escrevendo a resposta…", "find_place": "Procurando o endereço…",
-           "route_distance": "Calculando a rota…", "prepare_payment": "Preparando o pagamento…", "web_search": "Pesquisando…",
+           "route_distance": "Calculando a rota…", "prepare_payment": "Preparando o pagamento…", "web_search": "Pesquisando na web…", "_listen": "Ouvindo seu áudio…",
            "_": "Pensando…"},
     "en": {"list_calendar_events": "Checking your calendar…", "create_calendar_event": "Adding to your calendar…",
            "create_reminder": "Setting the reminder…", "add_expense": "Logging the expense…", "summarize_expenses": "Adding up expenses…",
            "search_emails": "Searching your email…", "read_email": "Reading the email…", "prepare_new_email": "Writing the email…",
            "prepare_email_reply": "Writing the reply…", "find_place": "Looking up the address…",
-           "route_distance": "Working out the route…", "prepare_payment": "Preparing the payment…", "web_search": "Searching…",
+           "route_distance": "Working out the route…", "prepare_payment": "Preparing the payment…", "web_search": "Searching the web…", "_listen": "Listening to your audio…",
            "_": "Thinking…"},
 }
 
@@ -50,7 +50,21 @@ def _pkey(request_id: str) -> str:
 
 def partial(request_id: str) -> dict:
     p = _PARTIAL.get(_pkey(request_id))
-    return {"text": p["text"], "status": p["status"], "done": p["done"]} if p else {"text": "", "status": "", "done": False}
+    if not p:
+        return {"text": "", "status": "", "done": False}
+    return {"text": p["text"], "status": p["status"], "done": p["done"], "transcript": p.get("transcript", "")}
+
+
+def partial_set(request_id: str | None, status_key: str | None = None, transcript: str | None = None) -> None:
+    """Antes da IA (ex. transcrevendo o áudio): o app já mostra o que está acontecendo e o que a pessoa disse."""
+    import time as _t
+    if not request_id:
+        return
+    buf = _PARTIAL.setdefault(_pkey(request_id), {"text": "", "status": "", "done": False, "t": _t.time()})
+    if status_key:
+        buf["status"] = STATUS["en" if store.user_lang() == "en" else "pt"].get(status_key, buf["status"])
+    if transcript is not None:
+        buf["transcript"] = transcript[:2000]
 
 
 import contextvars as _cv
@@ -65,11 +79,17 @@ def _partial_start(request_id: str | None):
         _PARTIAL.pop(k, None)
     if not request_id:
         return None
-    buf = {"text": "", "status": STATUS["en" if store.user_lang() == "en" else "pt"]["_"], "done": False, "t": now}
+    old = _PARTIAL.get(_pkey(request_id)) or {}
+    buf = {"text": "", "status": STATUS["en" if store.user_lang() == "en" else "pt"]["_"], "done": False, "t": now,
+           "transcript": old.get("transcript", "")}
     _PARTIAL[_pkey(request_id)] = buf
 
     def cb(piece):
         if piece is None:
+            buf["text"] = ""
+        elif isinstance(piece, dict):  # o que o Fidus está fazendo (ex. pesquisando na web)
+            lang = STATUS["en" if store.user_lang() == "en" else "pt"]
+            buf["status"] = lang.get(piece.get("status", ""), buf["status"])
             buf["text"] = ""
         else:
             buf["text"] += piece

@@ -66,6 +66,10 @@ UPGRADE_URL = env("FIDUS_UPGRADE_URL", "")  # página de planos/checkout; vazio 
 
 # Transcrição local (faster-whisper): tiny, base, small, medium, large-v3
 WHISPER_MODEL = env("FIDUS_WHISPER_MODEL", "small")
+# Transcrição dos pedidos falados: "auto" = OpenAI (rápida e mais precisa) quando há FIDUS_OPENAI_API_KEY, senão local.
+# "local" = sempre no servidor (Whisper). Reuniões gravadas continuam sempre locais.
+TRANSCRIBE = (env("FIDUS_TRANSCRIBE", "") or "auto").strip().lower()
+TRANSCRIBE_MODEL = (env("FIDUS_TRANSCRIBE_MODEL", "") or "gpt-4o-mini-transcribe").strip()
 
 # Google OAuth
 # Voz natural (Google Text-to-Speech). Sem a chave, o app usa a voz do celular.
