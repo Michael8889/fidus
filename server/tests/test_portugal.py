@@ -131,3 +131,16 @@ def test_ready_translations_always_served_even_when_rate_limited(monkeypatch):
     for _ in range(35):  # passa do limite de quem ainda não entrou: os textos prontos continuam a vir
         r = c.post("/v1/i18n", json={"lang": "de", "strings": [key]}, headers={"x-real-ip": "10.8.8.8"})
         assert r.status_code == 200 and r.json()["strings"].get(key) == "ÜBERSETZT"
+
+
+def test_translation_answers_at_once_even_if_ai_hangs(monkeypatch, tmp_path):
+    import time
+    from app import i18n
+    keys = ["Pronto", "Guardar"]
+    monkeypatch.setattr(i18n, "_allowed", lambda: set(keys))
+    monkeypatch.setattr(i18n, "_path", lambda lang: str(tmp_path / f"{lang}.json"))
+    (tmp_path / "fi.json").write_text('{"Pronto": "Valmis"}', encoding="utf-8")
+    monkeypatch.setattr(i18n, "_ask", lambda lang, chunk: time.sleep(3) or {})
+    t0 = time.time()
+    out = i18n.translate("fi", keys)
+    assert out == {"Pronto": "Valmis"} and time.time() - t0 < 1  # não espera a IA travada

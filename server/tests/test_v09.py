@@ -201,11 +201,17 @@ def test_i18n_translates_once_and_caches(monkeypatch):
         strings = json.loads(messages[-1]["content"])
         return {"text": json.dumps({s: f"[ms] {s}" for s in strings}), "tool_calls": []}
     monkeypatch.setattr(llm, "chat", fake)
+    import time as _t
     body = {"lang": "ms", "strings": ["Nova conversa", "Tarefas"]}
-    r = client.post("/v1/i18n", json=body).json()
+    r = client.post("/v1/i18n", json=body).json()  # responde na hora; a tradução é gerada em segundo plano
+    for _ in range(50):
+        if r["strings"].get("Tarefas"):
+            break
+        _t.sleep(0.05)
+        r = client.post("/v1/i18n", json=body).json()
     assert r["strings"]["Tarefas"] == "[ms] Tarefas"
     client.post("/v1/i18n", json=body)
-    assert len(calls) == 1  # segunda vez veio do arquivo
+    assert len(calls) == 1  # depois veio do arquivo
     assert client.post("/v1/i18n", json={"lang": "pt", "strings": ["x"]}).json()["strings"] == {}
     assert client.post("/v1/i18n", json={"lang": "xx", "strings": ["x"]}).json()["strings"] == {}
 

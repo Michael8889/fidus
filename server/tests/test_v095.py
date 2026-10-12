@@ -112,7 +112,7 @@ def test_translation_retries_in_smaller_blocks(monkeypatch, tmp_path):
             return {}  # bloco grande: a IA "estoura" e não devolve nada
         return {k: k.replace("Texto número", "Text number") for k in chunk}
     monkeypatch.setattr(i18n, "_ask", ask)
-    out = i18n.translate("en", keys)
+    out = i18n.translate("en", keys, wait=True)
     assert len(out) == 60 and out["Texto número 7"] == "Text number 7"
     assert max(calls) <= i18n.CHUNK
 

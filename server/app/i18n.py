@@ -107,20 +107,19 @@ def _ask(lang: str, strings: list[str]) -> dict:
     return {k: v for k, v in data.items() if isinstance(k, str) and isinstance(v, str) and k in strings and v.strip()}
 
 
-def translate(lang: str, strings: list[str], generate: bool = True) -> dict:
-    """{texto_em_português: tradução}. Português ou idioma desconhecido → {} (o app usa o original)."""
-    lang = norm(lang)
-    if not lang or lang == "pt":
-        return {}
-    ok = _allowed()
-    want = list(dict.fromkeys(s for s in strings[:MAX_PER_REQUEST] if isinstance(s, str) and s in ok))
-    cache = _load(lang)
-    missing = [s for s in want if s not in cache]
-    if missing and generate and len(cache) < MAX_PER_LANG:
+_running: dict = {}  # idioma -> quando começou a gerar (no fundo)
+GEN_STALE = 180      # segundos: geração parada há mais que isto pode recomeçar
+
+
+def _generate(lang: str, missing: list[str]) -> None:
+    """Gera as traduções que faltam (IA) e grava no arquivo. Roda em segundo plano, um idioma de cada vez."""
+    from concurrent.futures import ThreadPoolExecutor
+    try:
         with _lock(lang):
             cache = _load(lang)
-            missing = [s for s in want if s not in cache][: MAX_PER_LANG - len(cache)]
-            from concurrent.futures import ThreadPoolExecutor
+            missing = [s for s in missing if s not in cache][: max(0, MAX_PER_LANG - len(cache))]
+            if not missing:
+                return
             # blocos pequenos: bloco grande demais estoura a resposta da IA e volta sem nada (o menu ficava misturado)
             chunks = [missing[i:i + CHUNK] for i in range(0, len(missing), CHUNK)]
 
@@ -144,6 +143,32 @@ def translate(lang: str, strings: list[str], generate: bool = True) -> dict:
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(cache, f, ensure_ascii=False)
             os.replace(tmp, _path(lang))
+    finally:
+        _running.pop(lang, None)
+
+
+def translate(lang: str, strings: list[str], generate: bool = True, wait: bool = False) -> dict:
+    """{texto_em_português: tradução}. Português ou idioma desconhecido → {} (o app usa o original).
+
+    Responde NA HORA com o que já está traduzido; o que falta é gerado em segundo plano e chega no próximo pedido
+    (o app tenta de novo). Antes, o pedido esperava a IA e, se ela travava, o app ficava sem tradução nenhuma."""
+    import time as _time
+    lang = norm(lang)
+    if not lang or lang == "pt":
+        return {}
+    ok = _allowed()
+    want = list(dict.fromkeys(s for s in strings[:MAX_PER_REQUEST] if isinstance(s, str) and s in ok))
+    cache = _load(lang)
+    missing = [s for s in want if s not in cache]
+    if missing and generate and len(cache) < MAX_PER_LANG:
+        if wait:  # testes e textos do servidor: espera a geração
+            _generate(lang, missing)
+            cache = _load(lang)
+        else:
+            started = _running.get(lang)
+            if not started or _time.time() - started > GEN_STALE:
+                _running[lang] = _time.time()
+                threading.Thread(target=_generate, args=(lang, missing), daemon=True).start()
     return {s: cache[s] for s in want if s in cache}
 
 

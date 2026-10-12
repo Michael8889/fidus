@@ -946,7 +946,7 @@ def tts_phrase(body: TtsIn):
     if not tts.enabled():
         return {"audio": None}
     lang = store.user_lang()
-    text = body.phrase if lang == "pt" else (i18n.translate(lang, [body.phrase]).get(body.phrase) or body.phrase)
+    text = body.phrase if lang == "pt" else (i18n.translate(lang, [body.phrase], wait=True).get(body.phrase) or body.phrase)
     return {"audio": tts.synthesize(text, lang, cache=True)}
 
 
