@@ -233,8 +233,20 @@ def _country_line() -> str:
         return ""
 
 
+def _member_line() -> str:
+    m = store.member()
+    if not m:
+        return ""
+    return (f"\n- QUEM ESTÁ A FALAR AGORA: {m['name'] or m['email']}, a 2.ª pessoa desta conta (o PERFIL acima é do "
+            "titular). Trate esta pessoa pelo nome dela. Ela partilha despesas, faturas, lembretes, tarefas, documentos "
+            "e agenda, mas NÃO tem e-mails, Google, plano nem definições: se pedir, diga numa frase que isso é só do "
+            "titular.")
+
+
 def _mail_line() -> str:
     """Agenda e e-mail do Outlook: as mesmas ferramentas, com dois detalhes que mudam."""
+    if store.member():
+        return ""
     try:
         from . import google_client
         line = ""
@@ -262,7 +274,7 @@ def _context() -> str:
 - Nome: {prof["name"] or "ainda não sabemos (pergunte quando fizer sentido)"}
 - Idioma: {i18n.name(prof.get("language") or "pt")}
 - Carteiras (empresas/contas): {", ".join(f'{w["name"]} ({w["currency"] or "moeda padrão"})' for w in store.wallets())}
-- Moeda padrão: {prof["currency"]}{_prefs(prof)}{_mail_line()}{_country_line()}{_portugal_line()}
+- Moeda padrão: {prof["currency"]}{_prefs(prof)}{_mail_line()}{_country_line()}{_portugal_line()}{_member_line()}
 
 AGORA são {now.strftime('%H:%M')} ({prof["timezone"]}).
 HOJE é {dias[now.weekday()]}, {now.strftime('%d/%m/%Y')} ({now.strftime('%Y-%m-%d')}).

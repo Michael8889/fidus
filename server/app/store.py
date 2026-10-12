@@ -131,6 +131,8 @@ def _create(path: str) -> None:
         cols = {r[1] for r in c.execute("PRAGMA table_info(messages)").fetchall()}
         if "conv" not in cols:  # banco antigo: tudo o que já existe vira a conversa 1
             c.execute("ALTER TABLE messages ADD COLUMN conv INTEGER NOT NULL DEFAULT 1")
+        if "author" not in {r[1] for r in c.execute("PRAGMA table_info(messages)").fetchall()}:
+            c.execute("ALTER TABLE messages ADD COLUMN author TEXT")  # 2.ª pessoa da conta: conversas só dela
         ecols = {r[1] for r in c.execute("PRAGMA table_info(expenses)").fetchall()}
         for col in ("supplier_nif", "buyer_nif", "irs_category"):  # Portugal: NIF da fatura e categoria do e-Fatura
             if col not in ecols:
@@ -177,10 +179,22 @@ def kv_del(k: str) -> None:
         c.execute("DELETE FROM kv WHERE k=?", (k,))
 
 
+def member() -> dict | None:
+    """2.ª pessoa da conta (Premium) falando agora, ou None quando é o titular."""
+    u = CURRENT.get() or {}
+    return {"id": u["member_id"], "name": u.get("member_name") or "", "email": u.get("member_email") or ""} \
+        if u.get("member_id") else None
+
+
+def _author() -> str:
+    m = member()
+    return m["id"] if m else ""
+
+
 def add_message(role: str, content: str) -> None:
     with _conn() as c:
-        c.execute("INSERT INTO messages(role,content,created_at,conv) VALUES(?,?,?,?)",
-                  (role, content, now(), current_conv()))
+        c.execute("INSERT INTO messages(role,content,created_at,conv,author) VALUES(?,?,?,?,?)",
+                  (role, content, now(), current_conv(), _author() or None))
 
 
 def recent_messages(limit: int = 10, conv: int | None = None) -> list[dict]:
@@ -192,9 +206,21 @@ def recent_messages(limit: int = 10, conv: int | None = None) -> list[dict]:
 
 
 # ---------- Conversas (menu: Nova conversa / Conversas anteriores) ----------
+def _conv_key() -> str:
+    a = _author()
+    return f"conv:{a}" if a else "conv"
+
+
 def current_conv() -> int:
+    raw = kv_get(_conv_key())
+    if not raw and _author():  # 2.ª pessoa: começa numa conversa própria, nunca na do titular
+        with _conn() as c:
+            top = c.execute("SELECT COALESCE(MAX(conv),0) FROM messages").fetchone()[0]
+        nxt = max(top, int(kv_get("conv") or 1)) + 1
+        kv_set(_conv_key(), str(nxt))
+        return nxt
     try:
-        return int(kv_get("conv") or 1)
+        return int(raw or 1)
     except ValueError:
         return 1
 
@@ -207,16 +233,18 @@ def new_conversation() -> int:
         if not used:
             return cur
         top = c.execute("SELECT COALESCE(MAX(conv),0) FROM messages").fetchone()[0]
-    nxt = max(top, cur) + 1
-    kv_set("conv", str(nxt))
+    others = [int(r["v"]) for r in select("SELECT v FROM kv WHERE k LIKE 'conv%'") if str(r["v"]).isdigit()]
+    nxt = max([top, cur] + others) + 1
+    kv_set(_conv_key(), str(nxt))
     return nxt
 
 
 def open_conversation(conv: int) -> bool:
     with _conn() as c:
-        ok = c.execute("SELECT 1 FROM messages WHERE conv=? LIMIT 1", (conv,)).fetchone()
+        ok = c.execute("SELECT 1 FROM messages WHERE conv=? AND COALESCE(author,'')=? LIMIT 1",
+                       (conv, _author())).fetchone()
     if ok:
-        kv_set("conv", str(conv))
+        kv_set(_conv_key(), str(conv))
     return bool(ok)
 
 
@@ -224,7 +252,8 @@ def list_conversations(limit: int = 50) -> list[dict]:
     import re
     with _conn() as c:
         rows = c.execute("SELECT conv, COUNT(*) n, MIN(created_at) started, MAX(created_at) last, MAX(id) mx "
-                         "FROM messages GROUP BY conv ORDER BY mx DESC LIMIT ?", (limit,)).fetchall()
+                         "FROM messages WHERE COALESCE(author,'')=? GROUP BY conv ORDER BY mx DESC LIMIT ?",
+                         (_author(), limit)).fetchall()
         out = []
         for r in rows:
             first = c.execute("SELECT content FROM messages WHERE conv=? AND role='user' ORDER BY id LIMIT 1",
@@ -285,6 +314,9 @@ def update_pending(pid: str, status: str, payload: dict | None = None, only_if: 
 
 # ---------- Atividade: registro do que o Fidus fez ----------
 def add_activity(kind: str, title: str, detail: str = "", status: str = "feito", ref: str | None = None) -> int:
+    m = member()
+    if m:  # na conta com 2 pessoas, a Atividade mostra quem fez
+        detail = f"{detail} · {m['name'] or m['email']}".strip(" ·")
     with _conn() as c:
         cur = c.execute("INSERT INTO activities(kind,title,detail,status,ref,created_at) VALUES(?,?,?,?,?,?)",
                         (kind, title, detail, status, ref, now()))

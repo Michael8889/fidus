@@ -84,6 +84,8 @@ def init() -> None:
             c.execute("ALTER TABLE users ADD COLUMN google_sub TEXT")
         c.execute("INSERT OR IGNORE INTO users(id,email,name,created_at) VALUES(?,?,?,?)",
                   (store.OWNER_ID, config.OWNER_EMAIL or None, config.USER_NAME, store.now()))
+    from . import team
+    team.init()  # 2.ª pessoa na conta e acesso do contabilista
 
 
 def _h(x: str) -> str:
@@ -92,7 +94,12 @@ def _h(x: str) -> str:
 
 # ---------- usuários ----------
 def user_ctx(row: dict) -> dict:
-    """Dicionário que o store usa para abrir o banco certo."""
+    """Dicionário que o store usa para abrir o banco certo. A 2.ª pessoa de uma conta abre o banco do titular."""
+    if row.get("member_of"):
+        from . import team
+        m = team.member_ctx(row)
+        if m:
+            return m
     return {"id": row["id"], "email": row.get("email"), "name": row.get("name"),
             "is_owner": row["id"] == store.OWNER_ID, **store.user_paths(row["id"])}
 
@@ -129,6 +136,9 @@ def can_signup(email: str, ref: str | None = None) -> tuple[bool, str | None]:
         inv = c.execute("SELECT plan FROM invites WHERE lower(email)=lower(?)", (email,)).fetchone()
     if inv:
         return True, inv["plan"]
+    from . import team
+    if team.member_invite_for(email):
+        return True, None  # 2.ª pessoa convidada por um titular Premium
     if ref and config.BETA_INVITES > 0 and referrer_for_code(ref):
         if beta_invites_left(referrer_for_code(ref)["id"]) > 0:
             return True, config.BETA_PLAN  # beta: cada membro traz até N amigos
@@ -184,8 +194,11 @@ def find_or_create(email: str, name: str | None, sub: str | None = None, ref: st
         c.execute("INSERT INTO users(id,email,name,created_at,google_sub) VALUES(?,?,?,?,?)",
                   (uid, email, name, store.now(), sub))
         c.execute("UPDATE invites SET used_at=? WHERE lower(email)=lower(?)", (store.now(), email))
+    from . import plans, team
+    team.link_member_user(uid, email)
     u = get_user(uid)
-    from . import plans
+    if u.get("member_of"):
+        return u  # usa o banco do titular: nada a preparar
     with store.as_user(user_ctx(u)):
         store.init_db()
         plans.set_plan(invite_plan or config.NEW_USER_PLAN)
@@ -279,6 +292,10 @@ def user_for_token(token: str) -> dict | None:
     with _db() as c:
         r = c.execute("SELECT u.* FROM tokens t JOIN users u ON u.id=t.user_id "
                       "WHERE t.hash=? AND t.revoked=0 AND u.status='ativo'", (_h(token),)).fetchone()
+        if r and r["member_of"]:
+            from . import team
+            if not team.member_ctx(dict(r)):  # titular removeu a pessoa ou a conta dele saiu
+                return None
         if r and time.time() - _seen.get(r["id"], 0) > 300:  # grava "visto por último" no máx. a cada 5 min
             _seen[r["id"]] = time.time()
             c.execute("UPDATE users SET last_seen=? WHERE id=?", (store.now(), r["id"]))

@@ -186,11 +186,18 @@ TOOLS += features.TOOLS + meetings.TOOLS + booking.TOOLS + web_tools.TOOLS + pay
 _EXPENSE_FIELDS = {"buyer_nif": "PT", "supplier_nif": "PT", "irs_category": "PT", "supplier_vat_number": "GB"}
 
 
+# 2.ª pessoa da conta: nada que leia ou fale pelo e-mail/Google do titular, nem plano e definições
+MEMBER_BLOCKED = {"search_emails", "read_email", "prepare_email_reply", "prepare_new_email", "prepare_minutes_email",
+                  "prepare_event_invite", "update_profile", "offer_upgrade", "update_booking_settings", "read_sheet",
+                  "update_cells", "append_rows", "remember_sheet"}
+
+
 def available_tools() -> list[dict]:
     """Ferramentas do país do pacote do cliente: as dos outros países nem chegam à IA (mais rápido e mais barato)."""
     out = []
+    member = store.member()
     for t in TOOLS:
-        if not countries.tool_allowed(t["name"]):
+        if not countries.tool_allowed(t["name"]) or (member and t["name"] in MEMBER_BLOCKED):
             continue
         if t["name"] == "add_expense":
             props = {k: v for k, v in t["parameters"]["properties"].items()
@@ -238,6 +245,8 @@ def run(name: str, args: dict) -> dict:
         or uk.DISPATCH.get(name)
     if name == "save_document":
         fn = lambda **a: features.save_document(**a, _path=CURRENT_RECEIPT.get("path"))  # noqa: E731
+    if store.member() and name in MEMBER_BLOCKED:
+        return {"error": "isto é só para o titular da conta (e-mails, Google e definições são dele)"}
     if name == "offer_upgrade":
         return {"ok": True, "upsell": plans.upsell(args.get("feature", "extra_business"))}
     if not fn:

@@ -38,6 +38,8 @@ class UserContext:
 
 
 app.include_router(admin.router)  # painel da empresa em /admin
+from . import accountant_portal  # noqa: E402
+app.include_router(accountant_portal.router)  # portal do contabilista em /contabilista
 app.add_middleware(metrics.Middleware)  # mede tempo e erros (fica por dentro: já sabe quem é o cliente)
 app.add_middleware(UserContext)
 
@@ -58,11 +60,24 @@ if (os.getenv("FIDUS_BACKUP_AUTO", "1") or "1") not in ("0", "false", "no"):
     newsletter.start_hourly()  # dicas por e-mail: só para quem aceitou
 
 
+# 2.ª pessoa da conta (Premium): usa a conta do titular, mas não mexe em plano, ligações, definições, nem na conta
+MEMBER_DENY = ("/v1/billing", "/v1/account/", "/v1/auth/google/link", "/v1/auth/microsoft/", "/v1/mail_provider",
+               "/v1/countries", "/v1/members", "/v1/accountant", "/v1/admin", "/v1/referral", "/v1/marketing",
+               "/v1/onboarding", "/v1/auth/logout_all", "/v1/wallets", "/v1/nps")
+
+
 def auth(request: Request):
     if store.CURRENT.get() is None:
         h = request.headers.get("authorization", "")
         # o app mostra "sua conta foi aberta em outro aparelho" quando o motivo é esse
         raise HTTPException(401, accounts.token_problem(h[7:].strip()) or "token inválido")
+    if store.member():
+        path = request.url.path
+        if (request.method != "GET" and path == "/v1/plan") or path.startswith(MEMBER_DENY) and not (
+                request.method == "GET" and path == "/v1/wallets"):
+            raise HTTPException(403, "só o titular da conta pode fazer isto")
+        if not plans.allows("extra_user"):
+            raise HTTPException(403, "o plano desta conta já não inclui a 2.ª pessoa; fale com o titular")
 
 
 def owner_only():
@@ -666,7 +681,10 @@ def me(request: Request):
             "mail_accounts": google_client.mail_accounts(), "google_email": store.kv_get("google_email") or "",
             "language": store.user_lang(), "currency": plans.user_currency(), "countries": countries.info(),
             "staff_role": admin.role_for({**u, "email": u.get("email")}),
-            "nps_due": _nps_due(u), "natural_voice": _tts_on(), "realtime": _rt_on(), "onboarding_pending": _onb_pending(), "voice_gender": store.profile().get("voice_gender") or "female"}
+            "nps_due": _nps_due(u) and not store.member(), "natural_voice": _tts_on(), "realtime": _rt_on(),
+            "onboarding_pending": _onb_pending() and not store.member(),
+            "voice_gender": store.profile().get("voice_gender") or "female",
+            "member": store.member(), "account_owner": store.user_name() if store.member() else None}
 
 
 def _onb_pending() -> bool:
@@ -760,6 +778,8 @@ def profile_update(body: ProfileIn):
     import re
     from zoneinfo import ZoneInfo
     cur = store.profile()
+    if store.member():  # o perfil é do titular: a 2.ª pessoa não muda nada (o app manda idioma ao abrir)
+        return {"profile": cur, "language": store.user_lang(), "currency": plans.user_currency()}
     ch: dict = {}
     if body.language is not None:
         lang = i18n.norm(body.language)
@@ -1324,6 +1344,7 @@ def _undo_countries(ref: str) -> None:
 UNDO = {
     "countries_changed": lambda ref: _undo_countries(ref),
     "mail_primary": lambda ref: google_client.set_primary(ref),
+    "accountant_added": lambda ref: _team().revoke_accountant(int(ref), record=False),
     "event_created": lambda ref: tools.run_delete_event(ref),
     "reminder_created": lambda ref: tools.run_delete_event(ref),
     "expense_added": lambda ref: tools.run_delete_expense(int(ref)),
@@ -1762,6 +1783,65 @@ def i18n_strings(body: I18nIn, request: Request):
     if store.CURRENT.get() is None:
         _rate_limit(request, 30, "i18n")
     return {"lang": lang, "strings": i18n.translate(lang, body.strings)}
+
+
+# ---------- Premium: mais 1 pessoa na conta e acesso do contabilista ----------
+def _team():
+    from . import team
+    return team
+
+
+class TeamIn(BaseModel):
+    email: str
+
+
+def _team_call(feature: str, fn, *a):
+    blocked = plans.gate(feature, {})
+    if blocked:
+        return blocked
+    try:
+        return fn(*a)
+    except (ValueError, PermissionError) as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/v1/members", dependencies=[Depends(auth)])
+def members_list():
+    return {"members": _team().members(), "allowed": plans.allows("extra_user"), "max": _team().MAX_MEMBERS}
+
+
+@app.post("/v1/members", dependencies=[Depends(auth)])
+def members_add(body: TeamIn, request: Request):
+    _rate_limit(request, 10, "team")
+    return _team_call("extra_user", _team().invite_member, body.email)
+
+
+@app.post("/v1/members/{mid}/remove", dependencies=[Depends(auth)])
+def members_remove(mid: int):
+    try:
+        return _team().remove_member(mid)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@app.get("/v1/accountant", dependencies=[Depends(auth)])
+def accountant_list():
+    return {"accountants": _team().accountants(), "allowed": plans.allows("accountant_access"),
+            "portal": _team().portal_url()}
+
+
+@app.post("/v1/accountant", dependencies=[Depends(auth)])
+def accountant_add(body: TeamIn, request: Request):
+    _rate_limit(request, 10, "team")
+    return _team_call("accountant_access", _team().grant_accountant, body.email)
+
+
+@app.post("/v1/accountant/{aid}/remove", dependencies=[Depends(auth)])
+def accountant_remove(aid: int):
+    try:
+        return _team().revoke_accountant(aid)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
 
 
 # ---------- Convide e ganhe ----------

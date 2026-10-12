@@ -26,6 +26,8 @@ class SendError(Exception):
 
 def send_pending(pid: str) -> dict:
     """Envia uma ação pendente (trava atômica: um pedido = um envio). Erro → a ação volta a ficar pendente."""
+    if store.member():
+        raise SendError("só o titular da conta envia e-mails e convites")
     a = store.get_pending(pid)
     if not a or not store.claim_pending(pid):
         raise SendError("ação não está pendente")

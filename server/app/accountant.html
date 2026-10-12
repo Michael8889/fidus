@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Fidus · Contabilista</title>
+<style>
+:root{--bg:#F4F6F8;--card:#FFFFFF;--text:#0B1220;--sub:#5B6678;--line:#E2E7EE;--mint:#14804F;--mintbg:#E3F7EE;
+  --red:#C2362F;--redbg:#FCE9E7;--amber:#9A6200;--amberbg:#FFF3DC;--chip:#EEF1F5;--nav:#07090D;--navtext:#F2F5F7}
+@media (prefers-color-scheme:dark){:root{--bg:#07090D;--card:#10151D;--text:#EEF2F7;--sub:#9AA6B6;--line:#1F2733;--mint:#3DDC97;
+  --mintbg:#10291F;--red:#FF7A70;--redbg:#2E1513;--amber:#FFC560;--amberbg:#2C2210;--chip:#171E28;--nav:#020305}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{background:var(--nav);color:var(--navtext);padding:12px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;margin-right:auto}
+.logo span.f{width:30px;height:30px;border-radius:9px;background:#3DDC97;color:#07090D;display:grid;place-items:center}
+header button,header select{background:transparent;color:var(--navtext);border:1px solid #2A3341;border-radius:999px;padding:7px 12px;font:inherit;cursor:pointer;min-height:36px;max-width:100%}
+header select option{color:#0B1220}
+main{max-width:1240px;margin:0 auto;padding:16px 16px 60px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:12px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+@media (max-width:520px){.big{font-size:22px}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}
+.card h3{margin:0 0 6px;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--sub)}
+.big{font-size:26px;font-weight:800;letter-spacing:-.02em}
+.small{font-size:13px;color:var(--sub)}
+.sec{margin:24px 0 10px;font-size:18px;font-weight:800}
+.warn{background:var(--amberbg);color:var(--amber);border-radius:12px;padding:12px 14px;font-weight:600}
+.err{color:var(--red);font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--sub);white-space:nowrap}
+td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tablebox{overflow-x:auto}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input,select.f{font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);min-height:42px;max-width:100%}
+.btn{font:inherit;font-weight:700;border:0;border-radius:10px;padding:10px 16px;background:var(--text);color:var(--card);cursor:pointer;min-height:42px;text-decoration:none;display:inline-flex;align-items:center}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+.login{max-width:420px;margin:10vh auto;text-align:center}
+.login input{width:100%;margin:6px 0}
+.code{font:700 26px ui-monospace,monospace;letter-spacing:.18em;text-align:center}
+.pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--sub)}
+.pill.red{background:var(--redbg);color:var(--red)}
+.bar{height:8px;border-radius:999px;background:var(--chip);overflow:hidden;margin-top:4px}
+.bar span{display:block;height:100%;background:var(--mint)}
+a{color:inherit}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><span class="f">F</span><span id="ttl">Fidus</span></div>
+  <span id="who" class="small" style="color:#B7C0CC"></span>
+  <select id="lang" aria-label="Idioma"><option value="pt-pt">PT</option><option value="pt">BR</option><option value="en">EN</option></select>
+  <button id="out" hidden></button>
+</header>
+<main id="main"></main>
+<script>
+const T = {
+  "pt-pt": {title:"Contabilista", login_h:"Despesas dos seus clientes", login_p:"Entre com o e-mail a que o cliente deu acesso. Enviamos um código.",
+    email:"O seu e-mail", send:"Enviar código", code_p:"Escreva o código de 6 números que enviámos para {0}.", enter:"Entrar", back:"Usar outro e-mail",
+    bad_code:"Código inválido ou expirado.", out:"Sair", client:"Cliente", month:"Mês", wallet:"Carteira", all:"Todas",
+    total:"Total", vat:"IVA", count:"Lançamentos", no_nif:"Faturas sem NIF do cliente", by_cat:"Por categoria", by_irs:"Por categoria do e-Fatura (euros)",
+    list:"Lançamentos", date:"Data", merchant:"Estabelecimento", category:"Categoria", efatura:"e-Fatura", snif:"NIF vendedor", bnif:"NIF cliente",
+    amount:"Valor", receipt:"Fatura", see:"ver", export:"Exportar Excel + faturas (.zip)", none:"Sem despesas neste período.",
+    no_clients:"Nenhum cliente deu acesso a este e-mail (ou o acesso foi retirado).", ro:"Só leitura. O cliente pode retirar o acesso a qualquer momento.",
+    loading:"A carregar…"},
+  "pt": {title:"Contador", login_h:"Despesas dos seus clientes", login_p:"Entre com o e-mail ao qual o cliente deu acesso. Mandamos um código.",
+    email:"Seu e-mail", send:"Enviar código", code_p:"Digite o código de 6 números que enviamos para {0}.", enter:"Entrar", back:"Usar outro e-mail",
+    bad_code:"Código inválido ou expirado.", out:"Sair", client:"Cliente", month:"Mês", wallet:"Carteira", all:"Todas",
+    total:"Total", vat:"Impostos (IVA)", count:"Lançamentos", no_nif:"Faturas sem NIF do cliente", by_cat:"Por categoria", by_irs:"Por categoria do e-Fatura (euros)",
+    list:"Lançamentos", date:"Data", merchant:"Estabelecimento", category:"Categoria", efatura:"e-Fatura", snif:"NIF vendedor", bnif:"NIF cliente",
+    amount:"Valor", receipt:"Recibo", see:"ver", export:"Exportar Excel + recibos (.zip)", none:"Sem gastos neste período.",
+    no_clients:"Nenhum cliente deu acesso a este e-mail (ou o acesso foi retirado).", ro:"Só leitura. O cliente pode tirar o acesso quando quiser.",
+    loading:"Carregando…"},
+  "en": {title:"Accountant", login_h:"Your clients' expenses", login_p:"Sign in with the email your client gave access to. We'll send you a code.",
+    email:"Your email", send:"Send code", code_p:"Enter the 6-digit code we sent to {0}.", enter:"Sign in", back:"Use another email",
+    bad_code:"Invalid or expired code.", out:"Sign out", client:"Client", month:"Month", wallet:"Wallet", all:"All",
+    total:"Total", vat:"VAT", count:"Entries", no_nif:"Invoices without the client's NIF", by_cat:"By category", by_irs:"By e-Fatura category (euros)",
+    list:"Entries", date:"Date", merchant:"Merchant", category:"Category", efatura:"e-Fatura", snif:"Supplier VAT/NIF", bnif:"Client NIF",
+    amount:"Amount", receipt:"Receipt", see:"view", export:"Export Excel + receipts (.zip)", none:"No expenses in this period.",
+    no_clients:"No client has given this email access (or access was removed).", ro:"Read-only. Your client can remove access at any time.",
+    loading:"Loading…"}
+};
+const CAT = {
+  en: {"combustível":"Fuel","alimentação":"Food","transporte":"Transport","materiais":"Materials","ferramentas":"Tools","manutenção":"Maintenance",
+    "escritório":"Office","software":"Software","telefone e internet":"Phone and internet","impostos e taxas":"Taxes and fees","moradia":"Housing",
+    "saúde":"Health","lazer":"Leisure","viagem":"Travel","salários e prestadores":"Salaries and contractors","outros":"Other"},
+  "pt-pt": {"moradia":"habitação","escritório":"escritório"}
+};
+const cat = (k) => { const v = (CAT[L] && CAT[L][k]) || k; return v.charAt(0).toUpperCase() + v.slice(1); };
+const day = (d) => { const [y, m, dd] = String(d).split("-"); return L === "en" ? `${dd}/${m}/${y}` : `${dd}/${m}/${y}`; };
+const pick = () => { try { const s = localStorage.getItem("fidus_cont_lang"); if (s && T[s]) return s; } catch (e) {}
+  const n = (navigator.language || "").toLowerCase(); return n === "pt-br" ? "pt" : n.startsWith("pt") ? "pt-pt" : "en"; };
+let L = pick();
+const t = (k, ...a) => { let s = T[L][k] || T.en[k] || k; a.forEach((v, i) => s = s.split("{" + i + "}").join(v)); return s; };
+const $ = (q) => document.querySelector(q);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = (v, cur) => { try { return new Intl.NumberFormat(L === "en" ? "en-GB" : L === "pt" ? "pt-BR" : "pt-PT", {style:"currency", currency: cur}).format(v); } catch (e) { return v.toFixed(2) + " " + cur; } };
+const sums = (o) => Object.entries(o || {}).map(([c, v]) => money(v, c)).join(" · ") || "—";
+const api = async (path, opt = {}) => {
+  const r = await fetch("/contabilista/api/" + path, {credentials: "same-origin", ...opt,
+    headers: {"Content-Type": "application/json", "X-Fidus-Cont": "1", ...(opt.headers || {})}});
+  if (r.status === 401) { const e = new Error("401"); e.auth = true; throw e; }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.detail || r.statusText);
+  return d;
+};
+let ME = null, STATE = {gid: null, month: new Date().toISOString().slice(0, 7), wallet: ""};
+
+function chrome() {
+  document.documentElement.lang = L === "pt" ? "pt-BR" : L === "en" ? "en-GB" : "pt-PT";
+  $("#ttl").textContent = "Fidus · " + t("title");
+  $("#lang").value = L;
+  $("#out").textContent = t("out");
+  $("#out").hidden = !ME;
+  $("#who").textContent = ME ? ME.email : "";
+}
+
+function showLogin(email) {
+  ME = null; chrome();
+  $("#main").innerHTML = `<div class="login card"><h1 style="margin:0 0 6px;font-size:24px">${esc(t("login_h"))}</h1>
+    <p class="small">${esc(t("login_p"))}</p>
+    <form id="f1"><input id="em" type="email" required autocomplete="email" placeholder="${esc(t("email"))}" value="${esc(email || "")}">
+    <button class="btn" style="width:100%;justify-content:center">${esc(t("send"))}</button></form></div>`;
+  $("#f1").onsubmit = async (e) => {
+    e.preventDefault();
+    const em = $("#em").value.trim();
+    try { await api("start", {method: "POST", body: JSON.stringify({email: em})}); } catch (x) {}
+    showCode(em);
+  };
+}
+
+function showCode(email) {
+  $("#main").innerHTML = `<div class="login card"><p>${esc(t("code_p", email))}</p>
+    <form id="f2"><input id="cd" class="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" required>
+    <button class="btn" style="width:100%;justify-content:center">${esc(t("enter"))}</button></form>
+    <p id="msg" class="err"></p><button class="btn ghost" id="bk">${esc(t("back"))}</button></div>`;
+  $("#cd").focus();
+  $("#bk").onclick = () => showLogin(email);
+  $("#f2").onsubmit = async (e) => {
+    e.preventDefault();
+    try { await api("login", {method: "POST", body: JSON.stringify({email, code: $("#cd").value})}); boot(); }
+    catch (x) { $("#msg").textContent = t("bad_code"); }
+  };
+}
+
+async function boot() {
+  try { ME = await api("me"); } catch (e) { return showLogin(""); }
+  chrome();
+  if (!ME.clients.length) { $("#main").innerHTML = `<div class="card">${esc(t("no_clients"))}</div>`; return; }
+  if (!ME.clients.find((c) => c.id === STATE.gid)) STATE.gid = ME.clients[0].id;
+  load();
+}
+
+function q() {
+  const p = new URLSearchParams({month: STATE.month});
+  if (STATE.wallet) p.set("wallet", STATE.wallet);
+  return p.toString();
+}
+
+async function load() {
+  $("#main").innerHTML = `<p class="small">${esc(t("loading"))}</p>`;
+  let d;
+  try { d = await api(`c/${STATE.gid}/expenses?${q()}`); }
+  catch (e) { if (e.auth) return showLogin(""); $("#main").innerHTML = `<div class="card err">${esc(e.message)}</div>`; return; }
+  const catMax = Math.max(1, ...Object.values(d.by_category).map((o) => Object.values(o).reduce((a, b) => a + b, 0)));
+  const irsMax = Math.max(1, ...Object.values(d.by_irs || {}));
+  $("#main").innerHTML = `
+    <div class="row" style="margin-bottom:14px">
+      <label class="small">${esc(t("client"))}<br><select class="f" id="cl">${ME.clients.map((c) => `<option value="${c.id}" ${c.id === STATE.gid ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>
+      <label class="small">${esc(t("month"))}<br><input type="month" id="mo" value="${esc(STATE.month)}"></label>
+      <label class="small">${esc(t("wallet"))}<br><select class="f" id="wa"><option value="">${esc(t("all"))}</option>
+        ${d.wallets.map((w) => `<option ${w.name === STATE.wallet ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select></label>
+      <span style="flex:1"></span>
+      <a class="btn" id="ex" href="/contabilista/api/c/${STATE.gid}/export?${q()}" ${d.count ? "" : "aria-disabled=true style=\"opacity:.4;pointer-events:none\""}>${esc(t("export"))}</a>
+    </div>
+    <p class="small">${esc(t("ro"))}</p>
+    <div class="grid kpis">
+      <div class="card"><h3>${esc(t("total"))}</h3><div class="big">${sums(d.totals)}</div></div>
+      <div class="card"><h3>${esc(t("vat"))}</h3><div class="big">${sums(d.vat)}</div></div>
+      <div class="card"><h3>${esc(t("count"))}</h3><div class="big">${d.count}</div></div>
+      ${d.portugal ? `<div class="card"><h3>${esc(t("no_nif"))}</h3><div class="big" style="color:${d.invoices_without_nif ? "var(--red)" : "inherit"}">${d.invoices_without_nif}</div></div>` : ""}
+    </div>
+    ${d.count ? `<div class="grid" style="margin-top:12px">
+      <div class="card"><h3>${esc(t("by_cat"))}</h3>${Object.entries(d.by_category).map(([k, o]) => {
+        const tot = Object.values(o).reduce((a, b) => a + b, 0);
+        return `<div style="margin:8px 0"><div class="row" style="justify-content:space-between"><span>${esc(cat(k))}</span><b>${sums(o)}</b></div>
+          <div class="bar"><span style="width:${Math.round(tot / catMax * 100)}%"></span></div></div>`; }).join("")}</div>
+      ${d.portugal && Object.keys(d.by_irs).length ? `<div class="card"><h3>${esc(t("by_irs"))}</h3>${Object.entries(d.by_irs).map(([k, v]) =>
+        `<div style="margin:8px 0"><div class="row" style="justify-content:space-between"><span>${esc(k)}</span><b>${money(v, "EUR")}</b></div>
+          <div class="bar"><span style="width:${Math.round(v / irsMax * 100)}%"></span></div></div>`).join("")}</div>` : ""}
+    </div>
+    <div class="sec">${esc(t("list"))}</div>
+    <div class="card tablebox"><table><thead><tr><th>${esc(t("date"))}</th><th>${esc(t("merchant"))}</th><th>${esc(t("category"))}</th>
+      ${d.portugal ? `<th>${esc(t("efatura"))}</th>` : ""}<th>${esc(t("snif"))}</th>${d.portugal ? `<th>${esc(t("bnif"))}</th>` : ""}
+      <th>${esc(t("wallet"))}</th><th class="n">${esc(t("amount"))}</th><th class="n">${esc(t("vat"))}</th><th>${esc(t("receipt"))}</th></tr></thead><tbody>
+      ${d.expenses.map((r) => `<tr><td style="white-space:nowrap">${esc(day(r.date))}</td><td>${esc(r.merchant || "—")}${r.note ? `<div class="small">${esc(r.note)}</div>` : ""}</td>
+        <td>${esc(cat(r.category))}</td>${d.portugal ? `<td class="small">${esc(r.irs_category || "—")}</td>` : ""}<td>${esc(r.supplier_nif || "—")}</td>
+        ${d.portugal ? `<td>${r.currency === "EUR" && !r.buyer_nif ? `<span class="pill red">—</span>` : esc(r.buyer_nif || "—")}</td>` : ""}
+        <td class="small">${esc(r.wallet)}</td><td class="n">${money(r.amount, r.currency)}</td>
+        <td class="n">${r.vat != null ? money(r.vat, r.currency) : "—"}</td>
+        <td>${r.receipt ? `<a href="/contabilista/api/c/${STATE.gid}/receipt/${r.id}" target="_blank" rel="noopener">${esc(t("see"))}</a>` : "—"}</td></tr>`).join("")}
+    </tbody></table></div>` : `<div class="card" style="margin-top:12px">${esc(t("none"))}</div>`}`;
+  $("#cl").onchange = (e) => { STATE.gid = +e.target.value; STATE.wallet = ""; load(); };
+  $("#mo").onchange = (e) => { if (e.target.value) { STATE.month = e.target.value; load(); } };
+  $("#wa").onchange = (e) => { STATE.wallet = e.target.value; load(); };
+}
+
+$("#lang").onchange = (e) => { L = e.target.value; try { localStorage.setItem("fidus_cont_lang", L); } catch (x) {} ME ? load().then(chrome) : showLogin(""); chrome(); };
+$("#out").onclick = async () => { try { await api("logout", {method: "POST"}); } catch (e) {} showLogin(""); };
+chrome();
+boot();
+</script>
+</body>
+</html>

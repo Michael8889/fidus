@@ -190,6 +190,18 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
   o código dele) entra na hora, sem fila. Quem entra pelo beta fica no plano `FIDUS_BETA_PLAN` (Premium).
 - No fim do beta: `FIDUS_BETA_INVITES=0` volta ao programa de indicação normal.
 
+## Premium: contador e mais 1 pessoa (v0.17)
+- Configurações › Contador e mais 1 pessoa (só o titular, plano Premium ou Global). Os convites saem pelo e-mail do
+  Fidus depois do toque em Enviar; a IA não tem ferramenta para isso (`app/team.py`).
+- Contador: portal web só de leitura em `/contabilista` (`app/accountant_portal.py` + `accountant.html`), com código
+  de 6 números por e-mail e sessão de 12 h. Vê despesas, IVA, NIF, categorias do e-Fatura, fotos dos recibos e exporta
+  Excel + recibos. Não vê agenda, e-mails nem conversas. O cliente vê o último acesso e corta quando quiser.
+- 2.ª pessoa: entra com o próprio login e abre o banco do titular (`member_of` em `users`), com conversas só dela.
+  Bloqueado para ela: e-mails e Google do titular, envios, plano, ligações, país, definições, conta, convites
+  (`main.MEMBER_DENY`, `tools.MEMBER_BLOCKED`). Se o titular sair do Premium, ela perde o acesso na hora.
+- Faturação a clientes saiu do plano: em Portugal só software certificado pela AT pode emitir faturas. Se voltar,
+  será ligando a um faturador certificado (InvoiceXpress, Moloni, Vendus).
+
 ## Assinaturas
 - Lojas (Google Play, App Store) e site (Stripe) via RevenueCat. O app compra pela loja (`react-native-purchases`,
   precisa do APK novo) com o cliente identificado pelo id dele no Fidus; a RevenueCat avisa o servidor em

@@ -22,8 +22,9 @@ PLANS = {
     },
     "premium": {
         "rank": 3, "name": "Premium", "month": 39.90,
-        "highlights": ["Pagar por voz: MB Way, Multibanco, Pix e transferências preparados para você", "Cobrança e fatura para clientes",
-                       "Mais 1 pessoa na conta + acesso do contador", "Atas sem limite e suporte prioritário"],
+        "highlights": ["Pagar por voz: MB Way, Multibanco, Pix e transferências preparados para você",
+                       "Acesso do contador às despesas (só leitura)", "Mais 1 pessoa na conta",
+                       "Atas sem limite e suporte prioritário"],
     },
     "global": {
         "rank": 4, "name": "Global", "month": 49.90,
@@ -80,7 +81,7 @@ FEATURE_MIN = {
     "bank_connection": "premium",
     "prepare_payment": "premium",
     "save_payment_contact": "premium",
-    "client_invoices": "premium",
+    "accountant_access": "premium",
     "extra_user": "premium",
     "multi_country": "global",
 }
@@ -93,15 +94,14 @@ FEATURE_LABEL = {
     "extra_business": "gastos de mais de uma empresa",
     "voice_conversation": "modo conversa por voz", "bank_connection": "banco conectado",
     "prepare_payment": "pagar por voz", "save_payment_contact": "pagar por voz",
-    "client_invoices": "cobrança e fatura para clientes", "extra_user": "mais uma pessoa na conta",
+    "accountant_access": "acesso do contador às despesas", "extra_user": "mais uma pessoa na conta",
     "multi_country": "mais de um país (Portugal, Reino Unido e Brasil)",
 }
 
 UPSELL_TOOL = {
     "name": "offer_upgrade",
     "description": "Mostra no app o cartão do plano que libera um recurso que o usuário pediu e o plano atual não tem "
-                   "(ou que ainda vai chegar no Premium: banco conectado, cobrança/fatura para clientes, mais uma "
-                   "pessoa na conta). Use no máximo uma vez por assunto; se ele recusar, não insista.",
+                   "(ou que ainda vai chegar no Premium: banco conectado). Use no máximo uma vez por assunto; se ele recusar, não insista.",
     "parameters": {"type": "object", "properties": {"feature": {"type": "string", "enum": sorted(FEATURE_MIN)}},
                    "required": ["feature"]},
 }

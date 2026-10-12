@@ -43,7 +43,7 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const JS_VERSION = "0.16.1"; // única fonte da versão mostrada em Configurações e enviada ao servidor
+const JS_VERSION = "0.17.0"; // única fonte da versão mostrada em Configurações e enviada ao servidor
 const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=${JS_VERSION},ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
@@ -82,10 +82,13 @@ const _SERVER_TEXTS = () => [
   t("Voz e texto sem limite"), t("Agenda, lembretes e bom dia"), t("E-mail com aprovação"), t("Gastos e recibos de 1 carteira"),
   t("Documentos com validade"), t("Tarefas"), t("Empresas e moedas ilimitadas"), t("Link de agendamento para clientes"),
   t("Ata de reunião automática"), t("Pacote do contador"), t("Alerta de assinaturas"), t("Resumo da semana"),
-  t("Banco conectado: gastos entram sozinhos"), t("Cobrança e fatura para clientes"), t("Mais 1 pessoa na conta + acesso do contador"),
+  t("Banco conectado: gastos entram sozinhos"), t("Acesso do contador às despesas (só leitura)"), t("Mais 1 pessoa na conta"),
+  t("Pagar por voz: MB Way, Multibanco, Pix e transferências preparados para você"), t("Global"), t("Tudo do Premium"),
+  t("Portugal, Reino Unido e Brasil na mesma conta"), t("Euro, libra e real lado a lado"),
+  t("Calendário fiscal e pagamentos dos três países"), t("mais de um país (Portugal, Reino Unido e Brasil)"),
   t("Atas sem limite e suporte prioritário"), t("link de agendamento"), t("atas de reunião"), t("gravar reuniões e gerar a ata"),
   t("pacote do contador"), t("alerta de assinaturas"), t("resumo da semana"), t("gastos de mais de uma empresa"),
-  t("banco conectado"), t("cobrança e fatura para clientes"), t("mais uma pessoa na conta"), t("Negócio"),
+  t("banco conectado"), t("acesso do contador às despesas"), t("mais uma pessoa na conta"), t("Negócio"),
   t("Essencial"), t("Premium"), t("combustível"), t("alimentação"), t("transporte"), t("materiais"), t("ferramentas"),
   t("manutenção"), t("escritório"), t("software"), t("telefone e internet"), t("impostos e taxas"), t("moradia"), t("saúde"),
   t("lazer"), t("viagem"), t("salários e prestadores"), t("outros"),
@@ -178,7 +181,7 @@ type Item =
   | { id: string; type: "upsell"; up: Upsell }
   | { id: string; type: "nps" }
   | { id: string; type: "onb"; q: any };
-type Screen = "chat" | "convs" | "tasks" | "docs" | "meetings" | "expenses" | "booking" | "activity" | "invite" | "admin" | "settings" | "panel" | "plan";
+type Screen = "chat" | "convs" | "tasks" | "docs" | "meetings" | "expenses" | "booking" | "activity" | "invite" | "admin" | "settings" | "panel" | "plan" | "team";
 
 // Visual limpo: neutros + uma única cor de ação (preto no claro, quase branco no escuro).
 // São trocadas a cada render conforme o tema do celular (ver FidusApp).
@@ -581,6 +584,9 @@ function FidusApp() {
   const [newWallet, setNewWallet] = useState<{ name: string; currency: string } | null>(null);
   const [booking, setBooking] = useState<any>(null);
   const [referral, setReferral] = useState<any>(null);
+  const [team, setTeam] = useState<any>(null);  // contabilista e 2.ª pessoa (Premium)
+  const [teamIn, setTeamIn] = useState({ acc: "", mem: "" });
+  const [teamLock, setTeamLock] = useState<any>(null);
   const [refApply, setRefApply] = useState("");
   const [loadingScreen, setLoadingScreen] = useState(false);
   const [reader, setReader] = useState<{ title: string; text: string } | null>(null);
@@ -2034,6 +2040,7 @@ function FidusApp() {
   const PAY_BR: [string, string][] = [["celular", "Celular"], ["cpf", "CPF"], ["cnpj", "CNPJ"], ["email", "E-mail"], ["aleatoria", "Aleatória"]];
   // só as formas de pagamento do(s) país(es) do pacote, o principal primeiro
   const PAY_BY_COUNTRY: Record<string, [string, string][]> = { PT: [["mbway", "MB Way"], ["iban", "IBAN"]], GB: [["uk", "Conta UK"], ["iban", "IBAN"]], BR: PAY_BR };
+  const isMember = !!me?.member;  // 2.ª pessoa da conta de outra pessoa (Premium)
   const homeCountry: string = me?.countries?.countries?.[0] || (LANG === "pt-pt" ? "PT" : LANG === "pt" ? "BR" : "GB");
   const myCountries: string[] = me?.countries?.countries || [LANG === "pt-pt" || me?.currency === "EUR" ? "PT" : me?.currency === "GBP" ? "GB" : "BR"];
   const PAY_TYPES: [string, string][] = myCountries.flatMap((k) => PAY_BY_COUNTRY[k] || [])
@@ -2173,6 +2180,10 @@ function FidusApp() {
       if (sc === "expenses") await loadExpenses(arg || "", expWallet);
       if (sc === "booking") setBooking(await api("/v1/booking", {}, 15000));
       if (sc === "invite") setReferral(await api("/v1/referral", {}, 15000));
+      if (sc === "team") {
+        const [a, m] = await Promise.all([api("/v1/accountant", {}, 15000), api("/v1/members", {}, 15000)]);
+        setTeam({ accountants: a.accountants || [], acc_allowed: a.allowed, portal: a.portal, members: m.members || [], mem_allowed: m.allowed });
+      }
       if (sc === "settings") {
         setPlan(await api("/v1/plan", {}, 15000));
         const m = await api("/v1/me", {}, 15000); setMe(m); setNameEdit(m.profile?.name || m.name || "");
@@ -2238,6 +2249,33 @@ function FidusApp() {
     items.push([(info.max || 1) > 1 ? t("Os três países") : t("Os três países (plano Global)"),
       () => setC([...cur.slice(0, 1), ...Object.keys(COUNTRY_NAMES)].filter((v, i, a) => a.indexOf(v) === i))]);
     setSheet({ title: info.locked ? t("País do plano: {0}", cur.map((k) => t(COUNTRY_NAMES[k] || k)).join(" · ")) : t("País do pacote"), items });
+  }
+
+  // Premium: dar acesso ao contador (só leitura, página web) e convidar mais 1 pessoa para a conta
+  function teamAdd(kind: "acc" | "mem") {
+    const email = teamIn[kind].trim();
+    if (!email) return;
+    const msg = kind === "acc"
+      ? t("O Fidus manda um e-mail para {0} com o acesso só de leitura às suas despesas e recibos. Você pode tirar o acesso quando quiser.", email)
+      : t("O Fidus manda um e-mail para {0} com o convite para usar a sua conta (despesas, lembretes, tarefas e documentos). Os seus e-mails continuam só seus.", email);
+    Alert.alert(kind === "acc" ? t("Dar acesso ao contador?") : t("Convidar para a conta?"), msg, [
+      { text: t("Cancelar"), style: "cancel" },
+      { text: t("Enviar"), onPress: async () => {
+        try {
+          const r = await post(kind === "acc" ? "/v1/accountant" : "/v1/members", { email }, 20000);
+          if (r.locked) { setTeamLock(r); return; }
+          setTeamIn({ ...teamIn, [kind]: "" }); flash(t("Convite enviado")); loadScreen("team");
+        } catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
+      } }]);
+  }
+
+  function teamRemove(kind: "acc" | "mem", id: number, email: string) {
+    Alert.alert(kind === "acc" ? t("Tirar o acesso do contador?") : t("Remover da conta?"), email, [
+      { text: t("Cancelar"), style: "cancel" },
+      { text: t("Remover"), style: "destructive", onPress: async () => {
+        try { await post(kind === "acc" ? `/v1/accountant/${id}/remove` : `/v1/members/${id}/remove`, {}, 15000); loadScreen("team"); }
+        catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
+      } }]);
   }
 
   async function saveName() {
@@ -2328,6 +2366,7 @@ function FidusApp() {
     chat: "Fidus", convs: t("Conversas"), tasks: t("Tarefas"), docs: t("Documentos"), meetings: t("Reuniões e atas"),
     expenses: t("Gastos e contas"), booking: t("Link de agendamento"), activity: t("Atividade"),
     invite: t("Convide e ganhe"), admin: t("Clientes"), settings: t("Configurações"), panel: t("Painel da empresa"), plan: t("Meu plano"),
+    team: t("Contador e mais 1 pessoa"),
   });
 
   // ---------- Telas ----------
@@ -2774,29 +2813,72 @@ function FidusApp() {
         {storeReady && <Card c={c} onPress={restorePurchases}><Text style={{ color: c.text, flex: 1, fontSize: 15 }}>{t("Restaurar compras")}</Text></Card>}
       </ScrollView>
     );
+    if (screen === "team") {
+      const row = (kind: "acc" | "mem", x: any) => (
+        <View key={x.id} style={[s.kv, { alignItems: "center" }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: c.text, fontSize: 15 }} numberOfLines={1}>{x.email}</Text>
+            <Text style={{ color: c.sub, fontSize: 12 }}>{kind === "acc"
+              ? (x.last_access ? t("Último acesso: {0}", fmtDay(x.last_access.slice(0, 10))) : t("Ainda não entrou"))
+              : (x.joined ? t("Já usa a conta") : t("Convite enviado"))}</Text></View>
+          <Pressable hitSlop={8} onPress={() => teamRemove(kind, x.id, x.email)}><Text style={{ color: RED, fontWeight: "600" }}>{t("Remover")}</Text></Pressable>
+        </View>);
+      const add = (kind: "acc" | "mem", label: string) => (
+        <View style={[s.row, { gap: 8, marginTop: 6 }]}>
+          <TextInput value={teamIn[kind]} onChangeText={(v) => setTeamIn({ ...teamIn, [kind]: v })} placeholder={t("e-mail")}
+            placeholderTextColor={c.sub} autoCapitalize="none" keyboardType="email-address"
+            style={[s.input, s.flex, { color: c.text, backgroundColor: c.bg, marginBottom: 0 }]} />
+          <Pressable style={[s.primarySm, { justifyContent: "center" }]} onPress={() => teamAdd(kind)}><Text style={s.primaryText}>{label}</Text></Pressable>
+        </View>);
+      return (
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+          <Lock r={teamLock} />
+          <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
+            <Text style={{ color: c.sub, fontSize: 12, letterSpacing: 0.5 }}>{t("ACESSO DO CONTADOR")}</Text>
+            <Text style={{ color: c.text, fontSize: 15 }}>{t("O seu contador vê as despesas, os recibos, o IVA e o NIF numa página só de leitura, e exporta para Excel. Não vê agenda, e-mails nem conversas.")}</Text>
+            {(team?.accountants || []).map((x: any) => row("acc", x))}
+            {add("acc", t("Dar acesso"))}
+          </Card>
+          <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
+            <Text style={{ color: c.sub, fontSize: 12, letterSpacing: 0.5 }}>{t("MAIS 1 PESSOA NA CONTA")}</Text>
+            <Text style={{ color: c.text, fontSize: 15 }}>{t("Um sócio ou cônjuge entra com o próprio login e usa a mesma conta: despesas, recibos, lembretes, tarefas, documentos e agenda. Os seus e-mails, o plano e as configurações continuam só seus.")}</Text>
+            {(team?.members || []).map((x: any) => row("mem", x))}
+            {(team?.members || []).length < 1 && add("mem", t("Convidar"))}
+          </Card>
+        </ScrollView>);
+    }
     if (screen === "settings") return (
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-        <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+        {isMember && (
+          <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
+            <Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Conta de {0}", me.account_owner || "")}</Text>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{t("Você usa esta conta como 2.ª pessoa ({0}). E-mails, plano e ligações são do titular.", me.member?.email || "")}</Text>
+          </Card>)}
+        {!isMember && <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
           <Text style={{ color: c.sub, fontSize: 12 }}>{t("SEU NOME")}</Text>
           <View style={[s.row, { gap: 8 }]}>
             <TextInput style={[s.input, s.flex, { color: c.text, backgroundColor: c.bg, marginBottom: 0 }]} value={nameEdit} onChangeText={setNameEdit} />
             <Pressable style={[s.primarySm, { justifyContent: "center" }]} onPress={saveName}><Text style={s.primaryText}>{t("Salvar")}</Text></Pressable>
           </View>
           <Text style={{ color: c.sub, fontSize: 14 }}>{me?.email}</Text>
-        </Card>
+        </Card>}
         <Card c={c} onPress={chooseLanguage}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Idioma")}</Text>
             <Text style={{ color: c.sub, fontSize: 14 }}>{(LANG_CHOICES.find(([k]) => k === LANG) || [LANG, LANG])[1]}</Text></View>
           <Text style={{ color: c.sub }}>›</Text></Card>
-        {!!me?.countries && (
+        {!!me?.countries && !isMember && (
           <Card c={c} onPress={chooseCountry}>
             <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("País do pacote")}</Text>
               <Text style={{ color: c.sub, fontSize: 14 }}>{(me.countries.countries || []).map((k: string) => t(COUNTRY_NAMES[k] || k)).join(" · ")}</Text></View>
             <Text style={{ color: c.sub }}>›</Text></Card>)}
-        <Card c={c} onPress={() => setScreen("plan")}>
+        {!isMember && <Card c={c} onPress={() => setScreen("plan")}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Meu plano")}</Text>
             <Text style={{ color: c.sub, fontSize: 14 }}>{plan ? t(plan.name) : t(me?.plan_name || PLAN_NAMES[me?.plan] || "…")}</Text></View>
-          <Text style={{ color: c.sub }}>›</Text></Card>
+          <Text style={{ color: c.sub }}>›</Text></Card>}
+        {!isMember && <Card c={c} onPress={() => { setTeamLock(null); go("team"); }}>
+          <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Contador e mais 1 pessoa")}</Text>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{t("Acesso do contador às despesas e uma 2.ª pessoa na conta")}</Text></View>
+          <Text style={{ color: c.sub }}>›</Text></Card>}
         {!!me?.natural_voice && (
           <Card c={c} onPress={async () => {
             const g = me.voice_gender === "male" ? "female" : "male";
@@ -2833,15 +2915,15 @@ function FidusApp() {
             {t("Versão")}: {JS_VERSION} · {UPDATE_ID.slice(0, 8)}</Text>
           <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
         </Card>
-        <Card c={c} onPress={() => { setScreen("chat"); startOnboarding(true); }}>
+        {!isMember && <Card c={c} onPress={() => { setScreen("chat"); startOnboarding(true); }}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Refazer as boas-vindas")}</Text>
             <Text style={{ color: c.sub, fontSize: 14 }}>{t("O Fidus pergunta de novo como você trabalha e se ajusta.")}</Text></View>
-          <Text style={{ color: c.sub }}>›</Text></Card>
+          <Text style={{ color: c.sub }}>›</Text></Card>}
         <View style={{ flexDirection: "row", justifyContent: "center", gap: 18, paddingVertical: 4 }}>
           <Pressable onPress={() => Linking.openURL(`${base()}/privacy?lang=${LANG}`)}><Text style={{ color: c.sub, fontSize: 13 }}>{t("Privacidade")}</Text></Pressable>
           <Pressable onPress={() => Linking.openURL(`${base()}/terms?lang=${LANG}`)}><Text style={{ color: c.sub, fontSize: 13 }}>{t("Termos de uso")}</Text></Pressable>
         </View>
-        <Card c={c} onPress={googleMenu}>
+        {!isMember && <><Card c={c} onPress={googleMenu}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>Google</Text>
             <Text style={{ color: c.sub, fontSize: 14 }}>{me?.google_connected ? `${t("Conectado")}${me.google_email ? " · " + me.google_email : ""}${me.outlook_connected ? " · " + (me.mail_provider === "microsoft" ? t("e-mail") : t("agenda e e-mail")) : ""}` : t("Não conectado · tocar para conectar")}</Text></View>
           <Text style={{ color: c.sub }}>›</Text></Card>
@@ -2866,7 +2948,7 @@ function FidusApp() {
                 <Text style={s.primaryText}>{t("Apagar")}</Text></Pressable>
             </View>
           </>)}
-        </Card>
+        </Card></>}
         <Card c={c} onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Fidus`).catch(() => {})}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Ajuda e contato")}</Text>
             <Text style={{ color: c.sub, fontSize: 14 }}>{SUPPORT_EMAIL}</Text></View>
@@ -2906,7 +2988,7 @@ function FidusApp() {
         <View style={s.flex}>
         <FlatList
           ref={listRef} data={items} keyExtractor={(i) => i.id} contentContainerStyle={{ padding: 16, gap: 10 }}
-          ListHeaderComponent={me && !me.google_connected && !me.outlook_connected ? (
+          ListHeaderComponent={me && !isMember && !me.google_connected && !me.outlook_connected ? (
             <View style={[s.bubble, { backgroundColor: c.card, maxWidth: "100%", gap: 10 }]}>
               <Text style={{ color: c.text, fontSize: 15, fontWeight: "600" }}>{t("Conecte sua agenda e seu e-mail para o Fidus cuidar deles.")}</Text>
               <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
@@ -3161,7 +3243,7 @@ function FidusApp() {
                 ["convs", "chat", t("Conversas")], ["tasks", "task", t("Tarefas")], ["docs", "doc", t("Documentos")],
                 ["meetings", "mic", t("Reuniões e atas")], ["expenses", "wallet", t("Gastos e contas")],
                 ["booking", "link", t("Link de agendamento")], ["activity", "activity", t("Atividade")],
-                ["invite", "gift", t("Convide e ganhe")],
+                ...(isMember ? [] : [["invite", "gift", t("Convide e ganhe")]]),
                 ...(me?.is_owner ? [["admin", "users", t("Clientes")]] : []),
                 ...(me?.staff_role ? [["panel", "chart", t("Painel da empresa")]] : []),
               ] as [Screen, string, string][]).map(([sc, ic, label]) => (
@@ -3288,8 +3370,15 @@ const I18N_KEYS: string[] = [
   "Alerta de assinaturas",
   "Resumo da semana",
   "Banco conectado: gastos entram sozinhos",
-  "Cobrança e fatura para clientes",
-  "Mais 1 pessoa na conta + acesso do contador",
+  "Acesso do contador às despesas (só leitura)",
+  "Mais 1 pessoa na conta",
+  "Pagar por voz: MB Way, Multibanco, Pix e transferências preparados para você",
+  "Global",
+  "Tudo do Premium",
+  "Portugal, Reino Unido e Brasil na mesma conta",
+  "Euro, libra e real lado a lado",
+  "Calendário fiscal e pagamentos dos três países",
+  "mais de um país (Portugal, Reino Unido e Brasil)",
   "Atas sem limite e suporte prioritário",
   "link de agendamento",
   "atas de reunião",
@@ -3299,7 +3388,7 @@ const I18N_KEYS: string[] = [
   "resumo da semana",
   "gastos de mais de uma empresa",
   "banco conectado",
-  "cobrança e fatura para clientes",
+  "acesso do contador às despesas",
   "mais uma pessoa na conta",
   "Negócio",
   "Essencial",
@@ -3539,6 +3628,13 @@ const I18N_KEYS: string[] = [
   "Os três países (plano Global)",
   "País do plano: {0}",
   "País do pacote",
+  "O Fidus manda um e-mail para {0} com o acesso só de leitura às suas despesas e recibos. Você pode tirar o acesso quando quiser.",
+  "O Fidus manda um e-mail para {0} com o convite para usar a sua conta (despesas, lembretes, tarefas e documentos). Os seus e-mails continuam só seus.",
+  "Dar acesso ao contador?",
+  "Convidar para a conta?",
+  "Convite enviado",
+  "Tirar o acesso do contador?",
+  "Remover da conta?",
   "Obrigado!",
   "Painel da empresa",
   "Preparando seus dados…",
@@ -3564,6 +3660,7 @@ const I18N_KEYS: string[] = [
   "Convide e ganhe",
   "Configurações",
   "Meu plano",
+  "Contador e mais 1 pessoa",
   "Fale. O Fidus resolve.",
   "Entrar com o Google",
   "Entrar com e-mail",
@@ -3675,8 +3772,20 @@ const I18N_KEYS: string[] = [
   "Trocar forma de pagamento ou cancelar, direto na loja",
   "Fale com o suporte",
   "Restaurar compras",
+  "Último acesso: {0}",
+  "Ainda não entrou",
+  "Já usa a conta",
+  "e-mail",
+  "ACESSO DO CONTADOR",
+  "O seu contador vê as despesas, os recibos, o IVA e o NIF numa página só de leitura, e exporta para Excel. Não vê agenda, e-mails nem conversas.",
+  "Dar acesso",
+  "MAIS 1 PESSOA NA CONTA",
+  "Um sócio ou cônjuge entra com o próprio login e usa a mesma conta: despesas, recibos, lembretes, tarefas, documentos e agenda. Os seus e-mails, o plano e as configurações continuam só seus.",
+  "Conta de {0}",
+  "Você usa esta conta como 2.ª pessoa ({0}). E-mails, plano e ligações são do titular.",
   "SEU NOME",
   "Idioma",
+  "Acesso do contador às despesas e uma 2.ª pessoa na conta",
   "Voz masculina",
   "Voz feminina",
   "Voz do Fidus",
@@ -3712,7 +3821,6 @@ const I18N_KEYS: string[] = [
   "Privacidade",
   "Termos de uso",
   "Conectado",
-  "e-mail",
   "agenda e e-mail",
   "Não conectado · tocar para conectar",
   "Reenviar reunião",

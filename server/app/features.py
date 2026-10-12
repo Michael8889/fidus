@@ -485,8 +485,9 @@ def briefing_data(day: str | None = None) -> dict:
         for r in store.select("SELECT * FROM documents WHERE deleted=0 AND expires_on IS NOT NULL "
                               "AND expires_on>=? AND expires_on<=? ORDER BY expires_on",
                               (d.isoformat(), (d + timedelta(days=45)).isoformat()))]
-    try:
-        data["important_unread_emails"] = tools._search_emails("is:unread is:important newer_than:2d", 5)["emails"]
+    try:  # os e-mails são do titular: a 2.ª pessoa da conta não os vê
+        data["important_unread_emails"] = [] if store.member() else \
+            tools._search_emails("is:unread is:important newer_than:2d", 5)["emails"]
     except Exception:
         data["important_unread_emails"] = []
     month: dict = {}
@@ -602,8 +603,10 @@ def weekly_text(d: dict) -> str:
 
 
 # ---------- Exportação para o contador ----------
-def export_for_accountant(date_from, date_to, business=None):
+def build_export(date_from, date_to, business=None, folder=None) -> dict:
+    """Planilha (despesas + resumo) e fotos dos recibos num .zip. Não guarda nada nos Documentos."""
     import os
+    import re
     import zipfile
 
     from openpyxl import Workbook
@@ -629,15 +632,17 @@ def export_for_accountant(date_from, date_to, business=None):
     wb = Workbook()
     ws = wb.active
     ws.title = "Gastos"
-    head = ["Data", "Empresa", "Categoria", "Estabelecimento", "Valor", "Moeda", "IVA/VAT", "Observação", "Recibo"]
+    head = ["Data", "Empresa", "Categoria", "Estabelecimento", "Valor", "Moeda", "IVA/VAT", "NIF vendedor",
+            "NIF cliente", "Categoria e-Fatura", "Observação", "Recibo"]
     ws.append(head)
     for c in ws[1]:
         c.font = Font(bold=True)
     for r in rows:
         rec = f"recibos/{r['id']}{os.path.splitext(r['receipt_path'])[1]}" if r.get("receipt_path") and os.path.exists(r["receipt_path"]) else ""
         ws.append([r["date"], r["business"], r["category"], r["merchant"] or "", r["amount"], r["currency"],
-                   r["vat"] if r["vat"] is not None else "", r["note"] or "", rec])
-    for col, w in zip("ABCDEFGHI", (12, 18, 20, 24, 12, 8, 10, 30, 22)):
+                   r["vat"] if r["vat"] is not None else "", r.get("supplier_nif") or "", r.get("buyer_nif") or "",
+                   r.get("irs_category") or "", r["note"] or "", rec])
+    for col, w in zip("ABCDEFGHIJKL", (12, 18, 20, 24, 12, 8, 10, 14, 14, 22, 30, 22)):
         ws.column_dimensions[col].width = w
     sm = wb.create_sheet("Resumo")
     sm.append(["Empresa", "Categoria", "Moeda", "Total", "IVA"])
@@ -651,8 +656,7 @@ def export_for_accountant(date_from, date_to, business=None):
         t[1] += r["vat"] or 0
     for (b, c, cur), (tot, vat) in sorted(agg.items()):
         sm.append([b, c, cur, round(tot, 2), round(vat, 2)])
-    folder = store.files_dir("exports")
-    import re
+    folder = folder or store.files_dir("exports")
     tag = re.sub(r"[^\w-]", "", (business or "todas").replace(" ", "-")) or "empresa"
     base = f"fidus-{tag}-{date_from}-a-{date_to}"
     xlsx = os.path.join(folder, base + ".xlsx")
@@ -665,10 +669,17 @@ def export_for_accountant(date_from, date_to, business=None):
             if r.get("receipt_path") and os.path.exists(r["receipt_path"]):
                 z.write(r["receipt_path"], f"recibos/{r['id']}{os.path.splitext(r['receipt_path'])[1]}")
                 n_rec += 1
-    title = f"Pacote do contador · {business or 'todas as empresas'} · {date.fromisoformat(date_from):%d/%m/%y} a {date.fromisoformat(date_to):%d/%m/%y}"
-    did = store.insert("documents", title=title, description=f"{len(rows)} gastos, {n_rec} recibos. Exportação.",
-                       tags="exportação,contador", path=zpath, media_type="application/zip")
-    return {"ok": True, "document_id": did, "title": title, "expenses": len(rows), "receipts": n_rec}
+    title = f"Pacote do contador · {business or 'todas as empresas'} · {df:%d/%m/%y} a {dt:%d/%m/%y}"
+    return {"ok": True, "path": zpath, "name": base + ".zip", "title": title, "expenses": len(rows), "receipts": n_rec}
+
+
+def export_for_accountant(date_from, date_to, business=None):
+    r = build_export(date_from, date_to, business)
+    if not r.get("ok"):
+        return r
+    did = store.insert("documents", title=r["title"], description=f"{r['expenses']} gastos, {r['receipts']} recibos. Exportação.",
+                       tags="exportação,contador", path=r["path"], media_type="application/zip")
+    return {"ok": True, "document_id": did, "title": r["title"], "expenses": r["expenses"], "receipts": r["receipts"]}
 
 
 # ---------- Assinaturas ----------
