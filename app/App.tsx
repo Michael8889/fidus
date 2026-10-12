@@ -2802,7 +2802,7 @@ function FidusApp() {
             {SpeechRec ? "✅" : "❌"} {t("Transcrição no celular")}{SpeechRec ? "" : ` (${t("precisa do APK novo")})`}{"\n"}
             {me?.natural_voice ? "✅" : "❌"} {t("Voz natural")}{me?.natural_voice ? "" : ` (${t("falta a chave no servidor")})`}{"\n"}
             {RTC && me?.realtime && !rtErr ? "✅" : "❌"} {t("Conversa em tempo real")}{!RTC ? ` (${t("precisa do APK novo")})` : !me?.realtime ? ` (${t("desligada no servidor")})` : rtErr ? ` (${rtErr})` : ""}{"\n"}
-            {t("Versão")}: 0.13.2 · {UPDATE_ID.slice(0, 8)}</Text>
+            {t("Versão")}: 0.15.0 · {UPDATE_ID.slice(0, 8)}</Text>
           <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
         </Card>
         <Card c={c} onPress={() => { setScreen("chat"); startOnboarding(true); }}>
