@@ -45,7 +45,7 @@ def _uid() -> str:
 
 def tool_specs() -> list[dict]:
     return [{"type": "function", "name": t["name"], "description": t["description"], "parameters": t["parameters"]}
-            for t in tools.TOOLS]
+            for t in tools.available_tools()]
 
 
 def instructions() -> str:
@@ -101,7 +101,7 @@ def run_tool(name: str, arguments: str | dict | None) -> dict:
         args = json.loads(arguments) if isinstance(arguments, str) else dict(arguments or {})
     except ValueError:
         args = {}
-    if name not in {t["name"] for t in tools.TOOLS}:
+    if name not in {t["name"] for t in tools.available_tools()}:
         result = {"error": f"ferramenta desconhecida: {name}"}
     else:
         try:

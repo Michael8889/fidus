@@ -205,9 +205,29 @@ def _portugal_line() -> str:
         return ("\n- PORTUGAL: fatura portuguesa em foto -> em add_expense passe buyer_nif (NIF do cliente na fatura), "
                 "supplier_nif e irs_category; se vier alerta de NIF, diga-o numa frase. NIF do usuário: "
                 + (nif or "ainda não guardado (pergunte quando fizer sentido e use set_nif)") +
-                ". Pagamentos: MB Way, Multibanco (entidade + referência) ou IBAN, nunca Pix. Calendário fiscal: "
+                ". Pagamentos em Portugal: MB Way, Multibanco (entidade + referência) ou IBAN. Calendário fiscal: "
                 "ofereça setup_tax_reminders se ainda não tiver. Vocabulário de Portugal: fatura, NIF, IVA, "
                 "contabilista certificado, Finanças/AT, telemóvel.")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _country_line() -> str:
+    """País(es) do pacote: a IA só oferece o que é deles; outro país = plano Global (offer_upgrade multi_country)."""
+    try:
+        from . import countries
+        cs = countries.user_countries()
+        pays = {"PT": "MB Way, Multibanco, IBAN", "GB": "UK bank transfer (sort code + account), IBAN", "BR": "Pix"}
+        line = ("\n- PAÍS DO PACOTE: " + ", ".join(f"{countries.COUNTRIES[c]['name']} ({countries.COUNTRIES[c]['currency']}; "
+                                                 f"pagamentos: {pays[c]})" for c in cs) +
+                ". Impostos, pagamentos e carteiras só destes países. Se pedir algo fiscal/pagamento de outro país, "
+                "explique numa frase e use offer_upgrade com multi_country (plano Global, os três países). Gastos "
+                "avulsos de viagem em outra moeda podem ser lançados normalmente.")
+        if "GB" in cs:
+            line += ("\n- UK: receipts -> pass supplier_vat_number in add_expense when printed; if there's an alert, say "
+                     "it in one sentence. Offer setup_uk_tax_reminders (Self Assessment, MTD, VAT, Companies House) "
+                     "if not set up. Use UK words: VAT, HMRC, accountant, mobile, sort code.")
+        return line
     except Exception:  # noqa: BLE001
         return ""
 
@@ -235,7 +255,7 @@ def _context() -> str:
 - Nome: {prof["name"] or "ainda não sabemos (pergunte quando fizer sentido)"}
 - Idioma: {i18n.name(prof.get("language") or "pt")}
 - Carteiras (empresas/contas): {", ".join(f'{w["name"]} ({w["currency"] or "moeda padrão"})' for w in store.wallets())}
-- Moeda padrão: {prof["currency"]}{_prefs(prof)}{_mail_line()}{_portugal_line()}
+- Moeda padrão: {prof["currency"]}{_prefs(prof)}{_mail_line()}{_country_line()}{_portugal_line()}
 
 AGORA são {now.strftime('%H:%M')} ({prof["timezone"]}).
 HOJE é {dias[now.weekday()]}, {now.strftime('%d/%m/%Y')} ({now.strftime('%Y-%m-%d')}).
@@ -582,7 +602,7 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
         _t0 = _tm.time()
         if buf is not None:
             buf["text"] = ""  # cada volta escreve do zero (o texto antes de uma ferramenta é só "vou ver")
-        out = llm.chat(system_parts(voice), messages, tools.TOOLS, **({"model": light} if light else {}))
+        out = llm.chat(system_parts(voice), messages, tools.available_tools(), **({"model": light} if light else {}))
         _metrics.record_stage("ia", int((_tm.time() - _t0) * 1000))
         steps += 1
         if light and light == config.LLM_MODEL_CHEAP and steps >= 4:

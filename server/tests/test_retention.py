@@ -214,5 +214,5 @@ def test_essential_plan_upsells_instead_of_acting():
         assert client.post("/v1/meeting_b64", json={"audio_b64": "AAAA"}, headers=H).json()["locked"]
         assert "meetings_record" in client.get("/v1/plan", headers=H).json()["locked_features"]
     finally:
-        plans.set_plan("premium")
+        plans.set_plan("global")
     assert tools.run("get_booking_link", {}).get("link")

@@ -25,14 +25,19 @@ PLANS = {
         "highlights": ["Pagar por voz: MB Way, Multibanco, Pix e transferências preparados para você", "Cobrança e fatura para clientes",
                        "Mais 1 pessoa na conta + acesso do contador", "Atas sem limite e suporte prioritário"],
     },
+    "global": {
+        "rank": 4, "name": "Global", "month": 89.90,
+        "highlights": ["Tudo do Premium", "Portugal, Reino Unido e Brasil na mesma conta",
+                       "Euro, libra e real lado a lado", "Calendário fiscal e pagamentos dos três países"],
+    },
 }
 
 # Preço por moeda (valores redondos fixos, como nas lojas de apps). Libra no Reino Unido, euro na Europa,
 # dólar no resto do mundo. A cobrança de verdade segue o país do cartão.
 PRICES = {
-    "EUR": {"essencial": 16.90, "negocio": 49.90, "premium": 69.90},
-    "GBP": {"essencial": 24.90, "negocio": 42.90, "premium": 59.90},
-    "USD": {"essencial": 32.90, "negocio": 54.90, "premium": 74.90},
+    "EUR": {"essencial": 16.90, "negocio": 49.90, "premium": 69.90, "global": 89.90},
+    "GBP": {"essencial": 24.90, "negocio": 42.90, "premium": 59.90, "global": 79.90},
+    "USD": {"essencial": 32.90, "negocio": 54.90, "premium": 74.90, "global": 99.90},
 }
 SYMBOL = {"EUR": "€", "GBP": "£", "USD": "$"}
 EUROPE = set("AD AL AT AX BA BE BG BY CH CY CZ DE DK EE ES FI FO FR GG GI GR HR HU IE IM IS IT JE LI LT LU LV MC MD "
@@ -76,6 +81,7 @@ FEATURE_MIN = {
     "save_payment_contact": "premium",
     "client_invoices": "premium",
     "extra_user": "premium",
+    "multi_country": "global",
 }
 
 FEATURE_LABEL = {
@@ -87,6 +93,7 @@ FEATURE_LABEL = {
     "voice_conversation": "modo conversa por voz", "bank_connection": "banco conectado",
     "prepare_payment": "pagar por voz", "save_payment_contact": "pagar por voz",
     "client_invoices": "cobrança e fatura para clientes", "extra_user": "mais uma pessoa na conta",
+    "multi_country": "mais de um país (Portugal, Reino Unido e Brasil)",
 }
 
 UPSELL_TOOL = {
@@ -100,7 +107,7 @@ UPSELL_TOOL = {
 
 
 def current() -> str:
-    default = (config.DEFAULT_PLAN or "premium") if store.current().get("is_owner") else config.NEW_USER_PLAN
+    default = (config.DEFAULT_PLAN or "global") if store.current().get("is_owner") else config.NEW_USER_PLAN
     p = (store.kv_get("plan") or default).strip().lower()
     return p if p in PLANS else "essencial"  # valor estranho nunca libera o plano mais caro
 

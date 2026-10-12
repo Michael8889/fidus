@@ -187,7 +187,7 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
   `POST /billing/revenuecat` (segredo `FIDUS_BILLING_WEBHOOK_SECRET`) e o plano muda sozinho.
 - Para ligar:
   1. Google Play Console: publicar o app (pode ser teste fechado) e criar 3 assinaturas com o id do plano no nome:
-     `fidus_essencial`, `fidus_negocio`, `fidus_premium`, cada uma com os planos-base `mensal` e `anual` e os preços
+     `fidus_essencial`, `fidus_negocio`, `fidus_premium`, `fidus_global`, cada uma com os planos-base `mensal` e `anual` e os preços
      por país (libra, euro, dólar). Oferta de 7 dias grátis com a etiqueta `convite` (só quem veio por convite vê).
   2. RevenueCat: ligar a Play, criar a oferta "default" com os pacotes mensal e anual de cada plano, cadastrar o
      webhook acima com o segredo, copiar a chave pública do SDK (`goog_...`).
@@ -240,6 +240,17 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
   `https://app.heyfidus.com/auth/microsoft/callback`, permissões delegadas `User.Read Calendars.ReadWrite Mail.Read
   Mail.Send offline_access openid profile email`, e `FIDUS_MS_CLIENT_ID` / `FIDUS_MS_CLIENT_SECRET` no `.env`.
   Para clientes de empresa conseguirem autorizar: verificação de editor (Microsoft AI Cloud Partner Program).
+
+## País do pacote, Portugal e Reino Unido (v0.15)
+- Cada plano vale para UM país: Portugal (EUR), Reino Unido (GBP) ou Brasil (BRL). O plano Global (acima do
+  Premium; €89,90 / £79,90 / $99,90) vale para os três. O dono fica no Global (`FIDUS_PLAN=global`).
+- `app/countries.py`: país escolhido em Configurações › País do pacote (`POST /v1/countries`, vai para a Atividade
+  com Desfazer); sem escolha, o país do celular. A IA só recebe as ferramentas do país (`tools.available_tools()`),
+  e o `tools.run` bloqueia as outras com a oferta do Global (`multi_country`). Formas de pagamento e moedas de
+  carteira seguem o país; gasto avulso em viagem noutra moeda continua livre.
+- Portugal (`app/portugal.py`): NIF nas faturas, categorias do e-Fatura/IRS, calendário fiscal, MB Way e Multibanco.
+- Reino Unido (`app/uk.py`): confere o VAT number dos recibos (quem é VAT registered) e cria os lembretes de Self
+  Assessment, pagamentos por conta, MTD for Income Tax, VAT, Corporation Tax, Companies House e PAYE.
 
 ## Segurança dos dados dos clientes
 - As conexões com Google e Microsoft (chaves de acesso) ficam criptografadas no banco de cada cliente

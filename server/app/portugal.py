@@ -68,9 +68,8 @@ def set_nif(nif: str, wallet: str | None = None) -> dict:
 
 
 def is_portugal() -> bool:
-    p = store.profile()
-    return (p.get("country") or "").upper() == "PT" or (p.get("language") or "").lower().startswith("pt-pt") \
-        or bool(p.get("nifs"))
+    from . import countries
+    return countries.enabled("PT")
 
 
 def check_invoice(wallet: str, buyer_nif: str | None, supplier_nif: str | None, irs_category: str | None,

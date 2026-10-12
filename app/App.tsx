@@ -43,7 +43,7 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=0.13.2,ota=${UPDATE_ID.slice(0, 8)}`;
+const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=0.15.0,ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
 
@@ -158,7 +158,8 @@ const DEFAULT_SERVER = "https://app.heyfidus.com";
 // endereços antigos do mesmo servidor: quem entrou por eles passa para o novo assim que ele responder
 const LEGACY_SERVERS = ["https://fidus.148-230-123-44.sslip.io"];
 const SUPPORT_EMAIL = "suporte@heyfidus.com";
-const PLAN_NAMES: Record<string, string> = { essencial: "Essencial", negocio: "Negócio", premium: "Premium" };
+const PLAN_NAMES: Record<string, string> = { essencial: "Essencial", negocio: "Negócio", premium: "Premium", global: "Global" };
+const COUNTRY_NAMES: Record<string, string> = { PT: "🇵🇹 Portugal", GB: "🇬🇧 Reino Unido", BR: "🇧🇷 Brasil" };
 const fmtClock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 const money = (n: number, sym = "€") => `${sym}${LANG === "pt" ? n.toFixed(2).replace(".", ",") : n.toFixed(2)}`;
 
@@ -2014,10 +2015,12 @@ function FidusApp() {
   // ---------- Pagar por voz (Premium): o Fidus prepara, você paga no app do banco ----------
   // Portugal primeiro MB Way e IBAN; Brasil primeiro Pix; Reino Unido a conta UK
   const PAY_BR: [string, string][] = [["celular", "Celular"], ["cpf", "CPF"], ["cnpj", "CNPJ"], ["email", "E-mail"], ["aleatoria", "Aleatória"]];
-  const PAY_TYPES: [string, string][] = LANG === "pt-pt" || me?.currency === "EUR"
-    ? [["mbway", "MB Way"], ["iban", "IBAN"], ...PAY_BR, ["uk", "Conta UK"]]
-    : [...PAY_BR, ["mbway", "MB Way"], ["iban", "IBAN"], ["uk", "Conta UK"]];
-  const payDefault = () => (LANG === "pt-pt" || me?.currency === "EUR" ? "mbway" : "celular");
+  // só as formas de pagamento do(s) país(es) do pacote, o principal primeiro
+  const PAY_BY_COUNTRY: Record<string, [string, string][]> = { PT: [["mbway", "MB Way"], ["iban", "IBAN"]], GB: [["uk", "Conta UK"], ["iban", "IBAN"]], BR: PAY_BR };
+  const myCountries: string[] = me?.countries?.countries || [LANG === "pt-pt" || me?.currency === "EUR" ? "PT" : me?.currency === "GBP" ? "GB" : "BR"];
+  const PAY_TYPES: [string, string][] = myCountries.flatMap((k) => PAY_BY_COUNTRY[k] || [])
+    .filter(([k], i, a) => a.findIndex(([x]) => x === k) === i);
+  const payDefault = () => (PAY_TYPES[0] ? PAY_TYPES[0][0] : "celular");
 
   async function paySaveKey(a: Action, key?: string, type?: string) {
     const v = payIn[a.id] || { key: "", type: payDefault() };
@@ -2042,7 +2045,7 @@ function FidusApp() {
       const ct = await Contacts.presentContactPickerAsync();
       const phone = ct?.phoneNumbers?.[0]?.number;
       if (!phone) return Alert.alert(t("Agenda"), t("Esse contato não tem celular."));
-      const mb = payDefault() === "mbway" || /^(\+351|00351)/.test(phone.replace(/[\s-]/g, ""));
+      const mb = myCountries.includes("PT") && (!myCountries.includes("BR") || payDefault() === "mbway" || /^(\+351|00351)/.test(phone.replace(/[\s-]/g, "")));
       Alert.alert(mb ? t("Usar para o MB Way?") : t("Usar como chave Pix?"), `${ct.name || ""}\n${phone}`, [
         { text: t("Cancelar"), style: "cancel" },
         { text: t("Usar"), onPress: () => paySaveKey(a, phone, mb ? "mbway" : "celular") },
@@ -2194,6 +2197,22 @@ function FidusApp() {
       try { await SecureStore.deleteItemAsync("notifV"); setupNotifications(); } catch {}
       loadScreen("settings");
     }] as [string, () => void]) });
+  }
+
+  // País do pacote: um por plano; no Global, os três. O Fidus só mostra impostos e pagamentos desse(s) país(es).
+  function chooseCountry() {
+    const info = me?.countries || {};
+    const setC = async (codes: string[]) => {
+      try {
+        const r = await post("/v1/countries", { countries: codes });
+        if (r.locked) { push({ id: uid(), type: "upsell", up: r.upsell }); setScreen("chat"); return; }
+        setMe({ ...me, countries: { ...info, ...r }, currency: r.currency }); flash(t("Salvo"));
+      } catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
+    };
+    const items: [string, () => void][] = Object.keys(COUNTRY_NAMES).map((k) => [t(COUNTRY_NAMES[k]), () => setC([k])] as [string, () => void]);
+    items.push([(info.max || 1) > 1 ? t("Os três países") : t("Os três países (plano Global)"),
+      () => setC([...(info.countries || []).slice(0, 1), ...Object.keys(COUNTRY_NAMES)].filter((v, i, a) => a.indexOf(v) === i))]);
+    setSheet({ title: t("País do pacote"), items });
   }
 
   async function saveName() {
@@ -2734,6 +2753,11 @@ function FidusApp() {
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Idioma")}</Text>
             <Text style={{ color: c.sub, fontSize: 14 }}>{(LANG_CHOICES.find(([k]) => k === LANG) || [LANG, LANG])[1]}</Text></View>
           <Text style={{ color: c.sub }}>›</Text></Card>
+        {!!me?.countries && (
+          <Card c={c} onPress={chooseCountry}>
+            <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("País do pacote")}</Text>
+              <Text style={{ color: c.sub, fontSize: 14 }}>{(me.countries.countries || []).map((k: string) => t(COUNTRY_NAMES[k] || k)).join(" · ")}</Text></View>
+            <Text style={{ color: c.sub }}>›</Text></Card>)}
         <Card c={c} onPress={() => setScreen("plan")}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Meu plano")}</Text>
             <Text style={{ color: c.sub, fontSize: 14 }}>{plan ? t(plan.name) : t(me?.plan_name || PLAN_NAMES[me?.plan] || "…")}</Text></View>
@@ -2976,8 +3000,8 @@ function FidusApp() {
                         placeholderTextColor={c.sub} autoCapitalize="none"
                         style={[s.input, { color: c.text, backgroundColor: c.bg, marginBottom: 0 }]} />
                       <View style={s.row}>
-                        <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => payFromContacts(a)}>
-                          <Text style={{ color: c.text }}>{t("Escolher da agenda")}</Text></Pressable>
+                        {(myCountries.includes("PT") || myCountries.includes("BR")) && <Pressable style={[s.secondary, { borderColor: c.sub }]} onPress={() => payFromContacts(a)}>
+                          <Text style={{ color: c.text }}>{t("Escolher da agenda")}</Text></Pressable>}
                         <Pressable style={s.primarySm} onPress={() => paySaveKey(a)}><Text style={s.primaryText}>{t("Guardar")}</Text></Pressable>
                       </View>
                     </View>)}
@@ -3445,8 +3469,12 @@ const I18N_KEYS: string[] = [
   "Guardei para as próximas vezes",
   "Disponível no app atualizado.",
   "Esse contato não tem celular.",
+  "Usar para o MB Way?",
   "Usar como chave Pix?",
   "Usar",
+  "Entidade",
+  "Referência",
+  "Valor",
   "Pix copiado: cole no app do seu banco",
   "Dados copiados: cole no app do seu banco",
   "Lançado nos gastos",
@@ -3461,6 +3489,9 @@ const I18N_KEYS: string[] = [
   "Ainda processando…",
   "Idioma do Fidus",
   "Salvo",
+  "Os três países",
+  "Os três países (plano Global)",
+  "País do pacote",
   "Obrigado!",
   "Painel da empresa",
   "Preparando seus dados…",
@@ -3653,14 +3684,17 @@ const I18N_KEYS: string[] = [
   "pago ✓",
   "cancelado",
   "Chave",
+  "Telemóvel",
+  "Pagamento de serviços",
   "Conta",
   "Sai da conta",
   "Descrição",
-  "Primeira vez com {0}: qual a chave Pix ou os dados do banco? Eu guardo para as próximas.",
+  "Primeira vez com {0}: qual o MB Way, a chave Pix ou os dados do banco? Eu guardo para as próximas.",
   "Chave Pix",
   "Escolher da agenda",
   "Guardar",
   "Copiar Pix copia e cola",
+  "Copiar número do MB Way",
   "Copiar dados do pagamento",
   "Já paguei",
   "Cole no app do seu banco e confirme lá: o banco mostra o nome de quem recebe. Depois toque em Já paguei para lançar o gasto.",

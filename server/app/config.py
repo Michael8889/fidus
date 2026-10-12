@@ -61,7 +61,7 @@ WEB_SEARCH = (env("FIDUS_WEB_SEARCH", "1") or "1").strip() not in ("0", "false",
 WEB_SEARCH_COUNTRY = env("FIDUS_WEB_SEARCH_COUNTRY", "GB")
 
 # Planos: o plano deste servidor (até o pagamento existir) e a página para fazer upgrade
-DEFAULT_PLAN = env("FIDUS_PLAN", "premium")
+DEFAULT_PLAN = env("FIDUS_PLAN", "global")
 UPGRADE_URL = env("FIDUS_UPGRADE_URL", "")  # página de planos/checkout; vazio até o pagamento existir
 
 # Transcrição local (faster-whisper): tiny, base, small, medium, large-v3

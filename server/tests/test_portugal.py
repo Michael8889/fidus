@@ -56,7 +56,7 @@ def test_invoice_without_nif_alerts_and_saves_category():
 
 
 def test_no_nif_alerts_outside_portugal():
-    store.save_profile(country="GB", language="en", nifs={})
+    store.save_profile(country="GB", language="en", nifs={}, countries=["GB"])
     r = tools.run("add_expense", {"amount": 10, "category": "outros", "business": "Pessoal", "currency": "EUR"})
     assert not any("NIF" in a for a in r.get("alerts", []))
 

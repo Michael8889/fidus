@@ -12,7 +12,7 @@ import re
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from . import booking, config, features, google_client, meetings, payments, plans, portugal, store, web_tools
+from . import booking, config, countries, features, google_client, meetings, payments, plans, portugal, store, uk, web_tools
 
 TOOLS = [
     {
@@ -40,6 +40,8 @@ TOOLS = [
                                  "description": "fatura portuguesa: categoria do e-Fatura/IRS (supermercado, luz, "
                                                 "combustível = despesas_gerais; farmácia/médico = saude; restaurante = "
                                                 "restauracao_alojamento; gasto da empresa = atividade)"},
+                "supplier_vat_number": {"type": "string", "description": "UK receipt: the supplier's VAT registration "
+                                        "number (GB + 9 digits), if printed"},
             },
             "required": ["amount", "category", "business"],
         },
@@ -175,7 +177,24 @@ PROFILE_TOOL = {
 }
 
 TOOLS += features.TOOLS + meetings.TOOLS + booking.TOOLS + web_tools.TOOLS + payments.TOOLS + portugal.TOOLS + \
-    [plans.UPSELL_TOOL, PROFILE_TOOL]
+    uk.TOOLS + [plans.UPSELL_TOOL, PROFILE_TOOL]
+
+# campos do add_expense que só fazem sentido num país
+_EXPENSE_FIELDS = {"buyer_nif": "PT", "supplier_nif": "PT", "irs_category": "PT", "supplier_vat_number": "GB"}
+
+
+def available_tools() -> list[dict]:
+    """Ferramentas do país do pacote do cliente: as dos outros países nem chegam à IA (mais rápido e mais barato)."""
+    out = []
+    for t in TOOLS:
+        if not countries.tool_allowed(t["name"]):
+            continue
+        if t["name"] == "add_expense":
+            props = {k: v for k, v in t["parameters"]["properties"].items()
+                     if k not in _EXPENSE_FIELDS or countries.enabled(_EXPENSE_FIELDS[k])}
+            t = {**t, "parameters": {**t["parameters"], "properties": props}}
+        out.append(t)
+    return out
 
 # foto de recibo da mensagem atual (definida pelo agente antes de rodar as ferramentas)
 class _PerRequest(threading.local):
@@ -212,18 +231,25 @@ def run(name: str, args: dict) -> dict:
         "prepare_email_reply": _prepare_reply,
         "prepare_new_email": _prepare_new,
     }.get(name) or features.DISPATCH.get(name) or meetings.DISPATCH.get(name) or booking.DISPATCH.get(name) \
-        or web_tools.DISPATCH.get(name) or payments.DISPATCH.get(name) or portugal.DISPATCH.get(name)
+        or web_tools.DISPATCH.get(name) or payments.DISPATCH.get(name) or portugal.DISPATCH.get(name) \
+        or uk.DISPATCH.get(name)
     if name == "save_document":
         fn = lambda **a: features.save_document(**a, _path=CURRENT_RECEIPT.get("path"))  # noqa: E731
     if name == "offer_upgrade":
         return {"ok": True, "upsell": plans.upsell(args.get("feature", "extra_business"))}
     if not fn:
         return {"error": f"ferramenta desconhecida: {name}"}
+    if not countries.tool_allowed(name):
+        return plans.locked("multi_country")
     blocked = plans.gate(name, args)
     if blocked:
         return blocked
     try:
         return fn(**args)
+    except countries.CountryLocked as e:
+        out = plans.locked("multi_country")
+        out["error"] = f"{e}. " + out["error"]
+        return out
     except Exception as e:  # o modelo recebe o erro e explica ao usuário
         return {"error": str(e)}
 
@@ -353,7 +379,7 @@ def _today() -> str:
 
 
 def _add_expense(amount, category, business, currency=None, date=None, merchant=None, vat=None, note=None,
-                 attach_receipt=False, buyer_nif=None, supplier_nif=None, irs_category=None):
+                 attach_receipt=False, buyer_nif=None, supplier_nif=None, irs_category=None, supplier_vat_number=None):
     amount = round(float(amount), 2)
     if amount <= 0:
         return {"error": "valor precisa ser maior que zero"}
@@ -369,6 +395,10 @@ def _add_expense(amount, category, business, currency=None, date=None, merchant=
     receipt = CURRENT_RECEIPT.get("path") if attach_receipt else None
     if irs_category and irs_category not in portugal.IRS_CATEGORIES:
         irs_category = None
+    if not countries.enabled("PT"):
+        buyer_nif = supplier_nif = irs_category = None
+    if supplier_vat_number and countries.enabled("GB") and not supplier_nif:
+        supplier_nif = supplier_vat_number  # mesma coluna: número fiscal do fornecedor
     eid = store.add_expense(date or _today(), amount, cur, category, business, merchant, note,
                             float(vat) if vat is not None else None, receipt,
                             portugal.clean_nif(supplier_nif), portugal.clean_nif(buyer_nif), irs_category)
@@ -388,6 +418,13 @@ def _add_expense(amount, category, business, currency=None, date=None, merchant=
             out["irs_category"] = portugal.IRS_CATEGORIES[irs_category]
     except Exception:
         pass
+    try:  # Reino Unido: VAT number
+        if countries.enabled("GB"):
+            gb = uk.check_receipt(cur, vat, supplier_vat_number)
+            if gb:
+                out["alerts"] = (out.get("alerts") or []) + gb
+    except Exception:
+        pass
     return out
 
 
@@ -401,6 +438,8 @@ def _update_profile(name=None, timezone=None, currency=None, add_business=None, 
             return {"error": f"fuso horário desconhecido: {timezone} (use o formato Europe/Lisbon)"}
     if business_currency and not store._valid_currency(business_currency):
         return {"error": "moeda inválida (use o código de 3 letras, ex. GBP, EUR, BRL)"}
+    if business_currency:
+        countries.require_currency(business_currency)
     if add_business and not store.match_business(add_business) and not plans.allows("extra_business"):
         return plans.locked("extra_business")
     if wallet and not store.match_business(wallet):

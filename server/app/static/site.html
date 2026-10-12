@@ -484,8 +484,8 @@ input::placeholder{color:#6F7B8C}
 // ---------- Idiomas e moedas ----------
 // Idioma: o do navegador (pt, en, es, fr, de, it, ms; outros veem em inglês). O visitante pode trocar no rodapé.
 // Moeda: Reino Unido = libra, Europa = euro, resto do mundo = dólar (pelo fuso do aparelho). A cobrança segue o país do cartão.
-var PRICES = { EUR: { essencial: 16.90, negocio: 49.90, premium: 69.90 }, GBP: { essencial: 24.90, negocio: 42.90, premium: 59.90 },
-               USD: { essencial: 32.90, negocio: 54.90, premium: 74.90 } };
+var PRICES = { EUR: { essencial: 16.90, negocio: 49.90, premium: 69.90, global: 89.90 }, GBP: { essencial: 24.90, negocio: 42.90, premium: 59.90, global: 79.90 },
+               USD: { essencial: 32.90, negocio: 54.90, premium: 74.90, global: 99.90 } };
 var SYM = { EUR: "€", GBP: "£", USD: "$" };
 var LANGS = [["pt-pt", "PT"], ["pt", "BR"], ["en", "EN"], ["es", "ES"], ["fr", "FR"], ["de", "DE"], ["it", "IT"], ["ms", "MS"]];
 var EU_TZ_EXTRA = ["Atlantic/Azores", "Atlantic/Madeira", "Atlantic/Canary", "Atlantic/Faroe", "Atlantic/Reykjavik", "Arctic/Longyearbyen"];
@@ -570,7 +570,8 @@ pt: {
     cur: { GBP: "libras", EUR: "euros", USD: "dólares" } },
   plans: { essencial: ["Essencial", "Para organizar a vida e começar no próprio negócio.", ["Voz e texto sem limite", "Agenda, lembretes e bom dia às 8h", "E-mail: resumo e rascunhos com aprovação", "Gastos e recibos de 1 carteira", "Documentos com aviso de validade", "Tarefas e aba Atividade"]],
     negocio: ["Negócio", "Para quem toca uma ou mais empresas.", ["Tudo do Essencial", "Modo conversa: fale como numa ligação", "Empresas e moedas ilimitadas", "Link de agendamento para clientes", "Ata de reunião automática", "Pacote do contador com recibos", "Alerta de assinaturas e resumo da semana"]],
-    premium: ["Premium", "O back-office completo, no bolso.", ["Tudo do Negócio", "Pagar por voz: Pix e transferências preparados para você", "*Cobrança e fatura para clientes", "*Mais 1 pessoa na conta + acesso do contador", "Atas sem limite e suporte prioritário"]] },
+    premium: ["Premium", "O back-office completo, no bolso.", ["Tudo do Negócio", "Pagar por voz: Pix e transferências preparados para você", "*Cobrança e fatura para clientes", "*Mais 1 pessoa na conta + acesso do contador", "Atas sem limite e suporte prioritário"]],
+    global: ["Global", "Para quem vive e fatura entre países.", ["Tudo do Premium", "Brasil, Portugal e Reino Unido na mesma conta", "Real, euro e libra lado a lado", "Impostos e pagamentos dos três países (Pix, MB Way, conta UK)"]] },
   chat: ["Marca visita técnica quinta às 4 da tarde na Norauto de Coimbra", "Marcado: quinta, 16h–17h, na Norauto Coimbra com o endereço completo. O lembrete abre direto no Maps.",
     "Recibo enviado", "Lançado: {m45.90} · combustível · HomB. Recibo guardado.", "Responde o Carlos aceitando o orçamento", "Re: Orçamento cozinha · para Carlos",
     "Quanto gastei de gasolina este mês?", "{m186.40} em 4 abastecimentos.\nNo mesmo ponto do mês passado: {m212.10}."],
@@ -624,7 +625,8 @@ pt: {
     cur: { GBP: "libras", EUR: "euros", USD: "dólares" } },
   plans: { essencial: ["Essencial", "Para organizar a vida e o trabalho por conta própria.", ["Voz e texto sem limite", "Agenda, lembretes e bom dia às 8h", "E-mail: resumo e rascunhos com aprovação", "Despesas e faturas de 1 carteira, com NIF conferido", "Calendário fiscal: IVA, IRS e Segurança Social", "Documentos com aviso de validade e tarefas"]],
     negocio: ["Negócio", "Para quem gere uma ou mais empresas.", ["Tudo do Essencial", "Modo conversa: fale como numa chamada", "Empresas e moedas ilimitadas", "Link de marcações para clientes", "Ata de reunião automática", "Pacote do contabilista com as faturas", "Alerta de subscrições e resumo da semana"]],
-    premium: ["Premium", "O back-office completo, no bolso.", ["Tudo do Negócio", "Pagar por voz: MB Way, Multibanco e transferências preparados para si", "*Faturação e cobrança a clientes", "*Mais 1 pessoa na conta + acesso do contabilista", "Atas sem limite e suporte prioritário"]] },
+    premium: ["Premium", "O back-office completo, no bolso.", ["Tudo do Negócio", "Pagar por voz: MB Way, Multibanco e transferências preparados para si", "*Faturação e cobrança a clientes", "*Mais 1 pessoa na conta + acesso do contabilista", "Atas sem limite e suporte prioritário"]],
+    global: ["Global", "Para quem vive e fatura entre países.", ["Tudo do Premium", "Portugal, Reino Unido e Brasil na mesma conta", "Euro, libra e real lado a lado", "Calendário fiscal e pagamentos dos três países (MB Way, conta UK, Pix)"]] },
   chat: ["Marca visita técnica quinta às 4 da tarde na Norauto de Coimbra", "Marcado: quinta, 16h–17h, na Norauto Coimbra, com a morada completa. O lembrete abre diretamente no Maps.",
     "Fatura enviada", "Registado: {m45.90} · combustível · com o seu NIF. Fatura guardada.", "Responde ao Carlos a aceitar o orçamento", "Re: Orçamento cozinha · para Carlos",
     "Quanto gastei em combustível este mês?", "{m186.40} em 4 abastecimentos.\nNo mesmo ponto do mês passado: {m212.10}."],
@@ -658,7 +660,7 @@ en: {
     badge: "Early access open · Android", h1a: "Speak.", h1b: "Fidus", r0: "books it.", r1: "logs it.", r2: "replies.", r3: "reminds.", r4: "files it.",
     lead: "The personal assistant that handles the diary, emails, expenses and documents for people running a life and a business across countries. By voice, in your language.",
     emailLabel: "Your email", emailPh: "you@email.com", join: "Get access →", joined: "Done. You're in the next test group.",
-    c1: "✓ Works with Google Calendar, Gmail and Meet", c2: "✓ Several businesses and currencies", c3: "✓ Cancel in the app",
+    c1: "✓ Works with Outlook, Microsoft 365 and Google", c2: "✓ Self Assessment, VAT and Companies House reminders", c3: "✓ Cancel in the app",
     toast1t: "In your diary", toast1s: "Thursday, 4pm · with address", toast2t: "Expense logged", toast2s: "{m45.90} · HomB · receipt saved",
     toast3t: "Draft ready", toast3s: " · you approve", phoneAria: "Demo conversation with Fidus", online: "online", typing: "typing…",
     draftLabel: "Email · waiting for you", cancel: "Cancel", send: "Send", composer: "Type or tap the mic…", marqueeAria: "Example requests",
@@ -679,8 +681,9 @@ en: {
     cur: { GBP: "pounds", EUR: "euros", USD: "US dollars" } },
   plans: { essencial: ["Essential", "To organise your life and get started in your own business.", ["Unlimited voice and text", "Diary, reminders and an 8am briefing", "Email: summaries and drafts you approve", "Expenses and receipts for 1 wallet", "Documents with expiry alerts", "Tasks and Activity tab"]],
     negocio: ["Business", "For people running one or more companies.", ["Everything in Essential", "Conversation mode: talk like a phone call", "Unlimited businesses and currencies", "Booking link for clients", "Automatic meeting minutes", "Accountant pack with receipts", "Subscription alerts and weekly review"]],
-    premium: ["Premium", "The whole back office, in your pocket.", ["Everything in Business", "*Pay by voice: Pix and transfers prepared for you", "*Client billing and invoices", "*1 more person on the account + accountant access", "Unlimited minutes and priority support"]] },
-  chat: ["Book a site visit Thursday at 4pm at Norauto Coimbra", "Booked: Thursday, 4–5pm, at Norauto Coimbra with the full address. The reminder opens straight in Maps.",
+    premium: ["Premium", "The whole back office, in your pocket.", ["Everything in Business", "Pay by voice: UK bank transfers prepared for you", "*Client billing and invoices", "*1 more person on the account + accountant access", "Unlimited minutes and priority support"]],
+    global: ["Global", "For people who live and work across countries.", ["Everything in Premium", "UK, Portugal and Brazil in one account", "Pounds, euros and reais side by side", "Tax reminders and payments for all three (UK transfers, MB Way, Pix)"]] },
+  chat: ["Book the MOT Thursday at 4pm at Kwik Fit Wembley", "Booked: Thursday, 4–5pm, at Kwik Fit Wembley with the full address. The reminder opens straight in Maps.",
     "Receipt sent", "Logged: {m45.90} · fuel · HomB. Receipt saved.", "Reply to Carlos accepting the quote", "Re: Kitchen quote · to Carlos",
     "How much did I spend on fuel this month?", "{m186.40} across 4 fill-ups.\nSame point last month: {m212.10}."],
   cmd1: ["Lunch with the accountant Friday at 1", "How much did I spend on fuel this month?", "Remind me to pay VAT on the 5th", "Reply to Carlos accepting the quote",
@@ -688,7 +691,7 @@ en: {
   cmd2: ["Morning! How's my day?", "Meeting every Tuesday at 9 with a Meet link", "Make the quarterly accountant pack", "Which subscriptions do I pay?",
     "Send me my booking link", "Paid 45 for lunch, Portugal company", "Mum's birthday on the 27th, warn me 3 days before", "How was my week?"],
   day: [["Morning", "Your whole day in one message.", "Diary, tasks due today, bills coming up and important emails, before your first coffee.", "Morning! What have I got today?", "3 appointments, the first at 9:30.\n1 overdue task: send the quote.\nCar insurance expires in 12 days."],
-    ["In the car", "Diary with address, by voice.", "You talk to the phone in its holder. The event goes into Google Calendar with the full address and the reminder opens in Maps.", "Book a site visit Thursday at 4 on Rodney Road, Wembley", "Booked: Thursday, 4pm, with the full Wembley address."],
+    ["In the car", "Diary with address, by voice.", "You talk to the phone in its holder. The event goes into your Outlook or Google calendar with the full address and the reminder opens in Maps.", "Book a site visit Thursday at 4 on Rodney Road, Wembley", "Booked: Thursday, 4pm, with the full Wembley address."],
     ["Lunch", "A receipt became an entry.", "One photo and done: amount, VAT, category and business, with the receipt kept for your accountant.", "[receipt photo]", "Logged: {m23.80} · food · HomB.\nVAT: {m3.97}. Receipt saved."],
     ["Meeting", "The minutes write themselves.", "Record the meeting in the app. Fidus sums up the decisions, creates your tasks and drafts the email for you to approve.", "Stop and make the minutes", "Minutes ready: Wembley job.\n2 decisions · 3 next steps.\nAdded 2 tasks for you."],
     ["Emails", "Replies ready, you just approve.", "It reads, summarises and drafts in your tone. Nothing goes out until you tap Send or say “send it”.", "Reply to Carlos accepting, payment in 30 days", "Draft ready. Tap Send or say “send it”."],
@@ -700,7 +703,9 @@ en: {
     ["Meetings", "Meeting minutes", "Records, transcribes, summarises and creates everyone's tasks. The minutes email waits for your approval.", "What did we decide yesterday?"],
     ["Clients", "Booking link", "Your clients pick a free slot. The event lands in your diary with the visit address.", "Send me my booking link"]],
   bars: ["Materials", "Fuel", "Tools", "Food", "Software"],
-  faqs: [["Do I need WhatsApp?", "No. Fidus is its own app. Your personal and work chats stay separate."],
+  faqs: [["Does it work with Outlook?", "Yes. Connect Outlook and Microsoft 365, or Google (Gmail and Calendar)."],
+    ["Does it know UK tax deadlines?", "Yes. Tell Fidus how you work (sole trader, VAT, limited company, employees) and it sets reminders before Self Assessment, MTD, VAT, Corporation Tax, Companies House and PAYE deadlines. It checks VAT numbers on receipts too. It doesn't replace your accountant."],
+    ["Do I need WhatsApp?", "No. Fidus is its own app. Your personal and work chats stay separate."],
     ["Does it send emails on its own?", "Never. Replies, minutes and invites stay as drafts until you tap Send or say “send it”."],
     ["Does it work in my language?", "Yes. You speak or type in your language and Fidus answers in the same one. You can even mix languages."],
     ["Can I change plans later?", "Yes, any time. If you ask for something from a higher plan, Fidus shows you what it would unlock."],
@@ -986,7 +991,7 @@ var CHAT_KIND = [{ who: "user", voice: true }, { who: "bot" }, { who: "user", ph
   { who: "user", voice: true }, { who: "card" }, { who: "user", voice: true }, { who: "bot" }];
 var BAR_V = [1240, 412.6, 318, 186.4, 74.97];
 var BAR_C = ["#14804F", "#2F5BD8", "#C27A00", "#7A4FD8", "#5B6678"];
-var PLAN_IDS = ["essencial", "negocio", "premium"];
+var PLAN_IDS = ["essencial", "negocio", "premium", "global"];  // Global só nos idiomas que o descrevem (pt, pt-pt, en)
 var CURS = [["GBP", "£ GBP"], ["EUR", "€ EUR"], ["USD", "$ USD"]];
 
 class Component extends DCLogic {
@@ -1054,7 +1059,7 @@ class Component extends DCLogic {
       yBg: yearly ? "#07090D" : "transparent", yFg: yearly ? "#F2F5F7" : "#07090D",
       setMonthly: function () { self.setState({ yearly: false }); },
       setYearly: function () { self.setState({ yearly: true }); },
-      plans: PLAN_IDS.map(function (id) {
+      plans: PLAN_IDS.filter(function (id) { return D.plans[id]; }).map(function (id) {
         var p = D.plans[id], month = prices[id], featured = id === "negocio";
         return { name: p[0], who: p[1], featured: featured, start: T.startWith.replace("{n}", p[0]),
                  href: direct || "#acesso", pick: function () { self.setState({ plan: id }); },

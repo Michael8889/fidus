@@ -15,7 +15,7 @@ import re
 import unicodedata
 import uuid
 
-from . import store
+from . import countries, store
 
 KEY_TYPES = ["celular", "cpf", "cnpj", "email", "aleatoria"]
 METHOD_CURRENCY = {"pix": "BRL", "uk": "GBP", "iban": "EUR", "mbway": "EUR", "multibanco": "EUR"}
@@ -127,6 +127,7 @@ def save_contact(name: str, pix_key: str | None = None, pix_key_type: str | None
         data.update(method="uk", sort_code=f"{sc[:2]}-{sc[2:4]}-{sc[4:]}", account_number=acc)
     else:
         raise ValueError("falta o MB Way, a chave Pix ou os dados do banco")
+    countries.require_method(data["method"])
     if wallet:
         data["wallet"] = store.match_business(wallet) or wallet.strip()[:40]
     if category:
@@ -211,6 +212,7 @@ def _build(payload: dict, contact: dict | None) -> dict:
         payload.update(needs_key=True, method=None)
         return payload
     method = contact["method"]
+    countries.require_method(method)
     cur = (payload.get("currency") or "").upper() or METHOD_CURRENCY[method]
     if method == "pix" and cur != "BRL":
         raise ValueError("Pix é só em reais (BRL)")
@@ -240,6 +242,7 @@ def prepare(to: str, amount: float, currency: str | None = None, description: st
     if not 0 < amount < 1_000_000:
         raise ValueError("valor inválido")
     if mb_entity or mb_reference:  # fatura com referência Multibanco: não precisa de contacto
+        countries.require_method("multibanco")
         ent, ref = multibanco(mb_entity or "", mb_reference or "")
         payload = {"to": (to or "").strip()[:60] or f"Entidade {ent}", "amount": amount, "currency": "EUR",
                    "description": (description or "").strip()[:72], "needs_key": False, "method": "multibanco",

@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Uplo
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
-from . import account_data, accounts, newsletter, partners, actions, admin, agent, backup, booking, metrics, web_tools, config, features, google_client, i18n, mailer, meetings, plans, store, tools
+from . import account_data, accounts, countries, newsletter, partners, actions, admin, agent, backup, booking, metrics, web_tools, config, features, google_client, i18n, mailer, meetings, plans, store, tools
 
 app = FastAPI(title="Fidus API", version="0.9.0", docs_url=None, redoc_url=None, openapi_url=None)  # não expõe o mapa da API
 store.init_db()
@@ -623,7 +623,7 @@ def me(request: Request):
             "google_connected": google_client.google_connected(), "profile": store.profile(),
             "outlook_connected": _ms().is_connected(), "outlook_email": _ms().email(),
             "outlook_available": _ms().enabled(), "mail_provider": google_client.provider(),
-            "language": store.user_lang(), "currency": plans.user_currency(),
+            "language": store.user_lang(), "currency": plans.user_currency(), "countries": countries.info(),
             "staff_role": admin.role_for({**u, "email": u.get("email")}),
             "nps_due": _nps_due(u), "natural_voice": _tts_on(), "realtime": _rt_on(), "onboarding_pending": _onb_pending(), "voice_gender": store.profile().get("voice_gender") or "female"}
 
@@ -681,6 +681,28 @@ def nps(body: NpsIn):
 def panel_code():
     """Código de 8 letras para abrir o painel da empresa no computador (só equipe)."""
     return admin.new_panel_code(store.current())
+
+
+class CountriesIn(BaseModel):
+    countries: list[str]
+
+
+@app.post("/v1/countries", dependencies=[Depends(auth)])
+def countries_set(body: CountriesIn):
+    """País do pacote (um por plano; três no Global). Mudar de país fica na Atividade."""
+    before = countries.user_countries()
+    try:
+        r = countries.set_countries(body.countries)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if r.get("locked"):
+        return r
+    if r["countries"] != before:
+        names = ", ".join(countries.COUNTRIES[c]["name"] for c in r["countries"])
+        store.add_activity("countries_changed", f"País do pacote: {names}",
+                           "antes: " + ", ".join(countries.COUNTRIES[c]["name"] for c in before), "feito",
+                           ",".join(before))
+    return {**r, **countries.info(), "currency": plans.user_currency()}
 
 
 class ProfileIn(BaseModel):
@@ -1253,6 +1275,7 @@ def cancel_action(pid: str):
 
 # ---------- Aba Atividade ----------
 UNDO = {
+    "countries_changed": lambda ref: countries.set_countries(ref.split(",")),
     "event_created": lambda ref: tools.run_delete_event(ref),
     "reminder_created": lambda ref: tools.run_delete_event(ref),
     "expense_added": lambda ref: tools.run_delete_expense(int(ref)),
@@ -1784,7 +1807,7 @@ async def billing_webhook(request: Request):
     if not user:
         return {"ok": True, "ignored": "cliente desconhecido"}
     product = (ev.get("new_product_id") or ev.get("product_id") or "").lower()
-    plan = next((p for p in ("premium", "negocio", "essencial") if p in product), None)
+    plan = next((p for p in ("global", "premium", "negocio", "essencial") if p in product), None)
     mail = None
     with store.as_user(accounts.user_ctx(user)):
         before = plans.current()

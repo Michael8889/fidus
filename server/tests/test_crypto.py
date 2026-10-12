@@ -21,8 +21,8 @@ def test_secrets_are_encrypted_at_rest_and_readable():
     assert store.kv_get("google_creds") == '{"refresh_token": "segredo-123"}'
     store.kv_set("ms_tokens", '{"access_token": "abc"}')
     assert "abc" not in _raw("ms_tokens") and store.kv_get("ms_tokens") == '{"access_token": "abc"}'
-    store.kv_set("plan", "premium")  # dado comum continua legível
-    assert _raw("plan") == "premium"
+    store.kv_set("plan", "global")  # dado comum continua legível
+    assert _raw("plan") == "global"
 
 
 def test_old_plaintext_is_migrated_on_read():

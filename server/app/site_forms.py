@@ -14,7 +14,7 @@ from . import accounts, config, mailer, partners
 
 log = logging.getLogger("fidus.site")
 EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
-PLANS = {"essencial": "Essencial", "negocio": "Negócio", "premium": "Premium"}
+PLANS = {"essencial": "Essencial", "negocio": "Negócio", "premium": "Premium", "global": "Global"}
 _HITS: dict[str, list[float]] = {}
 
 
