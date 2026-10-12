@@ -248,7 +248,7 @@ def system(s: Session = Depends(need("system"))):
     if tasks24 >= 10 and _pct(failed, tasks24) > 10:
         problems.append("tasks_failing")
     return {"ok": not problems, "problems": problems, "uptime_s": int(time.time() - metrics.STARTED),
-            "version": "0.15.1", "llm": config.LLM_PROVIDER, "model": config.LLM_MODEL,
+            "version": "0.16.0", "llm": config.LLM_PROVIDER, "model": config.LLM_MODEL,
             "voice_stages": metrics.stage_p50(),
             "backup": {"age_hours": round(age, 1) if age is not None else None, **backup.last()},
             "disk_free_gb": free, "requests_24h": len(last24), "asks_24h": len(asks),
@@ -611,6 +611,40 @@ def waitlist_notify(s: Session = Depends(manager)):
         raise HTTPException(400, "nenhuma loja configurada (FIDUS_PLAY_STORE_URL / FIDUS_APP_STORE_URL)")
     r = site_forms.notify_store_ready()
     audit(s["email"], "site.notify", f"{r['sent']} enviados")
+    return r
+
+
+# ---------- beta só com convite: fila e turmas ----------
+@router.get("/admin/api/beta")
+def beta_view(s: Session = Depends(need("site"))):
+    from . import beta
+    q = beta.queue()
+    rows = accounts.waitlist()
+    return {"waiting": len(q), "invited": sum(1 for r in rows if r.get("invited_at")),
+            "joined": sum(1 for r in rows if r.get("invited_at") and accounts.by_email(r["email"])),
+            "ios_waiting": sum(1 for r in q if r.get("platform") == "ios"),
+            "queue": [{"email": r["email"], "position": r["position"], "friends": r["friends"],
+                       "platform": r.get("platform") or "", "lang": r.get("lang") or "", "since": r["created_at"]}
+                      for r in q[:200]],
+            "download_ready": bool(config.APP_DOWNLOAD_URL), "per_member": config.BETA_INVITES,
+            "can_manage": s["role"] in ("owner", "admin")}
+
+
+class BatchIn(BaseModel):
+    count: int
+    dry_run: bool = False
+
+
+@router.post("/admin/api/beta/invite")
+def beta_invite(body: BatchIn, s: Session = Depends(manager)):
+    """Convida os primeiros da fila (com Android). Primeiro com dry_run para ver quem seria."""
+    from . import beta
+    try:
+        r = beta.invite_batch(body.count, dry_run=body.dry_run)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not body.dry_run:
+        audit(s["email"], "beta.invite", f"{r['invited']} convidados")
     return r
 
 

@@ -234,7 +234,28 @@ def site_waitlist(body: WaitlistIn, request: Request):
     r = site_forms.join(body.email, body.lang or "", body.platform or "", body.plan or "", body.ref or "")
     if r.get("error"):
         raise HTTPException(400, "e-mail inválido")
-    return {"ok": True}
+    out = {"ok": True, "invited": r.get("invited", False)}
+    if r.get("token"):
+        out.update(status_url=f"{config.PUBLIC_BASE_URL.rstrip('/')}/beta?t={r['token']}",
+                   position=r.get("position"), share=r.get("share"))
+    return out
+
+
+@app.get("/beta", response_class=HTMLResponse)
+def beta_page(t: str = ""):
+    """Posição na fila (com o link para subir) ou, para quem foi convidado, o download do app."""
+    from . import beta
+    title, body = beta.page(t)
+    return _page(title, body)
+
+
+@app.get("/beta/app")
+def beta_download(t: str = ""):
+    from . import beta
+    url = beta.download_url(t)
+    if not url:
+        raise HTTPException(404, "convite não encontrado")
+    return RedirectResponse(url)
 
 
 @app.get("/lista/sair", response_class=HTMLResponse)
@@ -1778,6 +1799,12 @@ def referral_page(code: str, request: Request):
     code = accounts.referral_code(ref["id"])
     who = html.escape((ref.get("name") or "").split(" ")[0] or "Um amigo")
     en = not request.headers.get("accept-language", "").lower().startswith("pt")
+    if config.BETA_INVITES > 0 and accounts.beta_invites_left(ref["id"]) <= 0:
+        q = f'<a class="b" href="{config.SITE_URL}/?ref={code}">{"Join the queue" if en else "Entrar na fila"}</a>'
+        return _page("Fidus", (f"<h1>{who}'s invites are used up</h1><p>Fidus is invite-only for now. Join the queue "
+                               f"and we'll invite you soon.</p>{q}") if en else
+                     (f"<h1>Os convites de {who} acabaram</h1><p>O Fidus está só com convite por enquanto. Entre na "
+                      f"fila e convidamos você em breve.</p>{q}"))
     days = config.REFERRAL_TRIAL_DAYS
     download = (f'<a class="b" href="{html.escape(config.APP_DOWNLOAD_URL)}">{"Get the app" if en else "Baixar o app"}</a>'
                 if config.APP_DOWNLOAD_URL else "")

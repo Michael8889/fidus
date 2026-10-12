@@ -96,7 +96,11 @@ const T = {
   s_no_store:"Add FIDUS_PLAY_STORE_URL / FIDUS_APP_STORE_URL to .env to enable.", s_confirm:"Email everyone on the list who has not been told yet?", s_sent:"Sent: {0}. Waiting for their store: {1}.",
   s_apps:"Partner applications", s_kind:"Type", s_link:"Link", s_aud:"Audience", s_msg:"Message", s_approve:"Approve", s_reject:"Reject",
   st_nova:"New", st_aprovada:"Approved", st_recusada:"Rejected", s_approve_help:"After approving, create the code in Partners and reply to the person by email.",
-  voice_speed:"Voice speed (median, 24 h)", voice_stages_help:"transcription · AI thinking · natural voice"},
+  voice_speed:"Voice speed (median, 24 h)", voice_stages_help:"transcription · AI thinking · natural voice",
+  b_title:"Beta (invite only)", b_help:"Invite the top of the queue in groups. Each friend someone brings moves them up {0} places. Each member has {1} invites of their own.",
+  b_waiting:"In the queue", b_invited:"Invited", b_joined:"Signed in", b_ios:"iPhone (waiting)", b_count:"How many", b_preview:"See who",
+  b_send:"Invite them", b_confirm:"Send the invite email to these {0} people?", b_done:"Invited: {0}. Still in the queue: {1}.",
+  b_no_apk:"Add FIDUS_APP_DOWNLOAD_URL (APK link) to .env to invite.", b_pos:"#", b_friends:"Friends"},
  pt: {title:"Painel do Fidus", language:"Idioma", logout:"Sair", system:"Sistema", heart:"HEART", business:"Negócio",
   clients:"Clientes", team:"Equipe", signin:"Entrar no painel", signin_help:"No app do Fidus, abra o menu › Painel da empresa e digite aqui o código de 8 letras. Ele vale 5 minutos.",
   enter:"Entrar", all_ok:"Tudo funcionando", problems:"Precisa de atenção", uptime:"No ar há", requests24:"Chamadas (24 h)", asks24:"Pedidos ao Fidus (24 h)",
@@ -132,7 +136,11 @@ const T = {
   s_no_store:"Coloque FIDUS_PLAY_STORE_URL / FIDUS_APP_STORE_URL no .env para liberar.", s_confirm:"Mandar o e-mail para todos da lista que ainda não foram avisados?", s_sent:"Enviados: {0}. Esperando a loja deles: {1}.",
   s_apps:"Pedidos de parceria", s_kind:"Tipo", s_link:"Link", s_aud:"Público", s_msg:"Mensagem", s_approve:"Aprovar", s_reject:"Recusar",
   st_nova:"Novo", st_aprovada:"Aprovado", st_recusada:"Recusado", s_approve_help:"Depois de aprovar, crie o código em Parceiros e responda a pessoa por e-mail.",
-  voice_speed:"Velocidade da voz (mediana, 24 h)", voice_stages_help:"transcrição · IA pensando · voz natural"}
+  voice_speed:"Velocidade da voz (mediana, 24 h)", voice_stages_help:"transcrição · IA pensando · voz natural",
+  b_title:"Beta (só com convite)", b_help:"Convide os primeiros da fila por turmas. Cada amigo que a pessoa traz sobe ela {0} lugares. Cada membro tem {1} convites próprios.",
+  b_waiting:"Na fila", b_invited:"Convidados", b_joined:"Já entraram", b_ios:"iPhone (esperando)", b_count:"Quantos", b_preview:"Ver quem",
+  b_send:"Convidar", b_confirm:"Mandar o e-mail do convite para estas {0} pessoas?", b_done:"Convidados: {0}. Ainda na fila: {1}.",
+  b_no_apk:"Coloque FIDUS_APP_DOWNLOAD_URL (link do APK) no .env para convidar.", b_pos:"Nº", b_friends:"Amigos"}
 };
 let L = "en";
 try { L = localStorage.getItem("fidus_admin_lang") || "en"; } catch (e) {}
@@ -355,11 +363,47 @@ async function showLeads() {
     </tbody></table></div>`;
 }
 
+async function betaBlock() {
+  const b = await api("beta");
+  const html = `<div class="sec" style="margin-top:0">${esc(t("b_title"))}</div>
+    <p class="small muted">${esc(t("b_help", 10, b.per_member))}</p>
+    <div class="grid">${card(t("b_waiting"), num(b.waiting))}${card(t("b_invited"), num(b.invited))}${card(t("b_joined"), num(b.joined))}${card(t("b_ios"), num(b.ios_waiting))}</div>
+    ${b.can_manage ? `<p class="row"><input id="bn" type="number" min="1" max="500" value="20" style="width:90px" aria-label="${esc(t("b_count"))}">
+      <button class="btn ghost" id="bprev">${esc(t("b_preview"))}</button>
+      <button class="btn" id="bsend" ${b.download_ready ? "" : "disabled"}>${esc(t("b_send"))}</button></p>
+      ${b.download_ready ? "" : `<p class="small muted">${esc(t("b_no_apk"))}</p>`}<p id="bres" class="small"></p>` : ""}
+    <div class="card tablebox"><table><thead><tr><th>${esc(t("b_pos"))}</th><th>${esc(t("email"))}</th><th>${esc(t("s_platform"))}</th>
+      <th>${esc(t("b_friends"))}</th><th>${esc(t("l_since"))}</th></tr></thead><tbody>
+      ${b.queue.slice(0, 50).map((r) => `<tr><td>${num(r.position)}</td><td>${esc(r.email)}<div class="small">${esc(r.lang)}</div></td>
+        <td>${esc(r.platform || "—")}</td><td>${num(r.friends)}</td><td>${dateIso(r.since)}</td></tr>`).join("")
+        || `<tr><td colspan="5" class="muted">${esc(t("none"))}</td></tr>`}
+    </tbody></table></div>`;
+  return html;
+}
+
+function wireBeta() {
+  const n = () => parseInt(($("#bn") || {}).value || "0", 10) || 0;
+  const prev = $("#bprev"), send = $("#bsend");
+  if (prev) prev.onclick = async () => {
+    const r = await api("beta/invite", {method: "POST", body: JSON.stringify({count: n(), dry_run: true})});
+    $("#bres").textContent = r.would_invite.map((x) => `${x.position}. ${x.email}`).join(" · ") || t("none");
+  };
+  if (send) send.onclick = async () => {
+    const r0 = await api("beta/invite", {method: "POST", body: JSON.stringify({count: n(), dry_run: true})});
+    if (!r0.would_invite.length || !confirm(t("b_confirm", r0.would_invite.length))) return;
+    send.disabled = true;
+    try { const r = await api("beta/invite", {method: "POST", body: JSON.stringify({count: n()})});
+      $("#bres").textContent = t("b_done", r.invited, r.left_in_queue); }
+    catch (e) { $("#bres").textContent = e.message; send.disabled = false; }
+  };
+}
+
 async function showSite() {
+  const betaHtml = await betaBlock();
   const d = await api("site");
   const anyStore = d.stores.play || d.stores.apple;
   const dist = (o) => Object.entries(o || {}).map(([k, v]) => `${esc(k)}: <b>${num(v)}</b>`).join(" · ") || "—";
-  $("#main").innerHTML = `<div class="sec" style="margin-top:0">${esc(t("s_wait"))}</div>
+  $("#main").innerHTML = betaHtml + `<div class="sec">${esc(t("s_wait"))}</div>
     <p class="small muted">${esc(t("s_help"))}</p>
     <div class="grid">${card(t("s_total"), num(d.total))}${card(t("s_notified"), num(d.notified))}</div>
     <p class="small">${esc(t("s_platform"))}: ${dist(d.by_platform)}<br>${esc(t("s_plan"))}: ${dist(d.by_plan)}</p>
@@ -383,6 +427,7 @@ async function showSite() {
           <button class="btn ghost" data-app="${a.id}" data-to="recusada">${esc(t("s_reject"))}</button>` : ""}</td></tr>`).join("")
         || `<tr><td colspan="7" class="muted">${esc(t("none"))}</td></tr>`}
     </tbody></table></div>`;
+  wireBeta();
   const nb = $("#snotify");
   if (nb) nb.onclick = async () => {
     if (!confirm(t("s_confirm"))) return;

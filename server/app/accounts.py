@@ -66,7 +66,7 @@ def init() -> None:
                 status TEXT NOT NULL DEFAULT 'nova', created_at TEXT NOT NULL);
             """)
         wcols = {r[1] for r in c.execute("PRAGMA table_info(waitlist)").fetchall()}
-        for col in ("plan", "ref", "token", "notified_at"):
+        for col in ("plan", "ref", "token", "notified_at", "code", "invited_at", "invited_via"):
             if col not in wcols:
                 c.execute(f"ALTER TABLE waitlist ADD COLUMN {col} TEXT")
         dcols = {r[1] for r in c.execute("PRAGMA table_info(device_logins)").fetchall()}
@@ -129,6 +129,10 @@ def can_signup(email: str, ref: str | None = None) -> tuple[bool, str | None]:
         inv = c.execute("SELECT plan FROM invites WHERE lower(email)=lower(?)", (email,)).fetchone()
     if inv:
         return True, inv["plan"]
+    if ref and config.BETA_INVITES > 0 and referrer_for_code(ref):
+        if beta_invites_left(referrer_for_code(ref)["id"]) > 0:
+            return True, config.BETA_PLAN  # beta: cada membro traz até N amigos
+        return False, None
     if ref and config.REFERRAL_SIGNUP and referrer_for_code(ref) and _ref_signups_today(ref) < REFERRAL_DAILY_CAP:
         return True, None  # indicação de um cliente vale como convite (com limite por dia)
     if ref and config.REFERRAL_SIGNUP:
@@ -186,6 +190,10 @@ def find_or_create(email: str, name: str | None, sub: str | None = None, ref: st
         store.init_db()
         plans.set_plan(invite_plan or config.NEW_USER_PLAN)
         store.save_profile(name=(name or "").split(" ")[0] or None)
+    with _db() as c:  # convidado do beta por um membro (pelo site): fica ligado a quem convidou
+        w = c.execute("SELECT invited_via FROM waitlist WHERE lower(email)=lower(?)", (email,)).fetchone()
+    if w and w["invited_via"] and referrer_for_code(w["invited_via"]):
+        apply_referral(uid, w["invited_via"])
     return u
 
 
@@ -505,6 +513,19 @@ def consume_discount(uid: str) -> int:
     return r["percent"] if done else 0
 
 
+def beta_invites_left(uid: str) -> int:
+    """Convites do beta que o membro ainda tem: N menos os amigos que já entraram ou já foram convidados por ele."""
+    if config.BETA_INVITES <= 0:
+        return 0
+    code = referral_code(uid)
+    with _db() as c:
+        joined = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=?", (uid,)).fetchone()[0]
+        waiting = c.execute("SELECT COUNT(*) FROM waitlist w WHERE w.invited_via=? AND NOT EXISTS "
+                            "(SELECT 1 FROM users u JOIN referrals r ON r.invitee_id=u.id AND r.referrer_id=? "
+                            "WHERE lower(u.email)=lower(w.email))", (code, uid)).fetchone()[0]
+    return max(0, config.BETA_INVITES - joined - waiting)
+
+
 def referral_stats(uid: str) -> dict:
     with _db() as c:
         invited = c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=?", (uid,)).fetchone()[0]
@@ -516,7 +537,8 @@ def referral_stats(uid: str) -> dict:
     return {"invited": invited, "paid": paid, "credits_available": avail, "credits_used": used,
             "next_discount": next_discount(uid), "percent": config.REFERRAL_PERCENT,
             "trial_days": config.REFERRAL_TRIAL_DAYS,
-            "invited_by": ((mine["name"] or "").split(" ")[0] or "um amigo") if mine else None}
+            "invited_by": ((mine["name"] or "").split(" ")[0] or "um amigo") if mine else None,
+            "beta_total": config.BETA_INVITES, "beta_left": beta_invites_left(uid)}
 
 
 # ---------- Entrar com e-mail (código de 6 números, como no Claude e no ChatGPT) ----------

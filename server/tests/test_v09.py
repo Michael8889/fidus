@@ -248,6 +248,12 @@ def _login(monkeypatch, email, ref=""):
     return {"Authorization": f"Bearer {tok}"}
 
 
+@pytest.fixture(autouse=True)
+def _no_beta(monkeypatch):
+    """Estes testes são do programa de indicação de depois do beta (sem limite de 3 convites)."""
+    monkeypatch.setattr(config, "BETA_INVITES", 0)
+
+
 def test_referral_does_not_open_signup_by_default(monkeypatch):
     monkeypatch.setattr(config, "SIGNUP_OPEN", False)
     assert config.REFERRAL_SIGNUP is False or os.environ.get("FIDUS_REFERRAL_SIGNUP")

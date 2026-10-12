@@ -105,7 +105,10 @@ input::placeholder{color:#6F7B8C}
 <p class="msg" role="alert" style="margin: 12px 0 0; color: #FF8A8A; font-weight: 600">{{t.joinErr}}</p>
 </sc-if>
 <sc-if value="{{joined}}" hint-placeholder-val="{{ false }}">
-<p class="msg" style="margin: 12px 0 0; color: #3DDC97; font-weight: 600">{{t.joined}}</p>
+<p class="msg" style="margin: 12px 0 0; color: #3DDC97; font-weight: 600">{{joinedMsg}}</p>
+<sc-if value="{{statusUrl}}" hint-placeholder-val="{{ false }}">
+<p style="margin: 8px 0 0"><a href="{{statusUrl}}" style="color: #F2F5F7; font-weight: 700">{{posLink}}</a></p>
+</sc-if>
 </sc-if>
 </sc-if>
 </div>
@@ -461,7 +464,7 @@ pt: {
   t: { getOn: "Baixe no", storeAfter: "Instale, abra o Fidus e crie sua conta em 1 minuto, direto no app.", iosSoon: "No iPhone: em breve. Deixe seu e-mail e avisamos.", androidSoon: "No Android: em breve. Deixe seu e-mail e avisamos.", download: "Baixar o app →", navDay: "Um dia com o Fidus", navFeat: "Funções", navPlans: "Planos", navFaq: "Perguntas", navCta: "Começar agora →",
     badge: "Acesso antecipado aberto · Android", h1a: "Fale.", h1b: "O Fidus", r0: "agenda.", r1: "lança.", r2: "responde.", r3: "lembra.", r4: "guarda.",
     lead: "O assistente pessoal que cuida da agenda, dos e-mails, dos gastos e dos documentos de quem toca a vida e o negócio entre países. Por voz, no seu idioma.",
-    emailLabel: "Seu e-mail", emailPh: "seu@email.com", join: "Quero acesso →", joined: "Pronto. Você entra na próxima turma de testes.",
+    emailLabel: "Seu e-mail", emailPh: "seu@email.com", join: "Quero acesso →", joined: "Pronto. Você entra na próxima turma de testes.", posMsg: "Você é o nº {p} da fila. Cada amigo que entrar pelo seu link sobe você 10 lugares.", posLink: "Ver meu lugar e meu link →", invitedMsg: "Convite liberado! Veja o seu e-mail para baixar o app.",
     c1: "✓ Funciona com Google Agenda, Gmail e Meet", c2: "✓ Várias empresas e moedas", c3: "✓ Cancele no app",
     toast1t: "Já está na agenda", toast1s: "Quinta, 16h · com endereço", toast2t: "Gasto lançado", toast2s: "{m45.90} · HomB · recibo salvo",
     toast3t: "Rascunho pronto", toast3s: " · você aprova", phoneAria: "Demonstração de conversa com o Fidus", online: "online", typing: "digitando…",
@@ -516,7 +519,7 @@ pt: {
   t: { getOn: "Disponível na", storeAfter: "Instale, abra o Fidus e crie a sua conta em 1 minuto, diretamente na app.", iosSoon: "No iPhone: brevemente. Deixe o seu e-mail e avisamos.", androidSoon: "No Android: brevemente. Deixe o seu e-mail e avisamos.", download: "Descarregar a app →", navDay: "Um dia com o Fidus", navFeat: "Funções", navPlans: "Planos", navFaq: "Perguntas", navCta: "Começar agora →",
     badge: "Acesso antecipado aberto · Android", h1a: "Fale.", h1b: "O Fidus", r0: "agenda.", r1: "regista.", r2: "responde.", r3: "lembra.", r4: "guarda.",
     lead: "O assistente pessoal que trata da agenda, dos e-mails, das despesas e dos documentos de quem gere a vida e o negócio. Por voz, em português de Portugal.",
-    emailLabel: "O seu e-mail", emailPh: "o.seu@email.pt", join: "Quero acesso →", joined: "Pronto. Entra na próxima turma de testes.",
+    emailLabel: "O seu e-mail", emailPh: "o.seu@email.pt", join: "Quero acesso →", joined: "Pronto. Entra na próxima turma de testes.", posMsg: "É o n.º {p} da fila. Cada amigo que entrar pelo seu link fá-lo subir 10 lugares.", posLink: "Ver o meu lugar e o meu link →", invitedMsg: "Convite libertado! Veja o seu e-mail para descarregar a app.",
     c1: "✓ Funciona com Google, Outlook e Microsoft 365", c2: "✓ Confere o NIF das faturas", c3: "✓ Cancele na app",
     toast1t: "Já está na agenda", toast1s: "Quinta, 16h · com morada", toast2t: "Despesa registada", toast2s: "{m45.90} · com NIF · fatura guardada",
     toast3t: "Rascunho pronto", toast3s: " · você aprova", phoneAria: "Demonstração de conversa com o Fidus", online: "online", typing: "a escrever…",
@@ -572,7 +575,7 @@ en: {
   t: { getOn: "Get it on", storeAfter: "Install it, open Fidus and create your account in 1 minute, right in the app.", iosSoon: "iPhone: coming soon. Leave your email and we’ll let you know.", androidSoon: "Android: coming soon. Leave your email and we’ll let you know.", download: "Download the app →", navDay: "A day with Fidus", navFeat: "Features", navPlans: "Pricing", navFaq: "FAQ", navCta: "Get started →",
     badge: "Early access open · Android", h1a: "Speak.", h1b: "Fidus", r0: "books it.", r1: "logs it.", r2: "replies.", r3: "reminds.", r4: "files it.",
     lead: "The personal assistant that handles the diary, emails, expenses and documents for people running a life and a business across countries. By voice, in your language.",
-    emailLabel: "Your email", emailPh: "you@email.com", join: "Get access →", joined: "Done. You're in the next test group.",
+    emailLabel: "Your email", emailPh: "you@email.com", join: "Get access →", joined: "Done. You're in the next test group.", posMsg: "You're number {p} in the queue. Every friend who joins through your link moves you up 10 places.", posLink: "See my place and my link →", invitedMsg: "You're in! Check your email to get the app.",
     c1: "✓ Works with Outlook, Microsoft 365 and Google", c2: "✓ Self Assessment, VAT and Companies House reminders", c3: "✓ Cancel in the app",
     toast1t: "In your diary", toast1s: "Thursday, 4pm · with address", toast2t: "Expense logged", toast2s: "{m45.90} · HomB · receipt saved",
     toast3t: "Draft ready", toast3s: " · you approve", phoneAria: "Demo conversation with Fidus", online: "online", typing: "typing…",
@@ -998,6 +1001,9 @@ class Component extends DCLogic {
                  pick: function () { self.setState({ cur: k[0] }); } };
       }),
       joined: this.state.joined, joinErr: this.state.joinErr, sending: this.state.sending,
+      joinedMsg: this.state.invited ? (T.invitedMsg || L.en.t.invitedMsg)
+        : this.state.position ? (T.posMsg || L.en.t.posMsg).replace("{p}", this.state.position) : T.joined,
+      statusUrl: this.state.invited ? "" : (this.state.statusUrl || ""), posLink: T.posLink || L.en.t.posLink,
       joinLabel: this.state.sending ? T.sending : T.join,
       planNote: this.state.plan && !this.state.joined ? T.planPicked.replace("{n}", D.plans[this.state.plan][0]) : "",
       join: function (e) {
@@ -1007,11 +1013,17 @@ class Component extends DCLogic {
         var em = inp ? (inp.value || "").trim() : "";
         if (!em || (inp && inp.checkValidity && !inp.checkValidity())) { self.setState({ joinErr: true }); return; }
         self.setState({ sending: true, joinErr: false });
-        var done = function (ok) { self.setState({ sending: false, joined: ok, joinErr: !ok }); };
+        var done = function (ok, d) {
+          d = d || {};
+          self.setState({ sending: false, joined: ok, joinErr: !ok, invited: !!d.invited, position: d.position || 0, statusUrl: d.status_url || "" });
+        };
         try {
           fetch("/v1/site/waitlist", { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: em, lang: lang, platform: self.state.platform, plan: self.state.plan, ref: self.state.ref }) })
-            .then(function (r) { done(r.ok); }, function () { done(false); });
+            .then(function (r) {
+              if (!r.ok) return done(false);
+              return r.json().then(function (d) { done(true, d); }, function () { done(true); });
+            }, function () { done(false); });
         } catch (x) { done(false); }
       }
     };

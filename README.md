@@ -181,6 +181,15 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
   a cobrança precisa usar quando entrar no ar.
 - `FIDUS_REFERRAL_SIGNUP=1` faz o código valer como convite com o cadastro fechado (máx. 10 contas/código/dia).
 
+## Beta só com convite (v0.16)
+- Site: quem entra na lista ganha o lugar na fila e um link próprio (`heyfidus.com/?ref=L...`); cada amigo que entra
+  pelo link sobe a pessoa 10 lugares. A página `/beta?t=...` mostra a posição (ou, para convidado, o download).
+- Painel `/admin` › Site › Beta: "Ver quem" e "Convidar" os primeiros N da fila (só Android enquanto não há iPhone).
+  O convidado recebe o e-mail com o link do APK (`FIDUS_APP_DOWNLOAD_URL`) e entra com aquele e-mail.
+- Cada membro tem `FIDUS_BETA_INVITES` convites (3): quem entra pelo link dele (app › Convide e ganhe, ou o site com
+  o código dele) entra na hora, sem fila. Quem entra pelo beta fica no plano `FIDUS_BETA_PLAN` (Premium).
+- No fim do beta: `FIDUS_BETA_INVITES=0` volta ao programa de indicação normal.
+
 ## Assinaturas
 - Lojas (Google Play, App Store) e site (Stripe) via RevenueCat. O app compra pela loja (`react-native-purchases`,
   precisa do APK novo) com o cliente identificado pelo id dele no Fidus; a RevenueCat avisa o servidor em

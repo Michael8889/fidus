@@ -91,14 +91,20 @@ def join(email: str, lang: str = "", platform: str = "", plan: str = "", ref: st
     platform = platform if platform in ("android", "ios", "desktop") else ""
     ref = partners.norm(ref)[:24] if ref else ""
     r = accounts.add_waitlist(email, (lang or "")[:8], platform, plan, ref)
-    if r["new"]:
+    from . import beta
+    invited = beta.on_join(email, ref) == "invited"  # veio pelo link de um membro: convite na hora
+    if r["new"] and not invited:
         lg = _lang(lang)
         subject, body, plan_line = WAIT_MAIL[lg]
         body = body.format(plan=plan_line.format(p=PLANS[plan]) if plan else "")
         leave = f"{_base()}/lista/sair?t={r['token']}&lang={lg}"
         mailer.send_raw(email, subject, body, wait=False, footer=_footer(leave, lg),
                         headers={"List-Unsubscribe": f"<{leave}>", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"})
-    return {"ok": True, "new": r["new"]}
+    out = {"ok": True, "new": r["new"], "invited": invited}
+    if r["new"]:  # só quem acabou de entrar recebe o link da posição aqui; os outros pelo e-mail
+        st = beta.status(r["token"]) or {}
+        out.update(token=r["token"], position=st.get("position"), share=st.get("share"))
+    return out
 
 
 STORE_MAIL = {

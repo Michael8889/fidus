@@ -43,7 +43,7 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const JS_VERSION = "0.15.1"; // única fonte da versão mostrada em Configurações e enviada ao servidor
+const JS_VERSION = "0.16.0"; // única fonte da versão mostrada em Configurações e enviada ao servidor
 const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=${JS_VERSION},ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
@@ -2700,6 +2700,14 @@ function FidusApp() {
             </View>
           </>)}
         </View>
+        {!!referral?.beta_total && (
+          <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
+            <View style={s.kv}><Text style={{ color: c.text, fontWeight: "600" }}>{t("Convites do beta")}</Text>
+              <Text style={{ color: referral.beta_left ? GREEN : c.sub, fontWeight: "700" }}>{t("{0} de {1}", referral.beta_left, referral.beta_total)}</Text></View>
+            <Text style={{ color: c.sub, fontSize: 13 }}>{referral.beta_left
+              ? t("O Fidus está só com convite. Quem entrar pelo seu link não espera na fila.")
+              : t("Os seus convites acabaram. Os amigos podem entrar na fila pelo seu link.")}</Text>
+          </Card>)}
         {!!referral && (
           <Card c={c} style={{ flexDirection: "column", alignItems: "stretch" }}>
             <View style={s.kv}><Text style={{ color: c.sub }}>{t("Amigos convidados")}</Text><Text style={{ color: c.text, fontWeight: "700" }}>{referral.invited}</Text></View>
@@ -3631,6 +3639,10 @@ const I18N_KEYS: string[] = [
   "Para cada amigo que assinar o Fidus. Seu amigo ganha {0} dias grátis.",
   "Enviar convite",
   "Copiar link",
+  "Convites do beta",
+  "{0} de {1}",
+  "O Fidus está só com convite. Quem entrar pelo seu link não espera na fila.",
+  "Os seus convites acabaram. Os amigos podem entrar na fila pelo seu link.",
   "Amigos convidados",
   "Já assinaram",
   "Descontos guardados",
