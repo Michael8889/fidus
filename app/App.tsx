@@ -2202,17 +2202,24 @@ function FidusApp() {
   // País do pacote: um por plano; no Global, os três. O Fidus só mostra impostos e pagamentos desse(s) país(es).
   function chooseCountry() {
     const info = me?.countries || {};
+    const cur: string[] = info.countries || [];
     const setC = async (codes: string[]) => {
       try {
         const r = await post("/v1/countries", { countries: codes });
-        if (r.locked) { push({ id: uid(), type: "upsell", up: r.upsell }); setScreen("chat"); return; }
+        if (r.locked && r.upsell) { push({ id: uid(), type: "upsell", up: r.upsell }); setScreen("chat"); return; }
         setMe({ ...me, countries: { ...info, ...r }, currency: r.currency }); flash(t("Salvo"));
       } catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
     };
-    const items: [string, () => void][] = Object.keys(COUNTRY_NAMES).map((k) => [t(COUNTRY_NAMES[k]), () => setC([k])] as [string, () => void]);
+    // plano de um país: a primeira escolha fica fixa; trocar de país = plano Global
+    const confirmFirst = (k: string) => (info.max || 1) > 1 ? setC([k]) :
+      Alert.alert(t(COUNTRY_NAMES[k]), t("O seu plano fica com este país. Para trocar depois, só mudando para o plano Global."), [
+        { text: t("Cancelar"), style: "cancel" }, { text: t("Confirmar"), onPress: () => setC([k]) }]);
+    const items: [string, () => void][] = info.locked
+      ? Object.keys(COUNTRY_NAMES).filter((k) => !cur.includes(k)).map((k) => [t("{0} (plano Global)", t(COUNTRY_NAMES[k])), () => setC([k])] as [string, () => void])
+      : Object.keys(COUNTRY_NAMES).map((k) => [t(COUNTRY_NAMES[k]), () => confirmFirst(k)] as [string, () => void]);
     items.push([(info.max || 1) > 1 ? t("Os três países") : t("Os três países (plano Global)"),
-      () => setC([...(info.countries || []).slice(0, 1), ...Object.keys(COUNTRY_NAMES)].filter((v, i, a) => a.indexOf(v) === i))]);
-    setSheet({ title: t("País do pacote"), items });
+      () => setC([...cur.slice(0, 1), ...Object.keys(COUNTRY_NAMES)].filter((v, i, a) => a.indexOf(v) === i))]);
+    setSheet({ title: info.locked ? t("País do plano: {0}", cur.map((k) => t(COUNTRY_NAMES[k] || k)).join(" · ")) : t("País do pacote"), items });
   }
 
   async function saveName() {
@@ -3489,8 +3496,12 @@ const I18N_KEYS: string[] = [
   "Ainda processando…",
   "Idioma do Fidus",
   "Salvo",
+  "O seu plano fica com este país. Para trocar depois, só mudando para o plano Global.",
+  "Confirmar",
+  "{0} (plano Global)",
   "Os três países",
   "Os três países (plano Global)",
+  "País do plano: {0}",
   "País do pacote",
   "Obrigado!",
   "Painel da empresa",

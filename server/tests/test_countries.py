@@ -24,6 +24,10 @@ def _keep():
     store.kv_set("plan", plan) if plan is not None else store.kv_del("plan")
 
 
+def _use(*codes):
+    store.save_profile(countries=list(codes), country=codes[0])
+
+
 def _names(ts):
     return {t["name"] for t in ts}
 
@@ -38,10 +42,16 @@ def test_one_country_per_plan_and_upsell():
     plans.set_plan("premium")
     store.save_profile(countries=[], country="PT", language="pt-PT")
     assert countries.user_countries() == ["PT"]
+    assert not countries.locked_in()
     r = countries.set_countries(["PT", "GB"])
     assert r["locked"] and r["upsell"]["plan"] == "global"
-    assert countries.set_countries(["uk"])["countries"] == ["GB"]
-    assert plans.user_currency() == "GBP"
+    assert countries.set_countries(["uk"])["countries"] == ["GB"]  # primeira escolha
+    assert plans.user_currency() == "GBP" and countries.locked_in()
+    r = countries.set_countries(["PT"])  # trocar de país = mudar de plano
+    assert r["locked"] and r["upsell"]["plan"] == "global" and countries.user_countries() == ["GB"]
+    assert countries.set_countries(["GB"])["ok"]  # o mesmo país continua ok
+    plans.set_plan("global")
+    assert countries.set_countries(["PT", "GB"])["ok"]
 
 
 def test_global_gets_three_countries():
@@ -55,14 +65,14 @@ def test_global_gets_three_countries():
 
 def test_tools_follow_the_country():
     plans.set_plan("premium")
-    countries.set_countries(["GB"])
+    _use("GB")
     names = _names(tools.available_tools())
     assert "setup_uk_tax_reminders" in names and "setup_tax_reminders" not in names and "set_nif" not in names
     exp = next(t for t in tools.available_tools() if t["name"] == "add_expense")["parameters"]["properties"]
     assert "supplier_vat_number" in exp and "buyer_nif" not in exp
     r = tools.run("set_nif", {"nif": "123456789"})
     assert r["locked"] and r["upsell"]["feature"] == "multi_country"
-    countries.set_countries(["PT"])
+    _use("PT")
     names = _names(tools.available_tools())
     assert "setup_tax_reminders" in names and "setup_uk_tax_reminders" not in names
     # a lista completa continua com tudo (Global)
@@ -71,14 +81,14 @@ def test_tools_follow_the_country():
 
 def test_payment_methods_follow_the_country():
     plans.set_plan("premium")
-    countries.set_countries(["GB"])
+    _use("GB")
     r = tools.run("save_payment_contact", {"name": "Zé", "mbway_phone": "912345678"})
     assert r["locked"] and "Global" in r["error"]
     r = tools.run("prepare_payment", {"to": "EDP", "amount": 10, "mb_entity": "21312", "mb_reference": "123456789"})
     assert r["locked"]
     ok = tools.run("save_payment_contact", {"name": "Jo Smith", "sort_code": "12-34-56", "account_number": "12345678"})
     assert ok["ok"]
-    countries.set_countries(["BR"])
+    _use("BR")
     assert payments.save_contact("Ana Pix", pix_key="ana@ex.com")["method"] == "pix"
     for c in payments.contacts():
         if c["name"] in ("Jo Smith", "Ana Pix"):
@@ -87,36 +97,40 @@ def test_payment_methods_follow_the_country():
 
 def test_wallet_currency_needs_global():
     plans.set_plan("premium")
-    countries.set_countries(["PT"])
+    _use("PT")
     r = tools.run("update_profile", {"add_business": "Pessoal UK", "business_currency": "GBP"})
     assert r["locked"]
     plans.set_plan("global")
-    countries.set_countries(["PT", "GB"])
+    _use("PT", "GB")
     r = tools.run("update_profile", {"add_business": "Pessoal UK", "business_currency": "GBP"})
     assert r["ok"]
     tools.run("update_profile", {"remove_business": "Pessoal UK"})
 
 
-def test_countries_endpoint_activity_and_undo():
+def test_countries_endpoint_locks_and_subscription_freezes():
     plans.set_plan("premium")
-    countries.set_countries(["PT"])
+    store.save_profile(countries=[], country="PT", language="pt-PT")
     me = client.get("/v1/me", headers=H).json()
-    assert me["countries"]["countries"] == ["PT"] and me["countries"]["max"] == 1
+    assert me["countries"]["countries"] == ["PT"] and me["countries"]["max"] == 1 and not me["countries"]["locked"]
     r = client.post("/v1/countries", json={"countries": ["GB"]}, headers=H).json()
-    assert r["countries"] == ["GB"] and r["currency"] == "GBP"
+    assert r["countries"] == ["GB"] and r["currency"] == "GBP" and r["locked"] is True
     acts = client.get("/v1/activity", headers=H).json()
     act = next(a for a in (acts.get("items") if isinstance(acts, dict) else acts) if a["kind"] == "countries_changed")
-    assert client.post(f"/v1/activity/{act['id']}/undo", headers=H).status_code == 200
-    assert countries.user_countries() == ["PT"]
-    assert client.post("/v1/countries", json={"countries": ["PT", "BR"]}, headers=H).json()["locked"]
+    assert client.post(f"/v1/activity/{act['id']}/undo", headers=H).status_code == 502  # não volta: país fixo
+    assert countries.user_countries() == ["GB"]
+    r = client.post("/v1/countries", json={"countries": ["PT"]}, headers=H).json()
+    assert r["locked"] and r["upsell"]["plan"] == "global"
     assert client.post("/v1/countries", json={"countries": ["XX"]}, headers=H).status_code == 400
-
+    # assinatura sem escolha: fica o país do celular
+    store.save_profile(countries=[], country="BR")
+    countries.freeze()
+    assert store.profile()["countries"] == ["BR"] and countries.locked_in()
 
 def test_uk_vat_number_check():
     assert uk.valid_vat("GB 980 7806 84")  # HMRC example (new series)
     assert not uk.valid_vat("GB123456789")
     plans.set_plan("premium")
-    countries.set_countries(["GB"])
+    _use("GB")
     store.save_profile(uk_vat_registered=True)
     r = tools.run("add_expense", {"amount": 12, "currency": "GBP", "vat": 2, "category": "outros",
                                   "business": store.businesses()[0]})
@@ -130,7 +144,7 @@ def test_uk_vat_number_check():
 
 def test_uk_tax_reminders_once(monkeypatch):
     plans.set_plan("premium")
-    countries.set_countries(["GB"])
+    _use("GB")
     made = []
     monkeypatch.setattr(uk.features, "create_reminder",
                         lambda text, when, recurrence=None, notes=None: made.append((text, when, recurrence)) or {"event_id": str(len(made))})

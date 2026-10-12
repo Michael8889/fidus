@@ -1274,8 +1274,14 @@ def cancel_action(pid: str):
 
 
 # ---------- Aba Atividade ----------
+def _undo_countries(ref: str) -> None:
+    r = countries.set_countries(ref.split(","))
+    if r.get("locked"):
+        raise ValueError("o país do plano não muda; para outro país, plano Global")
+
+
 UNDO = {
-    "countries_changed": lambda ref: countries.set_countries(ref.split(",")),
+    "countries_changed": lambda ref: _undo_countries(ref),
     "event_created": lambda ref: tools.run_delete_event(ref),
     "reminder_created": lambda ref: tools.run_delete_event(ref),
     "expense_added": lambda ref: tools.run_delete_expense(int(ref)),
@@ -1814,6 +1820,7 @@ async def billing_webhook(request: Request):
         if kind in ("INITIAL_PURCHASE", "RENEWAL", "PRODUCT_CHANGE", "UNCANCELLATION", "NON_RENEWING_PURCHASE") and plan:
             plans.set_plan(plan)
             store.kv_set("subscription", f"ativa:{plan}")
+            countries.freeze()  # o país do plano fica fixo (no Global, os três)
         elif kind in ("CANCELLATION",):
             store.kv_set("subscription", f"cancelada:{plans.current()}")  # vale até o fim do período pago
         elif kind in ("EXPIRATION",):

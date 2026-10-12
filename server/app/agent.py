@@ -220,8 +220,9 @@ def _country_line() -> str:
         pays = {"PT": "MB Way, Multibanco, IBAN", "GB": "UK bank transfer (sort code + account), IBAN", "BR": "Pix"}
         line = ("\n- PAÍS DO PACOTE: " + ", ".join(f"{countries.COUNTRIES[c]['name']} ({countries.COUNTRIES[c]['currency']}; "
                                                  f"pagamentos: {pays[c]})" for c in cs) +
-                ". Impostos, pagamentos e carteiras só destes países. Se pedir algo fiscal/pagamento de outro país, "
-                "explique numa frase e use offer_upgrade com multi_country (plano Global, os três países). Gastos "
+                ". Impostos, pagamentos e carteiras só destes países, e o país do plano não muda. Se pedir algo fiscal/pagamento "
+                "de outro país ou trocar de país, explique numa frase e use offer_upgrade com multi_country (plano "
+                "Global, os três países). Gastos "
                 "avulsos de viagem em outra moeda podem ser lançados normalmente.")
         if "GB" in cs:
             line += ("\n- UK: receipts -> pass supplier_vat_number in add_expense when printed; if there's an alert, say "

@@ -244,8 +244,9 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
 ## País do pacote, Portugal e Reino Unido (v0.15)
 - Cada plano vale para UM país: Portugal (EUR), Reino Unido (GBP) ou Brasil (BRL). O plano Global (acima do
   Premium; €89,90 / £79,90 / $99,90) vale para os três. O dono fica no Global (`FIDUS_PLAN=global`).
-- `app/countries.py`: país escolhido em Configurações › País do pacote (`POST /v1/countries`, vai para a Atividade
-  com Desfazer); sem escolha, o país do celular. A IA só recebe as ferramentas do país (`tools.available_tools()`),
+- `app/countries.py`: país escolhido em Configurações › País do pacote (`POST /v1/countries`, vai para a Atividade);
+  sem escolha, o país do celular. O país fica FIXO depois da primeira escolha ou da assinatura (`countries.freeze()`
+  no webhook): trocar de país só mudando para o Global. No Global, o cliente escolhe à vontade entre os três. A IA só recebe as ferramentas do país (`tools.available_tools()`),
   e o `tools.run` bloqueia as outras com a oferta do Global (`multi_country`). Formas de pagamento e moedas de
   carteira seguem o país; gasto avulso em viagem noutra moeda continua livre.
 - Portugal (`app/portugal.py`): NIF nas faturas, categorias do e-Fatura/IRS, calendário fiscal, MB Way e Multibanco.

@@ -65,6 +65,18 @@ def currencies() -> set[str]:
     return {COUNTRIES[c]["currency"] for c in user_countries()}
 
 
+def locked_in() -> bool:
+    """O país fica fixo depois da primeira escolha (ou da assinatura). Trocar de país = mudar para o Global."""
+    return bool(store.profile().get("countries")) and max_countries() == 1
+
+
+def freeze() -> list[str]:
+    """Na assinatura: grava o país atual (o do celular, se nunca escolheu) e ele passa a ser o do plano."""
+    cs = user_countries()
+    store.save_profile(countries=cs, country=cs[0])
+    return cs
+
+
 def set_countries(codes: list[str]) -> dict:
     codes = [("GB" if c.upper() == "UK" else c.upper()) for c in codes if c]
     codes = list(dict.fromkeys(c for c in codes if c in COUNTRIES))
@@ -72,6 +84,11 @@ def set_countries(codes: list[str]) -> dict:
         raise ValueError("escolha Portugal, Reino Unido ou Brasil")
     if len(codes) > max_countries():
         return plans.locked("multi_country")
+    if locked_in() and codes != user_countries():
+        out = plans.locked("multi_country")
+        out["error"] = (f"o plano vale só para {COUNTRIES[primary()]['name']} e o país não muda. Para usar outro "
+                        "país: plano Global (os três países). " + out["error"])
+        return out
     store.save_profile(countries=codes, country=codes[0])
     return {"ok": True, "countries": codes, "currencies": sorted(currencies())}
 
@@ -100,5 +117,5 @@ def require_currency(currency: str | None) -> None:
 
 
 def info() -> dict:
-    return {"countries": user_countries(), "max": max_countries(), "chosen": bool(store.profile().get("countries")),
+    return {"countries": user_countries(), "max": max_countries(), "chosen": bool(store.profile().get("countries")), "locked": locked_in(),
             "options": [{"code": k, **v} for k, v in COUNTRIES.items()]}
