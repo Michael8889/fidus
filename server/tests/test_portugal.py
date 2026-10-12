@@ -114,3 +114,20 @@ def test_pt_pt_translation_uses_portugal_vocabulary(monkeypatch):
     assert i18n._path("pt-pt").endswith("pt-pt.v2.json") and i18n._path("es").endswith("es.json")
     i18n._ask("es", ["Salvar"])
     assert "telemóvel" not in seen["system"]
+
+
+def test_ready_translations_always_served_even_when_rate_limited(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import i18n, main
+    c = TestClient(main.app)
+    key = next(iter(i18n._allowed()))
+    cache = i18n._load("de")
+    cache[key] = "ÜBERSETZT"
+    with open(i18n._path("de"), "w", encoding="utf-8") as f:
+        import json
+        json.dump(cache, f)
+    monkeypatch.setattr(i18n.llm, "chat", lambda *a, **k: (_ for _ in ()).throw(AssertionError("não devia gerar")))
+    main._rate_hits.clear() if hasattr(main, "_rate_hits") else None
+    for _ in range(35):  # passa do limite de quem ainda não entrou: os textos prontos continuam a vir
+        r = c.post("/v1/i18n", json={"lang": "de", "strings": [key]}, headers={"x-real-ip": "10.8.8.8"})
+        assert r.status_code == 200 and r.json()["strings"].get(key) == "ÜBERSETZT"

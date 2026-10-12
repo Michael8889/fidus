@@ -107,7 +107,7 @@ def _ask(lang: str, strings: list[str]) -> dict:
     return {k: v for k, v in data.items() if isinstance(k, str) and isinstance(v, str) and k in strings and v.strip()}
 
 
-def translate(lang: str, strings: list[str]) -> dict:
+def translate(lang: str, strings: list[str], generate: bool = True) -> dict:
     """{texto_em_português: tradução}. Português ou idioma desconhecido → {} (o app usa o original)."""
     lang = norm(lang)
     if not lang or lang == "pt":
@@ -116,7 +116,7 @@ def translate(lang: str, strings: list[str]) -> dict:
     want = list(dict.fromkeys(s for s in strings[:MAX_PER_REQUEST] if isinstance(s, str) and s in ok))
     cache = _load(lang)
     missing = [s for s in want if s not in cache]
-    if missing and len(cache) < MAX_PER_LANG:
+    if missing and generate and len(cache) < MAX_PER_LANG:
         with _lock(lang):
             cache = _load(lang)
             missing = [s for s in want if s not in cache][: MAX_PER_LANG - len(cache)]

@@ -1785,9 +1785,13 @@ def i18n_strings(body: I18nIn, request: Request):
     lang = i18n.norm(body.lang)
     if not lang or lang == "pt":
         return {"lang": lang or "pt", "strings": {}}
-    if store.CURRENT.get() is None:
-        _rate_limit(request, 30, "i18n")
-    return {"lang": lang, "strings": i18n.translate(lang, body.strings)}
+    gen = True
+    if store.CURRENT.get() is None:  # sem login (tela de entrada): o limite só trava gerar traduções NOVAS com IA;
+        try:                         # as já prontas saem sempre (antes, abrir o app muitas vezes deixava tudo em português)
+            _rate_limit(request, 30, "i18n")
+        except HTTPException:
+            gen = False
+    return {"lang": lang, "strings": i18n.translate(lang, body.strings, generate=gen)}
 
 
 # ---------- Premium: mais 1 pessoa na conta e acesso do contabilista ----------

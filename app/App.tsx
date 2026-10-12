@@ -43,7 +43,7 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const JS_VERSION = "0.18.0"; // única fonte da versão mostrada em Configurações e enviada ao servidor
+const JS_VERSION = "0.18.1"; // única fonte da versão mostrada em Configurações e enviada ao servidor
 const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=${JS_VERSION},ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
@@ -649,18 +649,24 @@ function FidusApp() {
       if (cacheFile.exists) tr = JSON.parse(cacheFile.textSync());
     } catch { /* sem cópia no celular */ }
     TR = tr; bump();  // nunca herda textos do idioma anterior
-    try {
-      const r = await fetch(base() + "/v1/i18n", { method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token.trim()}` } : {}) },
-        body: JSON.stringify({ lang: want, strings: I18N_KEYS }) });
-      const j = await r.json();
-      if (seq !== langSeq.current || LANG !== want) return;  // o usuário já trocou de idioma
-      if (j?.strings && Object.keys(j.strings).length) {
-        tr = { ...tr, ...j.strings };
-        TR = tr; bump();
-        try { if (cacheFile) { if (!cacheFile.exists) cacheFile.create(); cacheFile.write(JSON.stringify(tr)); } } catch {}
-      }
-    } catch { /* sem rede: fica com a cópia ou o português */ }
+    for (let attempt = 0; attempt < 3; attempt++) {  // o servidor pode estar a gerar textos novos: tenta de novo
+      try {
+        const tk = (await SecureStore.getItemAsync("token")) || token;
+        const r = await fetch(base() + "/v1/i18n", { method: "POST",
+          headers: { "Content-Type": "application/json", ...(tk ? { Authorization: `Bearer ${String(tk).trim()}` } : {}) },
+          body: JSON.stringify({ lang: want, strings: I18N_KEYS }) });
+        const j = await r.json();
+        if (seq !== langSeq.current || LANG !== want) return;  // o usuário já trocou de idioma
+        if (r.ok && j?.strings && Object.keys(j.strings).length) {
+          tr = { ...tr, ...j.strings };
+          TR = tr; bump();
+          try { if (cacheFile) { if (!cacheFile.exists) cacheFile.create(); cacheFile.write(JSON.stringify(tr)); } } catch {}
+          if (Object.keys(j.strings).length >= I18N_KEYS.length * 0.9) return;
+        }
+      } catch { /* sem rede: fica com a cópia ou o português */ }
+      await new Promise((res) => setTimeout(res, 4000 * (attempt + 1)));
+      if (seq !== langSeq.current) return;
+    }
   }
 
   useEffect(() => {  // tela de entrada já no idioma do celular
