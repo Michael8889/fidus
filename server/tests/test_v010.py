@@ -79,6 +79,7 @@ def test_onboarding_full_flow(monkeypatch):
     assert q["step"] == "emails"
     done = client.post("/v1/onboarding/answer", json={"step": "emails", "value": "yes"}, headers=tok).json()
     assert done["done"] and "Anular" in done["messages"][0] and done["messages"][0].startswith("Pronto, Ana!")
+    assert "calendário fiscal" in done["messages"][-1] and "NIF" in done["messages"][-1]  # o "uau" de Portugal
     me = client.get("/v1/me", headers=tok).json()
     p = me["profile"]
     assert p["name"] == "Ana" and p["work_type"] == "company" and p["timezone"] == "Europe/Lisbon"

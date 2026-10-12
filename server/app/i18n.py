@@ -53,10 +53,27 @@ def name(lang: str) -> str:
     return LANGS.get(norm(lang) or "pt", "português")
 
 
+# Idiomas cuja tradução foi refeita (o arquivo antigo fica no disco, só deixa de ser usado)
+_CACHE_VERSION = {"pt-pt": "v2"}
+
+# Vocabulário que denuncia tradução brasileira em Portugal: a IA recebe a lista e segue
+GLOSSARY = {
+    "pt-pt": ("Use always European Portuguese as written in Portugal, never Brazilian forms. Address the user as "
+              "'você' implied by the verb (3rd person, no 'tu'), e.g. 'Toque', 'Guarde'. Vocabulary: celular→"
+              "telemóvel, tela→ecrã, configurações→definições, salvar→guardar, baixar (download)→descarregar, "
+              "desfazer→anular, usuário→utilizador, arquivo→ficheiro, cadastro→registo, contador→contabilista, "
+              "gasto→despesa, gasolina→combustível, agendar/marcar horário→marcar, ônibus→autocarro, time (equipe)"
+              "→equipa, fila→fila, registro→registo, câmera→câmara, ligar (telefonar)→ligar, esporte→desporto, "
+              "aplicativo/app→a app (feminine), 'Você está'→'Está', 'pra'→'para', gerúndio ('estou fazendo')→"
+              "'a fazer' ('estou a fazer'). Money examples in euros."),
+}
+
+
 def _path(lang: str) -> str:
     d = os.path.join(config.DATA_DIR, "i18n")
     os.makedirs(d, exist_ok=True)
-    return os.path.join(d, f"{lang}.json")
+    v = _CACHE_VERSION.get(lang)
+    return os.path.join(d, f"{lang}.{v}.json" if v else f"{lang}.json")
 
 
 def _load(lang: str) -> dict:
@@ -76,7 +93,7 @@ def _ask(lang: str, strings: list[str]) -> dict:
     system = (f"You translate the user interface of Fidus, a personal assistant app, from Brazilian Portuguese to "
               f"{LANGS[lang]}. Keep it short and natural for a phone app. Keep emojis, numbers, punctuation, line "
               "breaks, the name Fidus and placeholders like {0} or {name} exactly. Reply ONLY with a JSON object "
-              "mapping each original string to its translation.")
+              "mapping each original string to its translation." + (" " + GLOSSARY[lang] if lang in GLOSSARY else ""))
     out = llm.chat(system, [{"role": "user", "content": json.dumps(strings, ensure_ascii=False)}], [],
                    web_search=False, model=config.LLM_MODEL_LIGHT)
     text = out.get("text") or ""

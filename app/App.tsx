@@ -43,7 +43,7 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const JS_VERSION = "0.16.0"; // única fonte da versão mostrada em Configurações e enviada ao servidor
+const JS_VERSION = "0.16.1"; // única fonte da versão mostrada em Configurações e enviada ao servidor
 const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=${JS_VERSION},ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
@@ -2034,6 +2034,7 @@ function FidusApp() {
   const PAY_BR: [string, string][] = [["celular", "Celular"], ["cpf", "CPF"], ["cnpj", "CNPJ"], ["email", "E-mail"], ["aleatoria", "Aleatória"]];
   // só as formas de pagamento do(s) país(es) do pacote, o principal primeiro
   const PAY_BY_COUNTRY: Record<string, [string, string][]> = { PT: [["mbway", "MB Way"], ["iban", "IBAN"]], GB: [["uk", "Conta UK"], ["iban", "IBAN"]], BR: PAY_BR };
+  const homeCountry: string = me?.countries?.countries?.[0] || (LANG === "pt-pt" ? "PT" : LANG === "pt" ? "BR" : "GB");
   const myCountries: string[] = me?.countries?.countries || [LANG === "pt-pt" || me?.currency === "EUR" ? "PT" : me?.currency === "GBP" ? "GB" : "BR"];
   const PAY_TYPES: [string, string][] = myCountries.flatMap((k) => PAY_BY_COUNTRY[k] || [])
     .filter(([k], i, a) => a.findIndex(([x]) => x === k) === i);
@@ -2648,7 +2649,9 @@ function FidusApp() {
                   <Text style={{ color: c.text, flex: 1, fontSize: 15 }}>{b.name} · {t("dia {0}", b.day_of_month)}</Text>
                   <Text style={{ color: c.text }}>{b.amount != null ? `${Number(b.amount).toFixed(2)} ${b.currency || ""}` : ""}</Text></View>))}
             </Card>)}
-          {!!e && !e.count && !e.bills?.length && <Empty text={t("Nenhum gasto neste mês.\nDiga “paguei 30 libras de gasolina” ou mande a foto do recibo.")} />}
+          {!!e && !e.count && !e.bills?.length && <Empty text={homeCountry === "PT" ? t("Nenhuma despesa neste mês.\nDiga “paguei 40 euros de combustível” ou mande a foto da fatura.")
+            : homeCountry === "BR" ? t("Nenhum gasto neste mês.\nDiga “paguei 80 reais de gasolina” ou mande a foto do recibo.")
+            : t("Nenhum gasto neste mês.\nDiga “paguei 30 libras de gasolina” ou mande a foto do recibo.")} />}
           {!!e?.count && (
             <Pressable style={[s.secondary, { borderColor: c.line, alignItems: "center" }]} onPress={() => exportWallet(month)}>
               <Text style={{ color: c.text }}>{expWallet ? t("Exportar {0} para o contador", expWallet) : t("Exportar o mês para o contador")}</Text></Pressable>)}
@@ -2929,7 +2932,11 @@ function FidusApp() {
               <ActivityIndicator color={c.sub} /><Text style={{ color: c.sub }}>{live.status || t("Fidus está pensando…")}</Text>
             </View>)}</View>) : null}
           ListEmptyComponent={<Text style={[s.empty, { color: c.sub }]}>
-            {t("Toque no microfone, fale e toque de novo para enviar.\nEx.: “Marca visita técnica dia 12 às 4pm”,\n“Me lembra de pagar o IVA dia 5”,\n“Paguei 60 libras de gasolina, HomB” ou\n📷 mande a foto de um recibo ou documento.\n\n🎙 Reunião no topo grava e gera a ata.")}
+            {homeCountry === "PT"
+              ? t("Toque no microfone, fale e toque de novo para enviar.\nEx.: “Marca o contabilista sexta às 10”,\n“Me lembra de pagar o IVA dia 20”,\n“Paguei 40 euros de combustível” ou\n📷 mande a foto de uma fatura: eu confiro o NIF.\n\n🎙 Reunião no topo grava e gera a ata.")
+              : homeCountry === "BR"
+              ? t("Toque no microfone, fale e toque de novo para enviar.\nEx.: “Marca dentista quinta às 10”,\n“Me lembra de pagar o DAS dia 20”,\n“Paguei 80 reais de gasolina” ou\n📷 mande a foto de um recibo ou documento.\n\n🎙 Reunião no topo grava e gera a ata.")
+              : t("Toque no microfone, fale e toque de novo para enviar.\nEx.: “Marca visita técnica quinta às 16h”,\n“Me lembra de pagar o VAT dia 7”,\n“Paguei 60 libras de gasolina” ou\n📷 mande a foto de um recibo ou documento.\n\n🎙 Reunião no topo grava e gera a ata.")}
           </Text>}
           renderItem={({ item }) => {
             if (item.type === "user")
@@ -3623,6 +3630,8 @@ const I18N_KEYS: string[] = [
   "ÚLTIMOS LANÇAMENTOS",
   "CONTAS FIXAS",
   "dia {0}",
+  "Nenhuma despesa neste mês.\nDiga “paguei 40 euros de combustível” ou mande a foto da fatura.",
+  "Nenhum gasto neste mês.\nDiga “paguei 80 reais de gasolina” ou mande a foto do recibo.",
   "Nenhum gasto neste mês.\nDiga “paguei 30 libras de gasolina” ou mande a foto do recibo.",
   "Exportar {0} para o contador",
   "Exportar o mês para o contador",
@@ -3720,7 +3729,9 @@ const I18N_KEYS: string[] = [
   "Nova conversa",
   "Conecte sua agenda e seu e-mail para o Fidus cuidar deles.",
   "Fidus está pensando…",
-  "Toque no microfone, fale e toque de novo para enviar.\nEx.: “Marca visita técnica dia 12 às 4pm”,\n“Me lembra de pagar o IVA dia 5”,\n“Paguei 60 libras de gasolina, HomB” ou\n📷 mande a foto de um recibo ou documento.\n\n🎙 Reunião no topo grava e gera a ata.",
+  "Toque no microfone, fale e toque de novo para enviar.\nEx.: “Marca o contabilista sexta às 10”,\n“Me lembra de pagar o IVA dia 20”,\n“Paguei 40 euros de combustível” ou\n📷 mande a foto de uma fatura: eu confiro o NIF.\n\n🎙 Reunião no topo grava e gera a ata.",
+  "Toque no microfone, fale e toque de novo para enviar.\nEx.: “Marca dentista quinta às 10”,\n“Me lembra de pagar o DAS dia 20”,\n“Paguei 80 reais de gasolina” ou\n📷 mande a foto de um recibo ou documento.\n\n🎙 Reunião no topo grava e gera a ata.",
+  "Toque no microfone, fale e toque de novo para enviar.\nEx.: “Marca visita técnica quinta às 16h”,\n“Me lembra de pagar o VAT dia 7”,\n“Paguei 60 libras de gasolina” ou\n📷 mande a foto de um recibo ou documento.\n\n🎙 Reunião no topo grava e gera a ata.",
   "De 0 a 10, quanto você indicaria o Fidus a um amigo?",
   "O que faria o Fidus ser ainda melhor? (opcional)",
   "Transferência",

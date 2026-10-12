@@ -245,9 +245,43 @@ def answer(step: str, value=None, skip: bool = False) -> dict:
         closing = [m.replace("{name}", name).replace(", !", "!").replace(" ,", ",") for m in tx["done"]]
         if not name:
             closing[0] = re.sub(r",\s*!", "!", closing[0])
+        tip = _tax_tip(_lang())
+        if tip:
+            closing.append(tip)
         return {"done": True, "notes": notes, "messages": closing}
     _save(st)
     return {**question(), "notes": notes}
+
+
+# Fecho do onboarding: o que o Fidus faz de especial no país do plano (o "uau" de quem é de lá)
+TAX_TIP = {
+    ("PT", "pt-pt"): "Mais uma coisa: trato do seu calendário fiscal (IVA, Segurança Social, IRS, IUC) com lembretes "
+                     "uns dias antes de cada prazo, e confiro o NIF das faturas que me enviar. Quando quiser, diga "
+                     "“cria o meu calendário fiscal”.",
+    ("PT", "pt"): "Mais uma coisa: cuido do seu calendário fiscal em Portugal (IVA, Segurança Social, IRS, IUC) com "
+                  "lembretes uns dias antes de cada prazo, e confiro o NIF das faturas que você mandar. Quando quiser, "
+                  "diga “cria o meu calendário fiscal”.",
+    ("PT", "en"): "One more thing: I can set up the Portuguese tax calendar (IVA, Segurança Social, IRS, IUC) with "
+                  "reminders a few days before each deadline, and check the NIF on your invoices. Just say "
+                  "“set up my tax calendar”.",
+    ("GB", "en"): "One more thing: I can set up reminders before every UK tax deadline (Self Assessment, MTD, VAT, "
+                  "Companies House, PAYE) and check VAT numbers on your receipts. Just say “set up my tax reminders”.",
+    ("GB", "pt"): "Mais uma coisa: crio lembretes antes de cada prazo de imposto no Reino Unido (Self Assessment, "
+                  "VAT, Companies House, PAYE) e confiro o VAT number dos recibos. É só dizer “cria meus lembretes "
+                  "de impostos”.",
+    ("GB", "pt-pt"): "Mais uma coisa: crio lembretes antes de cada prazo fiscal no Reino Unido (Self Assessment, VAT, "
+                     "Companies House, PAYE) e confiro o VAT number dos recibos. Basta dizer “cria os meus lembretes "
+                     "de impostos”.",
+}
+
+
+def _tax_tip(lang: str) -> str | None:
+    try:
+        from . import countries
+        cc = countries.primary()
+    except Exception:  # noqa: BLE001
+        return None
+    return TAX_TIP.get((cc, lang)) or TAX_TIP.get((cc, "en"))
 
 
 def _apply(step: str, value, tx: dict) -> list[str]:

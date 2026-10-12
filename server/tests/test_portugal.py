@@ -99,3 +99,18 @@ def test_price_and_pt_pt_texts():
     assert "Seu código" in mailer.render("login_code", "pt-BR", code="1")[0]
     assert site_forms._lang("pt-PT") == "pt-pt" and "Está na lista" in site_forms.WAIT_MAIL["pt-pt"][0]
     assert "Fale-nos" in site_forms.partner_page("pt-pt")
+
+
+def test_pt_pt_translation_uses_portugal_vocabulary(monkeypatch):
+    from app import i18n
+    seen = {}
+
+    def fake_chat(system, messages, tools_, **kw):
+        seen["system"] = system
+        return {"text": "{}"}
+    monkeypatch.setattr(i18n.llm, "chat", fake_chat)
+    i18n._ask("pt-pt", ["Salvar"])
+    assert "telemóvel" in seen["system"] and "ecrã" in seen["system"] and "definições" in seen["system"]
+    assert i18n._path("pt-pt").endswith("pt-pt.v2.json") and i18n._path("es").endswith("es.json")
+    i18n._ask("es", ["Salvar"])
+    assert "telemóvel" not in seen["system"]
