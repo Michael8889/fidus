@@ -9,18 +9,19 @@ from . import config
 
 COMPANY = "Fidus Labs Limited"
 NUMBER = "17510962"
-UPDATED = "11 October 2026"
+ICO_REG = "ZC271147"  # registro no ICO (Information Commissioner's Office), 12/10/2026
+UPDATED = "12 October 2026"
 
 
 def _vals() -> dict:
-    return {"company": COMPANY, "number": NUMBER, "updated": UPDATED,
+    return {"company": COMPANY, "number": NUMBER, "ico": ICO_REG, "updated": UPDATED,
             "address": html.escape(config.COMPANY_ADDRESS or "[registered office address]"),
             "email": html.escape(config.SUPPORT_EMAIL or config.OWNER_EMAIL or "[support email]")}
 
 
 PRIVACY = {
     "en": """<h1>Privacy Policy</h1><p class="small">Last updated: {updated}</p>
-<p>Fidus is a personal assistant app provided by <b>{company}</b>, a company registered in England and Wales (company no. {number}), registered office {address} (“we”). We are the data controller for the personal data described here. Contact: <a href="mailto:{email}">{email}</a>.</p>
+<p>Fidus is a personal assistant app provided by <b>{company}</b>, a company registered in England and Wales (company no. {number}), registered office {address} (“we”). We are the data controller for the personal data described here, registered with the UK Information Commissioner's Office (registration no. {ico}). Contact: <a href="mailto:{email}">{email}</a>.</p>
 <h2>What we collect</h2>
 <ul><li><b>Account:</b> your name, email address, language, country and time zone, your plan and the device you use.</li>
 <li><b>What you ask Fidus:</b> your messages, voice requests (transcribed on our server or on your phone; the audio is not kept), photos and PDFs you send (for example receipts), and what Fidus records for you: expenses, wallets, tasks, documents, reminders, meeting notes.</li>
@@ -44,7 +45,7 @@ PRIVACY = {
 <h2>Children</h2><p>Fidus is for people aged 18 and over.</p>
 <h2>Changes</h2><p>If we change this policy in a meaningful way, we will tell you in the app or by email.</p>""",
     "pt": """<h1>Política de Privacidade</h1><p class="small">Última atualização: {updated}</p>
-<p>O Fidus é um app de assistente pessoal oferecido pela <b>{company}</b>, empresa registrada na Inglaterra e País de Gales (nº {number}), sede registrada em {address} (“nós”). Somos os responsáveis (controladores) pelos dados pessoais descritos aqui. Contato: <a href="mailto:{email}">{email}</a>.</p>
+<p>O Fidus é um app de assistente pessoal oferecido pela <b>{company}</b>, empresa registrada na Inglaterra e País de Gales (nº {number}), sede registrada em {address} (“nós”). Somos os responsáveis (controladores) pelos dados pessoais descritos aqui, registrados no ICO, a autoridade de proteção de dados do Reino Unido (registro nº {ico}). Contato: <a href="mailto:{email}">{email}</a>.</p>
 <h2>O que coletamos</h2>
 <ul><li><b>Conta:</b> nome, e-mail, idioma, país e fuso horário, seu plano e o aparelho que você usa.</li>
 <li><b>O que você pede ao Fidus:</b> suas mensagens, pedidos por voz (transcritos no nosso servidor ou no seu celular; o áudio não é guardado), fotos e PDFs que você manda (como recibos) e o que o Fidus registra para você: gastos, carteiras, tarefas, documentos, lembretes, atas de reunião.</li>
