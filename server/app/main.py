@@ -1162,6 +1162,7 @@ class PayKeyIn(BaseModel):
     iban: str | None = None
     sort_code: str | None = None
     account_number: str | None = None
+    mbway_phone: str | None = None
 
 
 @app.post("/v1/payments/{pid}/key", dependencies=[Depends(auth)])

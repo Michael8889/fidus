@@ -11,7 +11,7 @@ MAX_STEPS = 6
 
 # Pedidos que a pessoa cancelou no app (botão parar). Chave "cliente:id do pedido" -> hora.
 _CANCEL: dict[str, float] = {}
-CANCELLED_MSG = {"pt": "Pedido cancelado.", "en": "Request cancelled."}
+CANCELLED_MSG = {"pt": "Pedido cancelado.", "pt-pt": "Pedido cancelado.", "en": "Request cancelled."}
 
 
 def _cancel_key(request_id: str) -> str:
@@ -28,13 +28,25 @@ def cancel(request_id: str) -> None:
 
 # ---------- Resposta aparecendo enquanto é escrita (o app consulta /v1/partial/{request_id}) ----------
 _PARTIAL: dict[str, dict] = {}
+
+
+def _status_lang() -> str:
+    lang = (store.user_lang() or "pt").lower()
+    return "en" if lang == "en" else "pt-pt" if lang.startswith("pt-pt") else "pt"
 STATUS = {  # o que aparece no app enquanto a ferramenta roda
     "pt": {"list_calendar_events": "Vendo sua agenda…", "create_calendar_event": "Marcando na agenda…",
            "create_reminder": "Criando o lembrete…", "add_expense": "Lançando o gasto…", "summarize_expenses": "Somando os gastos…",
            "search_emails": "Procurando nos e-mails…", "read_email": "Lendo o e-mail…", "prepare_new_email": "Escrevendo o e-mail…",
            "prepare_email_reply": "Escrevendo a resposta…", "find_place": "Procurando o endereço…",
-           "route_distance": "Calculando a rota…", "prepare_payment": "Preparando o pagamento…", "web_search": "Pesquisando na web…", "_listen": "Ouvindo seu áudio…",
+           "route_distance": "Calculando a rota…", "prepare_payment": "Preparando o pagamento…", "web_search": "Pesquisando na web…", "_listen": "Ouvindo seu áudio…", "setup_tax_reminders": "Criando os lembretes fiscais…", "irs_summary": "Somando as faturas do IRS…",
            "_": "Pensando…"},
+    "pt-pt": {"list_calendar_events": "A ver a sua agenda…", "create_calendar_event": "A marcar na agenda…",
+              "create_reminder": "A criar o lembrete…", "add_expense": "A registar a despesa…", "summarize_expenses": "A somar as despesas…",
+              "search_emails": "A procurar nos e-mails…", "read_email": "A ler o e-mail…", "prepare_new_email": "A escrever o e-mail…",
+              "prepare_email_reply": "A escrever a resposta…", "find_place": "A procurar a morada…",
+              "route_distance": "A calcular o percurso…", "prepare_payment": "A preparar o pagamento…", "web_search": "A pesquisar na web…",
+              "_listen": "A ouvir o seu áudio…", "setup_tax_reminders": "A criar os lembretes fiscais…", "irs_summary": "A somar as faturas do IRS…",
+              "_": "A pensar…"},
     "en": {"list_calendar_events": "Checking your calendar…", "create_calendar_event": "Adding to your calendar…",
            "create_reminder": "Setting the reminder…", "add_expense": "Logging the expense…", "summarize_expenses": "Adding up expenses…",
            "search_emails": "Searching your email…", "read_email": "Reading the email…", "prepare_new_email": "Writing the email…",
@@ -62,7 +74,7 @@ def partial_set(request_id: str | None, status_key: str | None = None, transcrip
         return
     buf = _PARTIAL.setdefault(_pkey(request_id), {"text": "", "status": "", "done": False, "t": _t.time()})
     if status_key:
-        buf["status"] = STATUS["en" if store.user_lang() == "en" else "pt"].get(status_key, buf["status"])
+        buf["status"] = STATUS[_status_lang()].get(status_key, buf["status"])
     if transcript is not None:
         buf["transcript"] = transcript[:2000]
 
@@ -80,7 +92,7 @@ def _partial_start(request_id: str | None):
     if not request_id:
         return None
     old = _PARTIAL.get(_pkey(request_id)) or {}
-    buf = {"text": "", "status": STATUS["en" if store.user_lang() == "en" else "pt"]["_"], "done": False, "t": now,
+    buf = {"text": "", "status": STATUS[_status_lang()]["_"], "done": False, "t": now,
            "transcript": old.get("transcript", "")}
     _PARTIAL[_pkey(request_id)] = buf
 
@@ -88,7 +100,7 @@ def _partial_start(request_id: str | None):
         if piece is None:
             buf["text"] = ""
         elif isinstance(piece, dict):  # o que o Fidus está fazendo (ex. pesquisando na web)
-            lang = STATUS["en" if store.user_lang() == "en" else "pt"]
+            lang = STATUS[_status_lang()]
             buf["status"] = lang.get(piece.get("status", ""), buf["status"])
             buf["text"] = ""
         else:
@@ -183,6 +195,23 @@ def _prefs(prof: dict) -> str:
     return ("\n" + "\n".join(out)) if out else ""
 
 
+def _portugal_line() -> str:
+    """Quem está em Portugal: NIF, e-Fatura, MB Way e calendário fiscal português."""
+    try:
+        from . import portugal
+        if not portugal.is_portugal():
+            return ""
+        nif = portugal.user_nif()
+        return ("\n- PORTUGAL: fatura portuguesa em foto -> em add_expense passe buyer_nif (NIF do cliente na fatura), "
+                "supplier_nif e irs_category; se vier alerta de NIF, diga-o numa frase. NIF do usuário: "
+                + (nif or "ainda não guardado (pergunte quando fizer sentido e use set_nif)") +
+                ". Pagamentos: MB Way, Multibanco (entidade + referência) ou IBAN, nunca Pix. Calendário fiscal: "
+                "ofereça setup_tax_reminders se ainda não tiver. Vocabulário de Portugal: fatura, NIF, IVA, "
+                "contabilista certificado, Finanças/AT, telemóvel.")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def _mail_line() -> str:
     """Agenda e e-mail do Outlook: as mesmas ferramentas, com dois detalhes que mudam."""
     try:
@@ -206,7 +235,7 @@ def _context() -> str:
 - Nome: {prof["name"] or "ainda não sabemos (pergunte quando fizer sentido)"}
 - Idioma: {i18n.name(prof.get("language") or "pt")}
 - Carteiras (empresas/contas): {", ".join(f'{w["name"]} ({w["currency"] or "moeda padrão"})' for w in store.wallets())}
-- Moeda padrão: {prof["currency"]}{_prefs(prof)}{_mail_line()}
+- Moeda padrão: {prof["currency"]}{_prefs(prof)}{_mail_line()}{_portugal_line()}
 
 AGORA são {now.strftime('%H:%M')} ({prof["timezone"]}).
 HOJE é {dias[now.weekday()]}, {now.strftime('%d/%m/%Y')} ({now.strftime('%Y-%m-%d')}).
@@ -533,7 +562,7 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
         light = config.LLM_MODEL_CHEAP if (light or route(user_text, bool(image_b64)) == "cheap") else None
     steps = 0
     buf = _CUR_PARTIAL.get()
-    lang_s = STATUS["en" if store.user_lang() == "en" else "pt"]
+    lang_s = STATUS[_status_lang()]
     def stopped() -> dict:
         """A pessoa tocou em parar: não faz mais nada (o que já foi feito fica na Atividade, com Desfazer)."""
         store.add_message("assistant", "[pedido cancelado pelo usuário; não continue este pedido]" + _action_log(actions))

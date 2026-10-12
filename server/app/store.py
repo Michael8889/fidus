@@ -131,6 +131,13 @@ def _create(path: str) -> None:
         cols = {r[1] for r in c.execute("PRAGMA table_info(messages)").fetchall()}
         if "conv" not in cols:  # banco antigo: tudo o que já existe vira a conversa 1
             c.execute("ALTER TABLE messages ADD COLUMN conv INTEGER NOT NULL DEFAULT 1")
+        ecols = {r[1] for r in c.execute("PRAGMA table_info(expenses)").fetchall()}
+        for col in ("supplier_nif", "buyer_nif", "irs_category"):  # Portugal: NIF da fatura e categoria do e-Fatura
+            if col not in ecols:
+                c.execute(f"ALTER TABLE expenses ADD COLUMN {col} TEXT")
+        pcols = {r[1] for r in c.execute("PRAGMA table_info(payment_contacts)").fetchall()}
+        if pcols and "mbway_phone" not in pcols:  # Portugal: MB Way pelo número do telemóvel
+            c.execute("ALTER TABLE payment_contacts ADD COLUMN mbway_phone TEXT")
     c0.close()
 
 
@@ -309,12 +316,14 @@ def set_activity_status(aid: int, status: str) -> None:
 # ---------- Gastos ----------
 def add_expense(date: str, amount: float, currency: str, category: str, business: str,
                 merchant: str | None = None, note: str | None = None, vat: float | None = None,
-                receipt_path: str | None = None) -> int:
+                receipt_path: str | None = None, supplier_nif: str | None = None, buyer_nif: str | None = None,
+                irs_category: str | None = None) -> int:
     with _conn() as c:
         cur = c.execute(
-            "INSERT INTO expenses(date,amount,currency,category,business,merchant,note,vat,receipt_path,created_at)"
-            " VALUES(?,?,?,?,?,?,?,?,?,?)",
-            (date, amount, currency, category, business, merchant, note, vat, receipt_path, now()))
+            "INSERT INTO expenses(date,amount,currency,category,business,merchant,note,vat,receipt_path,created_at,"
+            "supplier_nif,buyer_nif,irs_category) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (date, amount, currency, category, business, merchant, note, vat, receipt_path, now(),
+             supplier_nif, buyer_nif, irs_category))
         return cur.lastrowid
 
 

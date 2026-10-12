@@ -138,13 +138,33 @@ _T = {
         "es": ("Ganaste un {percent}% de descuento 🎁", "<p>{name}, {friend} se suscribió a Fidus con tu invitación.</p><p>Ganaste un <b>{percent}% de descuento</b> en un próximo cobro. Los descuentos no se suman: uno por cobro, y los que sobran pasan a los siguientes.</p>"),
     },
 }
-_FALLBACK = {"name": {"pt": "tudo bem", "en": "there", "es": "hola"}, "friend": {"pt": "Um amigo", "en": "A friend", "es": "Un amigo"}}
+_FALLBACK = {"name": {"pt": "tudo bem", "pt-pt": "olá", "en": "there", "es": "hola"},
+             "friend": {"pt": "Um amigo", "pt-pt": "Um amigo", "en": "A friend", "es": "Un amigo"}}
+
+# português de Portugal (clientes em Portugal)
+_PT_PT = {
+    "login_code": ("O seu código do Fidus: {code}", "<p>O seu código para entrar no Fidus:</p><p style='font-size:32px;font-weight:800;letter-spacing:6px'>{code}</p><p>É válido durante 10 minutos. Se não foi você, ignore este e-mail: ninguém entra sem o código.</p>"),
+    "admin_alert": ("Alerta do Fidus", "<p>{text}</p>"),
+    "account_deleted": ("A sua conta do Fidus foi apagada", "<p>{name}, a sua conta do Fidus foi apagada, como pediu. Os seus dados são destruídos definitivamente dentro de 30 dias; até lá, se foi engano, responda a este e-mail.</p><p>Se tinha subscrição pela Google Play ou App Store, cancele também lá para não ser cobrado.</p>"),
+    "use_google": ("Entre no Fidus com o Google", "<p>Alguém pediu um código para entrar no Fidus com este e-mail.</p><p>A sua conta entra com o <b>Google</b>: na app, toque em <b>Entrar com o Google</b>. Se não foi você, ignore este e-mail.</p>"),
+    "welcome": ("Bem-vindo ao Fidus, {name}", "<p>Olá, {name}!</p><p>O seu assessor já está pronto. Para começar:</p><p>• Toque no microfone e diga: <b>“marca almoço com o contabilista sexta à uma”</b><br>• Envie a foto de uma fatura e ele regista a despesa (e confere o NIF)<br>• Pergunte <b>“o que tenho hoje?”</b> todas as manhãs</p><p>Nada sai em seu nome sem a sua ordem. Alguma dúvida, basta responder a este e-mail.</p>"),
+    "sub_started": ("O seu plano {plan} está ativo", "<p>Pronto, {name}: o plano <b>{plan}</b> está ativo.</p><p>O recibo do pagamento vem da loja onde subscreveu. Para mudar de plano ou cancelar, use a app: menu › Definições.</p>"),
+    "sub_renewed": ("Plano {plan} renovado", "<p>{name}, o seu plano <b>{plan}</b> foi renovado. Obrigado por continuar com o Fidus.</p>"),
+    "sub_billing_issue": ("Não conseguimos cobrar a sua subscrição", "<p>{name}, a loja não conseguiu cobrar o plano <b>{plan}</b>. Confirme o método de pagamento na Google Play ou na App Store para não perder o acesso.</p>"),
+    "sub_cancelled": ("Subscrição cancelada", "<p>{name}, a sua subscrição do plano <b>{plan}</b> foi cancelada. Continua com acesso até ao fim do período já pago. Se mudar de ideias, basta subscrever de novo na app.</p>"),
+    "sub_expired": ("O seu plano terminou", "<p>{name}, o período pago do plano <b>{plan}</b> terminou. Os seus dados continuam guardados. Para voltar, subscreva de novo na app.</p>"),
+    "referral_paid": ("Ganhou {percent}% de desconto 🎁", "<p>{name}, {friend} subscreveu o Fidus com o seu convite.</p><p>Ganhou <b>{percent}% de desconto</b> numa próxima cobrança. Os descontos não se somam: vale um por cobrança, e os que sobram ficam para as seguintes.</p>"),
+}
+for _k, _v in _PT_PT.items():
+    if _k in _T:
+        _T[_k]["pt-pt"] = _v
 
 
 def render(kind: str, lang: str = "pt", **v) -> tuple[str, str]:
-    lang = (lang or "pt").split("-")[0].lower()
-    lang = lang if lang in ("pt", "en", "es") else "en"
-    subject, body = _T[kind][lang]
+    raw = (lang or "pt").lower().replace("_", "-")
+    lang = "pt-pt" if raw.startswith("pt-pt") else raw.split("-")[0]
+    lang = lang if lang in ("pt", "pt-pt", "en", "es") else "en"
+    subject, body = _T[kind].get(lang) or _T[kind]["pt"]
     vals = {k: html.escape(str(x)) for k, x in v.items() if x is not None and x != ""}
     for k, d in _FALLBACK.items():
         vals.setdefault(k, d[lang])

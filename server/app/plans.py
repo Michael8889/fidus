@@ -9,7 +9,7 @@ from . import config, store
 
 PLANS = {
     "essencial": {
-        "rank": 1, "name": "Essencial", "month": 29.90,
+        "rank": 1, "name": "Essencial", "month": 16.90,
         "highlights": ["Voz e texto sem limite", "Agenda, lembretes e bom dia", "E-mail com aprovação",
                        "Gastos e recibos de 1 carteira", "Documentos com validade", "Tarefas"],
     },
@@ -22,7 +22,7 @@ PLANS = {
     },
     "premium": {
         "rank": 3, "name": "Premium", "month": 69.90,
-        "highlights": ["Pagar por voz: Pix e transferências preparados para você", "Cobrança e fatura para clientes",
+        "highlights": ["Pagar por voz: MB Way, Multibanco, Pix e transferências preparados para você", "Cobrança e fatura para clientes",
                        "Mais 1 pessoa na conta + acesso do contador", "Atas sem limite e suporte prioritário"],
     },
 }
@@ -30,7 +30,7 @@ PLANS = {
 # Preço por moeda (valores redondos fixos, como nas lojas de apps). Libra no Reino Unido, euro na Europa,
 # dólar no resto do mundo. A cobrança de verdade segue o país do cartão.
 PRICES = {
-    "EUR": {"essencial": 29.90, "negocio": 49.90, "premium": 69.90},
+    "EUR": {"essencial": 16.90, "negocio": 49.90, "premium": 69.90},
     "GBP": {"essencial": 24.90, "negocio": 42.90, "premium": 59.90},
     "USD": {"essencial": 32.90, "negocio": 54.90, "premium": 74.90},
 }

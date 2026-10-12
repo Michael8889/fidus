@@ -397,10 +397,10 @@ input::placeholder{color:#6F7B8C}
 // ---------- Idiomas e moedas ----------
 // Idioma: o do navegador (pt, en, es, fr, de, it, ms; outros veem em inglês). O visitante pode trocar no rodapé.
 // Moeda: Reino Unido = libra, Europa = euro, resto do mundo = dólar (pelo fuso do aparelho). A cobrança segue o país do cartão.
-var PRICES = { EUR: { essencial: 29.90, negocio: 49.90, premium: 69.90 }, GBP: { essencial: 24.90, negocio: 42.90, premium: 59.90 },
+var PRICES = { EUR: { essencial: 16.90, negocio: 49.90, premium: 69.90 }, GBP: { essencial: 24.90, negocio: 42.90, premium: 59.90 },
                USD: { essencial: 32.90, negocio: 54.90, premium: 74.90 } };
 var SYM = { EUR: "€", GBP: "£", USD: "$" };
-var LANGS = [["pt", "PT"], ["en", "EN"], ["es", "ES"], ["fr", "FR"], ["de", "DE"], ["it", "IT"], ["ms", "MS"]];
+var LANGS = [["pt-pt", "PT"], ["pt", "BR"], ["en", "EN"], ["es", "ES"], ["fr", "FR"], ["de", "DE"], ["it", "IT"], ["ms", "MS"]];
 var EU_TZ_EXTRA = ["Atlantic/Azores", "Atlantic/Madeira", "Atlantic/Canary", "Atlantic/Faroe", "Atlantic/Reykjavik", "Arctic/Longyearbyen"];
 var UK_TZ = ["Europe/London", "Europe/Belfast", "Europe/Guernsey", "Europe/Jersey", "Europe/Isle_of_Man", "GB"];
 var EU_CC = "AD AL AT AX BA BE BG BY CH CY CZ DE DK EE ES FI FO FR GG GI GR HR HU IE IM IS IT JE LI LT LU LV MC MD ME MK MT NL NO PL PT RO RS SE SI SJ SK SM UA VA XK".split(" ");
@@ -408,8 +408,13 @@ var EU_CC = "AD AL AT AX BA BE BG BY CH CY CZ DE DK EE ES FI FO FR GG GI GR HR H
 function detectLang() {
   var list = [];
   try { list = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]) || []; } catch (e) {}
+  var tz = "";
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) {}
   for (var i = 0; i < list.length; i++) {
-    var b = String(list[i] || "").toLowerCase().split("-")[0];
+    var full = String(list[i] || "").toLowerCase();
+    var b = full.split("-")[0];
+    // português de Portugal: navegador pt-PT, ou português sem país num aparelho com fuso de Portugal
+    if (full === "pt-pt" || (b === "pt" && full !== "pt-br" && /^(Europe\/Lisbon|Atlantic\/(Azores|Madeira))$/.test(tz))) return "pt-pt";
     if (b === "nb" || b === "no") b = "en";
     if (L[b]) return b;
   }
@@ -428,6 +433,7 @@ function detectCurrency() {
   return EU_CC.indexOf(region) >= 0 ? "EUR" : "USD";
 }
 function localeFor(lang) {
+  if (lang === "pt-pt") return "pt-PT";
   try { var nav = navigator.language || ""; if (nav.toLowerCase().split("-")[0] === lang) return nav; } catch (e) {}
   return { pt: "pt-BR", en: "en-GB", es: "es-ES", fr: "fr-FR", de: "de-DE", it: "it-IT", ms: "ms-MY" }[lang] || "en-GB";
 }
@@ -468,16 +474,16 @@ pt: {
     ctrlKicker: "Você no controle", ctrlH: "Um assistente que pede licença.", ctrlP: "Faz a rotina sozinho. Para antes de qualquer coisa que fale por você.",
     ctrl1h: "Nada sai sem você mandar", ctrl1p: "E-mails, atas e convites ficam em rascunho até você tocar em Enviar ou dizer “envia”.",
     ctrl2h: "Tudo pode ser desfeito", ctrl2p: "A aba Atividade mostra cada coisa que o Fidus fez, com botão para desfazer.",
-    ctrl3h: "Seus dados são seus", ctrl3p: "O áudio vira texto e é apagado. [Confirmar a política de privacidade antes de publicar.]",
+    ctrl3h: "Seus dados são seus", ctrl3p: "O áudio vira texto e é apagado. Nada é usado para anúncios ou para treinar IA.",
     plansH1: "Sem limite de pedidos.", plansH2: "Em nenhum plano.", billingAria: "Forma de cobrança", monthly: "Mensal", yearly: "Anual · 2 meses grátis",
     recommended: "Recomendado", perMonth: "/mês", yearNote: "{p} por ano, cobrado uma vez", monthNote: "cobrado todo mês", startWith: "Começar com o {n}", soon: "EM BREVE",
-    priceNote: "Preços em {c}, com impostos [confirmar]. Cancele quando quiser, direto no app.", faqH: "Perguntas",
+    priceNote: "Preços em {c}, com impostos. Cancele quando quiser, direto no app.", faqH: "Perguntas",
     finalH: "Pare de anotar. Comece a falar.", finalCta: "Quero acesso antecipado →", company: "· [EMPRESA LTD], Reino Unido",
     privacy: "Privacidade", terms: "Termos", contact: "Contato", partners: "Seja parceiro", joinErr: "Não deu para enviar. Confira o e-mail e tente de novo.", sending: "Enviando…", planPicked: "Plano escolhido: {n}. Deixe seu e-mail e avisamos quando abrir.", langLabel: "Idioma", curLabel: "Moeda", navAria: "Principal",
     cur: { GBP: "libras", EUR: "euros", USD: "dólares" } },
   plans: { essencial: ["Essencial", "Para organizar a vida e começar no próprio negócio.", ["Voz e texto sem limite", "Agenda, lembretes e bom dia às 8h", "E-mail: resumo e rascunhos com aprovação", "Gastos e recibos de 1 carteira", "Documentos com aviso de validade", "Tarefas e aba Atividade"]],
     negocio: ["Negócio", "Para quem toca uma ou mais empresas.", ["Tudo do Essencial", "Modo conversa: fale como numa ligação", "Empresas e moedas ilimitadas", "Link de agendamento para clientes", "Ata de reunião automática", "Pacote do contador com recibos", "Alerta de assinaturas e resumo da semana"]],
-    premium: ["Premium", "O back-office completo, no bolso.", ["Tudo do Negócio", "*Pagar por voz: Pix e transferências preparados para você", "*Cobrança e fatura para clientes", "*Mais 1 pessoa na conta + acesso do contador", "Atas sem limite e suporte prioritário"]] },
+    premium: ["Premium", "O back-office completo, no bolso.", ["Tudo do Negócio", "Pagar por voz: Pix e transferências preparados para você", "*Cobrança e fatura para clientes", "*Mais 1 pessoa na conta + acesso do contador", "Atas sem limite e suporte prioritário"]] },
   chat: ["Marca visita técnica quinta às 4 da tarde na Norauto de Coimbra", "Marcado: quinta, 16h–17h, na Norauto Coimbra com o endereço completo. O lembrete abre direto no Maps.",
     "Recibo enviado", "Lançado: {m45.90} · combustível · HomB. Recibo guardado.", "Responde o Carlos aceitando o orçamento", "Re: Orçamento cozinha · para Carlos",
     "Quanto gastei de gasolina este mês?", "{m186.40} em 4 abastecimentos.\nNo mesmo ponto do mês passado: {m212.10}."],
@@ -502,8 +508,63 @@ pt: {
     ["Ele envia e-mails sozinho?", "Nunca. Respostas, atas e convites ficam em rascunho até você tocar em Enviar ou dizer “envia”."],
     ["Funciona no meu idioma?", "Sim. Você fala ou escreve no seu idioma e o Fidus responde no mesmo idioma. Pode até misturar."],
     ["Posso mudar de plano depois?", "Sim, a qualquer momento. Se você pedir algo de um plano acima, o próprio Fidus mostra o que ele liberaria."],
-    ["Funciona no iPhone?", "O acesso antecipado começa pelo Android. O iPhone vem em seguida. [Confirmar data.]"],
+    ["Funciona no iPhone?", "O acesso antecipado começa pelo Android. O iPhone vem em seguida."],
     ["Como cancelo?", "Direto no app, a qualquer momento, sem ligação e sem multa."]]
+},
+"pt-pt": {
+  t: { getOn: "Disponível na", storeAfter: "Instale, abra o Fidus e crie a sua conta em 1 minuto, diretamente na app.", iosSoon: "No iPhone: brevemente. Deixe o seu e-mail e avisamos.", androidSoon: "No Android: brevemente. Deixe o seu e-mail e avisamos.", download: "Descarregar a app →", navDay: "Um dia com o Fidus", navFeat: "Funções", navPlans: "Planos", navFaq: "Perguntas", navCta: "Começar agora →",
+    badge: "Acesso antecipado aberto · Android", h1a: "Fale.", h1b: "O Fidus", r0: "agenda.", r1: "regista.", r2: "responde.", r3: "lembra.", r4: "guarda.",
+    lead: "O assistente pessoal que trata da agenda, dos e-mails, das despesas e dos documentos de quem gere a vida e o negócio. Por voz, em português de Portugal.",
+    emailLabel: "O seu e-mail", emailPh: "o.seu@email.pt", join: "Quero acesso →", joined: "Pronto. Entra na próxima turma de testes.",
+    c1: "✓ Funciona com Google, Outlook e Microsoft 365", c2: "✓ Confere o NIF das faturas", c3: "✓ Cancele na app",
+    toast1t: "Já está na agenda", toast1s: "Quinta, 16h · com morada", toast2t: "Despesa registada", toast2s: "{m45.90} · com NIF · fatura guardada",
+    toast3t: "Rascunho pronto", toast3s: " · você aprova", phoneAria: "Demonstração de conversa com o Fidus", online: "online", typing: "a escrever…",
+    draftLabel: "E-mail · à espera de si", cancel: "Cancelar", send: "Enviar", composer: "Escreva ou toque no microfone…", marqueeAria: "Exemplos de pedidos",
+    dayH: "Enquanto trabalha, ele trata do resto.", dayTabs: "Horários do dia", featH: "Um assistente. A rotina inteira.",
+    moneyKicker: "O seu dinheiro, organizado", moneyH: "Cada cêntimo no sítio certo.",
+    moneyP: "Diga a despesa ou fotografe a fatura. O Fidus separa por empresa, categoria e moeda, confere o NIF, avisa quando algo foge ao normal e entrega o pacote pronto para o contabilista.",
+    panelAria: "Exemplo de painel de despesas", panelTitle: "Setembro · Empresa", example: "exemplo", warn: "Atenção:", warnT: "fatura sem o seu NIF no restaurante de ontem.",
+    ok: "Pronto:", okT: "pacote do contabilista do 3.º trimestre, com 41 faturas.",
+    ctrlKicker: "Você no controlo", ctrlH: "Um assistente que pede licença.", ctrlP: "Faz a rotina sozinho. Para antes de qualquer coisa que fale por si.",
+    ctrl1h: "Nada sai sem a sua ordem", ctrl1p: "E-mails, atas e convites ficam em rascunho até tocar em Enviar ou dizer “envia”.",
+    ctrl2h: "Tudo pode ser desfeito", ctrl2p: "O separador Atividade mostra cada coisa que o Fidus fez, com botão para desfazer.",
+    ctrl3h: "Os seus dados são seus", ctrl3p: "O áudio vira texto e é apagado. Nada é usado para anúncios ou para treinar IA.",
+    plansH1: "Sem limite de pedidos.", plansH2: "Em nenhum plano.", billingAria: "Forma de pagamento", monthly: "Mensal", yearly: "Anual · 2 meses grátis",
+    recommended: "Recomendado", perMonth: "/mês", yearNote: "{p} por ano, cobrado uma vez", monthNote: "cobrado todos os meses", startWith: "Começar com o {n}", soon: "BREVEMENTE",
+    priceNote: "Preços em {c}, com IVA incluído. Cancele quando quiser, diretamente na app.", faqH: "Perguntas",
+    finalH: "Pare de apontar. Comece a falar.", finalCta: "Quero acesso antecipado →", company: "· Fidus Labs Limited, Reino Unido",
+    privacy: "Privacidade", terms: "Termos", contact: "Contacto", partners: "Seja parceiro", joinErr: "Não foi possível enviar. Confirme o e-mail e tente de novo.", sending: "A enviar…", planPicked: "Plano escolhido: {n}. Deixe o seu e-mail e avisamos quando abrir.", langLabel: "Idioma", curLabel: "Moeda", navAria: "Principal",
+    cur: { GBP: "libras", EUR: "euros", USD: "dólares" } },
+  plans: { essencial: ["Essencial", "Para organizar a vida e o trabalho por conta própria.", ["Voz e texto sem limite", "Agenda, lembretes e bom dia às 8h", "E-mail: resumo e rascunhos com aprovação", "Despesas e faturas de 1 carteira, com NIF conferido", "Calendário fiscal: IVA, IRS e Segurança Social", "Documentos com aviso de validade e tarefas"]],
+    negocio: ["Negócio", "Para quem gere uma ou mais empresas.", ["Tudo do Essencial", "Modo conversa: fale como numa chamada", "Empresas e moedas ilimitadas", "Link de marcações para clientes", "Ata de reunião automática", "Pacote do contabilista com as faturas", "Alerta de subscrições e resumo da semana"]],
+    premium: ["Premium", "O back-office completo, no bolso.", ["Tudo do Negócio", "Pagar por voz: MB Way, Multibanco e transferências preparados para si", "*Faturação e cobrança a clientes", "*Mais 1 pessoa na conta + acesso do contabilista", "Atas sem limite e suporte prioritário"]] },
+  chat: ["Marca visita técnica quinta às 4 da tarde na Norauto de Coimbra", "Marcado: quinta, 16h–17h, na Norauto Coimbra, com a morada completa. O lembrete abre diretamente no Maps.",
+    "Fatura enviada", "Registado: {m45.90} · combustível · com o seu NIF. Fatura guardada.", "Responde ao Carlos a aceitar o orçamento", "Re: Orçamento cozinha · para Carlos",
+    "Quanto gastei em combustível este mês?", "{m186.40} em 4 abastecimentos.\nNo mesmo ponto do mês passado: {m212.10}."],
+  cmd1: ["Marca almoço com o contabilista sexta à uma", "Quanto gastei em combustível este mês?", "Lembra-me de pagar o IVA dia 25", "Responde ao Carlos a aceitar o orçamento",
+    "O que tenho amanhã?", "Procura o seguro do carro", "Renda de 950 todos os dias 8", "Cria a tarefa de rever o contrato até sexta"],
+  cmd2: ["Bom dia! Como está o meu dia?", "Reunião todas as terças às 9h com link do Teams", "Prepara o pacote do contabilista do trimestre", "Que subscrições é que eu pago?",
+    "Manda 30 euros por MB Way à Ana", "Paguei 18 de almoço, empresa", "Aniversário da minha mãe dia 27, avisa 3 dias antes", "Quantas faturas ficaram sem NIF?"],
+  day: [["Bom dia", "O dia inteiro numa mensagem.", "Agenda, tarefas que vencem hoje, prazos fiscais dos próximos dias e e-mails importantes, antes do primeiro café.", "Bom dia! O que tenho hoje?", "3 compromissos, o primeiro às 9h30.\n1 tarefa atrasada: enviar orçamento.\nIVA do trimestre: entrega até dia 20."],
+    ["No carro", "Agenda com morada, por voz.", "Fala com o telemóvel no suporte. O compromisso entra na agenda com a morada completa e o lembrete abre no Maps.", "Marca visita técnica quinta às 4 na Avenida da Liberdade, Lisboa", "Marcado: quinta, 16h, com a morada completa em Lisboa."],
+    ["Almoço", "Fatura virou registo.", "Uma foto e pronto: valor, IVA, NIF, categoria do e-Fatura e empresa, com a fatura guardada para o contabilista.", "[foto da fatura]", "Registado: {m23.80} · restauração · com o seu NIF.\nIVA: {m3.97}. Fatura guardada."],
+    ["Reunião", "A ata escreve-se sozinha.", "Grave a reunião na app. O Fidus resume as decisões, cria as suas tarefas e prepara o e-mail para aprovar.", "Terminar e gerar a ata", "Ata pronta: Obra Coimbra.\n2 decisões · 3 próximos passos.\nPus 2 tarefas suas na lista."],
+    ["E-mails", "Respostas prontas, você só aprova.", "Ele lê, resume e escreve rascunhos no seu tom. Nada sai até tocar em Enviar ou dizer “envia”.", "Responde ao Carlos a aceitar, pagamento a 30 dias", "Rascunho pronto. Toque em Enviar ou diga “envia”."],
+    ["Fim do dia", "Nada esquecido.", "Lembretes que tocam à hora certa e prazos que avisam antes de vencer, todos os meses.", "Lembra-me de ligar ao fornecedor amanhã às 9", "Combinado. Amanhã às 9h o seu telemóvel avisa."]],
+  feat: [["Agenda", "Agenda e lembretes", "Compromissos com morada, eventos recorrentes, link do Meet ou do Teams e lembretes que tocam no telemóvel.", "Reunião semanal todas as terças às 9h"],
+    ["E-mail", "E-mail com aprovação", "Resumo do que importa e rascunhos no seu tom, no Gmail ou no Outlook. Você revê e decide.", "O que chegou de importante hoje?"],
+    ["Despesas", "Despesas, faturas e NIF", "Por empresa, categoria e moeda. Confere o NIF, separa por categoria do e-Fatura e avisa de duplicados.", "Quantas faturas ficaram sem NIF?"],
+    ["Finanças", "Calendário fiscal", "Lembretes do IVA, da Segurança Social, do IRS, do e-Fatura e do IUC, antes de cada prazo.", "Cria os lembretes do IVA trimestral"],
+    ["Reuniões", "Ata de reunião", "Grava, transcreve, resume e cria as tarefas de cada um. O e-mail da ata espera pela sua aprovação.", "O que ficou decidido ontem?"],
+    ["Clientes", "Link de marcações", "Os seus clientes escolhem uma hora livre. O compromisso cai na sua agenda com a morada da visita.", "Manda-me o meu link de marcações"]],
+  bars: ["Materiais", "Combustível", "Ferramentas", "Restauração", "Software"],
+  faqs: [["Preciso de usar o WhatsApp?", "Não. O Fidus é uma app própria. As suas conversas pessoais e de trabalho continuam separadas."],
+    ["Ele envia e-mails sozinho?", "Nunca. Respostas, atas e convites ficam em rascunho até tocar em Enviar ou dizer “envia”."],
+    ["Fala português de Portugal?", "Sim. Percebe e responde em português de Portugal, com a voz e o vocabulário de cá: fatura, NIF, telemóvel."],
+    ["Funciona com o Outlook?", "Sim. Liga ao Google (Gmail e Agenda) ou ao Outlook e Microsoft 365."],
+    ["Posso mudar de plano depois?", "Sim, a qualquer momento. Se pedir algo de um plano acima, o próprio Fidus mostra o que ele desbloqueia."],
+    ["Funciona no iPhone?", "O acesso antecipado começa pelo Android. O iPhone vem a seguir."],
+    ["Como cancelo?", "Diretamente na app, a qualquer momento, sem chamadas e sem penalização."]]
 },
 en: {
   t: { getOn: "Get it on", storeAfter: "Install it, open Fidus and create your account in 1 minute, right in the app.", iosSoon: "iPhone: coming soon. Leave your email and we’ll let you know.", androidSoon: "Android: coming soon. Leave your email and we’ll let you know.", download: "Download the app →", navDay: "A day with Fidus", navFeat: "Features", navPlans: "Pricing", navFaq: "FAQ", navCta: "Get started →",
@@ -522,10 +583,10 @@ en: {
     ctrlKicker: "You're in control", ctrlH: "An assistant that asks first.", ctrlP: "It runs the routine on its own. It stops before anything that speaks for you.",
     ctrl1h: "Nothing goes out without your word", ctrl1p: "Emails, minutes and invites stay as drafts until you tap Send or say “send it”.",
     ctrl2h: "Everything can be undone", ctrl2p: "The Activity tab shows everything Fidus did, with an undo button.",
-    ctrl3h: "Your data is yours", ctrl3p: "Audio becomes text and is deleted. [Confirm the privacy policy before publishing.]",
+    ctrl3h: "Your data is yours", ctrl3p: "Audio becomes text and is deleted. Nothing is used for ads or to train AI.",
     plansH1: "No limit on requests.", plansH2: "On any plan.", billingAria: "Billing period", monthly: "Monthly", yearly: "Yearly · 2 months free",
     recommended: "Recommended", perMonth: "/month", yearNote: "{p} per year, billed once", monthNote: "billed monthly", startWith: "Start with {n}", soon: "SOON",
-    priceNote: "Prices in {c}, taxes included [confirm]. Cancel any time, right in the app.", faqH: "Questions",
+    priceNote: "Prices in {c}, taxes included. Cancel any time, right in the app.", faqH: "Questions",
     finalH: "Stop taking notes. Start talking.", finalCta: "Get early access →", company: "· [COMPANY LTD], United Kingdom",
     privacy: "Privacy", terms: "Terms", contact: "Contact", partners: "Become a partner", joinErr: "Couldn’t send. Check your email and try again.", sending: "Sending…", planPicked: "Plan picked: {n}. Leave your email and we’ll tell you when it opens.", langLabel: "Language", curLabel: "Currency", navAria: "Main",
     cur: { GBP: "pounds", EUR: "euros", USD: "US dollars" } },
@@ -556,7 +617,7 @@ en: {
     ["Does it send emails on its own?", "Never. Replies, minutes and invites stay as drafts until you tap Send or say “send it”."],
     ["Does it work in my language?", "Yes. You speak or type in your language and Fidus answers in the same one. You can even mix languages."],
     ["Can I change plans later?", "Yes, any time. If you ask for something from a higher plan, Fidus shows you what it would unlock."],
-    ["Does it work on iPhone?", "Early access starts on Android. iPhone comes next. [Confirm date.]"],
+    ["Does it work on iPhone?", "Early access starts on Android. iPhone comes next."],
     ["How do I cancel?", "Right in the app, any time, no phone call and no fee."]]
 },
 es: {
@@ -576,10 +637,10 @@ es: {
     ctrlKicker: "Tú tienes el control", ctrlH: "Un asistente que pide permiso.", ctrlP: "Hace la rutina solo. Se detiene antes de cualquier cosa que hable por ti.",
     ctrl1h: "Nada sale sin tu orden", ctrl1p: "Correos, actas e invitaciones quedan en borrador hasta que tocas Enviar o dices “envía”.",
     ctrl2h: "Todo se puede deshacer", ctrl2p: "La pestaña Actividad muestra cada cosa que hizo Fidus, con botón para deshacer.",
-    ctrl3h: "Tus datos son tuyos", ctrl3p: "El audio se convierte en texto y se borra. [Confirmar la política de privacidad antes de publicar.]",
+    ctrl3h: "Tus datos son tuyos", ctrl3p: "El audio se convierte en texto y se borra.",
     plansH1: "Sin límite de pedidos.", plansH2: "En ningún plan.", billingAria: "Forma de pago", monthly: "Mensual", yearly: "Anual · 2 meses gratis",
     recommended: "Recomendado", perMonth: "/mes", yearNote: "{p} al año, en un solo pago", monthNote: "se cobra cada mes", startWith: "Empezar con {n}", soon: "PRONTO",
-    priceNote: "Precios en {c}, impuestos incluidos [confirmar]. Cancela cuando quieras, desde la app.", faqH: "Preguntas",
+    priceNote: "Precios en {c}, impuestos incluidos. Cancela cuando quieras, desde la app.", faqH: "Preguntas",
     finalH: "Deja de anotar. Empieza a hablar.", finalCta: "Quiero acceso anticipado →", company: "· [EMPRESA LTD], Reino Unido",
     privacy: "Privacidad", terms: "Términos", contact: "Contacto", partners: "Hazte socio", joinErr: "No se pudo enviar. Revisa tu correo e inténtalo de nuevo.", sending: "Enviando…", planPicked: "Plan elegido: {n}. Deja tu correo y te avisamos cuando abra.", langLabel: "Idioma", curLabel: "Moneda", navAria: "Principal",
     cur: { GBP: "libras", EUR: "euros", USD: "dólares" } },
@@ -610,7 +671,7 @@ es: {
     ["¿Envía correos solo?", "Nunca. Respuestas, actas e invitaciones quedan en borrador hasta que tocas Enviar o dices “envía”."],
     ["¿Funciona en mi idioma?", "Sí. Hablas o escribes en tu idioma y Fidus responde en el mismo. Puedes incluso mezclar."],
     ["¿Puedo cambiar de plan después?", "Sí, cuando quieras. Si pides algo de un plan superior, Fidus te muestra lo que desbloquearía."],
-    ["¿Funciona en iPhone?", "El acceso anticipado empieza en Android. iPhone viene después. [Confirmar fecha.]"],
+    ["¿Funciona en iPhone?", "El acceso anticipado empieza en Android. iPhone viene después."],
     ["¿Cómo cancelo?", "Desde la app, cuando quieras, sin llamadas ni penalización."]]
 },
 fr: {
@@ -630,10 +691,10 @@ fr: {
     ctrlKicker: "Vous gardez la main", ctrlH: "Un assistant qui demande d’abord.", ctrlP: "Il gère la routine seul. Il s’arrête avant tout ce qui parle en votre nom.",
     ctrl1h: "Rien ne part sans votre accord", ctrl1p: "E-mails, comptes rendus et invitations restent en brouillon jusqu’à ce que vous touchiez Envoyer ou disiez « envoie ».",
     ctrl2h: "Tout peut être annulé", ctrl2p: "L’onglet Activité montre tout ce que Fidus a fait, avec un bouton pour annuler.",
-    ctrl3h: "Vos données vous appartiennent", ctrl3p: "L’audio devient du texte puis est supprimé. [Confirmer la politique de confidentialité avant publication.]",
+    ctrl3h: "Vos données vous appartiennent", ctrl3p: "L’audio devient du texte puis est supprimé.",
     plansH1: "Demandes illimitées.", plansH2: "Dans toutes les formules.", billingAria: "Facturation", monthly: "Mensuel", yearly: "Annuel · 2 mois offerts",
     recommended: "Recommandé", perMonth: "/mois", yearNote: "{p} par an, payé en une fois", monthNote: "facturé chaque mois", startWith: "Commencer avec {n}", soon: "BIENTÔT",
-    priceNote: "Prix en {c}, taxes comprises [à confirmer]. Résiliez quand vous voulez, dans l’app.", faqH: "Questions",
+    priceNote: "Prix en {c}, taxes comprises. Résiliez quand vous voulez, dans l’app.", faqH: "Questions",
     finalH: "Arrêtez de noter. Commencez à parler.", finalCta: "Je veux l’accès anticipé →", company: "· [SOCIÉTÉ LTD], Royaume-Uni",
     privacy: "Confidentialité", terms: "Conditions", contact: "Contact", partners: "Devenir partenaire", joinErr: "Envoi impossible. Vérifiez votre e-mail et réessayez.", sending: "Envoi…", planPicked: "Formule choisie : {n}. Laissez votre e-mail, on vous prévient à l’ouverture.", langLabel: "Langue", curLabel: "Devise", navAria: "Principal",
     cur: { GBP: "livres sterling", EUR: "euros", USD: "dollars US" } },
@@ -664,7 +725,7 @@ fr: {
     ["Envoie-t-il des e-mails tout seul ?", "Jamais. Réponses, comptes rendus et invitations restent en brouillon jusqu’à ce que vous touchiez Envoyer ou disiez « envoie »."],
     ["Fonctionne-t-il dans ma langue ?", "Oui. Vous parlez ou écrivez dans votre langue et Fidus répond dans la même. Vous pouvez même mélanger."],
     ["Puis-je changer de formule ensuite ?", "Oui, à tout moment. Si vous demandez une fonction d’une formule supérieure, Fidus vous montre ce qu’elle débloquerait."],
-    ["Fonctionne-t-il sur iPhone ?", "L’accès anticipé commence sur Android. L’iPhone suivra. [Confirmer la date.]"],
+    ["Fonctionne-t-il sur iPhone ?", "L’accès anticipé commence sur Android. L’iPhone suivra."],
     ["Comment résilier ?", "Directement dans l’app, à tout moment, sans appel ni frais."]]
 },
 de: {
@@ -684,10 +745,10 @@ de: {
     ctrlKicker: "Du hast die Kontrolle", ctrlH: "Ein Assistent, der vorher fragt.", ctrlP: "Er erledigt die Routine allein. Er stoppt vor allem, was in deinem Namen spricht.",
     ctrl1h: "Nichts geht ohne dein Okay raus", ctrl1p: "E-Mails, Protokolle und Einladungen bleiben Entwürfe, bis du auf Senden tippst oder „senden“ sagst.",
     ctrl2h: "Alles lässt sich rückgängig machen", ctrl2p: "Der Tab Aktivität zeigt alles, was Fidus getan hat – mit Rückgängig-Knopf.",
-    ctrl3h: "Deine Daten gehören dir", ctrl3p: "Audio wird zu Text und danach gelöscht. [Datenschutzerklärung vor Veröffentlichung bestätigen.]",
+    ctrl3h: "Deine Daten gehören dir", ctrl3p: "Audio wird zu Text und danach gelöscht.",
     plansH1: "Unbegrenzte Anfragen.", plansH2: "In jedem Tarif.", billingAria: "Abrechnung", monthly: "Monatlich", yearly: "Jährlich · 2 Monate gratis",
     recommended: "Empfohlen", perMonth: "/Monat", yearNote: "{p} pro Jahr, einmal abgerechnet", monthNote: "monatlich abgerechnet", startWith: "Mit {n} starten", soon: "BALD",
-    priceNote: "Preise in {c}, inkl. Steuern [bestätigen]. Jederzeit in der App kündbar.", faqH: "Fragen",
+    priceNote: "Preise in {c}, inkl. Steuern. Jederzeit in der App kündbar.", faqH: "Fragen",
     finalH: "Hör auf zu notieren. Fang an zu sprechen.", finalCta: "Früher Zugang →", company: "· [FIRMA LTD], Vereinigtes Königreich",
     privacy: "Datenschutz", terms: "AGB", contact: "Kontakt", partners: "Partner werden", joinErr: "Senden fehlgeschlagen. Prüfe deine E-Mail und versuch es erneut.", sending: "Wird gesendet…", planPicked: "Gewählter Tarif: {n}. Hinterlass deine E-Mail, wir melden uns zum Start.", langLabel: "Sprache", curLabel: "Währung", navAria: "Hauptmenü",
     cur: { GBP: "Pfund", EUR: "Euro", USD: "US-Dollar" } },
@@ -718,7 +779,7 @@ de: {
     ["Verschickt er E-Mails allein?", "Nie. Antworten, Protokolle und Einladungen bleiben Entwürfe, bis du auf Senden tippst oder „senden“ sagst."],
     ["Funktioniert er in meiner Sprache?", "Ja. Du sprichst oder schreibst in deiner Sprache, und Fidus antwortet in derselben. Du kannst sogar mischen."],
     ["Kann ich den Tarif später wechseln?", "Ja, jederzeit. Fragst du nach etwas aus einem höheren Tarif, zeigt Fidus dir, was er freischalten würde."],
-    ["Funktioniert er auf dem iPhone?", "Der frühe Zugang startet auf Android. Das iPhone folgt. [Datum bestätigen.]"],
+    ["Funktioniert er auf dem iPhone?", "Der frühe Zugang startet auf Android. Das iPhone folgt."],
     ["Wie kündige ich?", "Direkt in der App, jederzeit, ohne Anruf und ohne Gebühr."]]
 },
 it: {
@@ -738,10 +799,10 @@ it: {
     ctrlKicker: "Il controllo è tuo", ctrlH: "Un assistente che chiede prima.", ctrlP: "Gestisce la routine da solo. Si ferma prima di qualsiasi cosa parli a nome tuo.",
     ctrl1h: "Niente parte senza il tuo ok", ctrl1p: "E-mail, verbali e inviti restano in bozza finché non tocchi Invia o dici “invia”.",
     ctrl2h: "Tutto si può annullare", ctrl2p: "La scheda Attività mostra tutto ciò che Fidus ha fatto, con il pulsante per annullare.",
-    ctrl3h: "I tuoi dati sono tuoi", ctrl3p: "L’audio diventa testo e viene cancellato. [Confermare l’informativa privacy prima di pubblicare.]",
+    ctrl3h: "I tuoi dati sono tuoi", ctrl3p: "L’audio diventa testo e viene cancellato.",
     plansH1: "Richieste illimitate.", plansH2: "In ogni piano.", billingAria: "Fatturazione", monthly: "Mensile", yearly: "Annuale · 2 mesi gratis",
     recommended: "Consigliato", perMonth: "/mese", yearNote: "{p} all’anno, addebitati una volta", monthNote: "addebitato ogni mese", startWith: "Inizia con {n}", soon: "PRESTO",
-    priceNote: "Prezzi in {c}, tasse incluse [da confermare]. Disdici quando vuoi, dall’app.", faqH: "Domande",
+    priceNote: "Prezzi in {c}, tasse incluse. Disdici quando vuoi, dall’app.", faqH: "Domande",
     finalH: "Smetti di prendere appunti. Inizia a parlare.", finalCta: "Voglio l’accesso anticipato →", company: "· [AZIENDA LTD], Regno Unito",
     privacy: "Privacy", terms: "Termini", contact: "Contatti", partners: "Diventa partner", joinErr: "Invio non riuscito. Controlla l’e-mail e riprova.", sending: "Invio…", planPicked: "Piano scelto: {n}. Lascia la tua e-mail e ti avvisiamo all’apertura.", langLabel: "Lingua", curLabel: "Valuta", navAria: "Principale",
     cur: { GBP: "sterline", EUR: "euro", USD: "dollari USA" } },
@@ -772,7 +833,7 @@ it: {
     ["Manda e-mail da solo?", "Mai. Risposte, verbali e inviti restano in bozza finché non tocchi Invia o dici “invia”."],
     ["Funziona nella mia lingua?", "Sì. Parli o scrivi nella tua lingua e Fidus risponde nella stessa. Puoi anche mescolare."],
     ["Posso cambiare piano dopo?", "Sì, quando vuoi. Se chiedi qualcosa di un piano superiore, Fidus ti mostra cosa sbloccherebbe."],
-    ["Funziona su iPhone?", "L’accesso anticipato parte su Android. iPhone arriverà dopo. [Confermare la data.]"],
+    ["Funziona su iPhone?", "L’accesso anticipato parte su Android. iPhone arriverà dopo."],
     ["Come disdico?", "Dall’app, quando vuoi, senza telefonate e senza penali."]]
 },
 ms: {
@@ -792,10 +853,10 @@ ms: {
     ctrlKicker: "Anda yang mengawal", ctrlH: "Pembantu yang minta izin dahulu.", ctrlP: "Dia uruskan rutin sendiri. Dia berhenti sebelum apa-apa yang bercakap bagi pihak anda.",
     ctrl1h: "Tiada apa dihantar tanpa arahan anda", ctrl1p: "E-mel, minit dan jemputan kekal sebagai draf sehingga anda sentuh Hantar atau sebut “hantar”.",
     ctrl2h: "Semuanya boleh dibatalkan", ctrl2p: "Tab Aktiviti menunjukkan semua yang Fidus lakukan, dengan butang untuk membatalkan.",
-    ctrl3h: "Data anda milik anda", ctrl3p: "Audio ditukar kepada teks dan dipadam. [Sahkan dasar privasi sebelum diterbitkan.]",
+    ctrl3h: "Data anda milik anda", ctrl3p: "Audio ditukar kepada teks dan dipadam.",
     plansH1: "Permintaan tanpa had.", plansH2: "Dalam semua pelan.", billingAria: "Kitaran bil", monthly: "Bulanan", yearly: "Tahunan · 2 bulan percuma",
     recommended: "Disyorkan", perMonth: "/bulan", yearNote: "{p} setahun, dibayar sekali", monthNote: "dibil setiap bulan", startWith: "Mula dengan {n}", soon: "AKAN DATANG",
-    priceNote: "Harga dalam {c}, termasuk cukai [sahkan]. Batal bila-bila masa, terus dalam aplikasi.", faqH: "Soalan",
+    priceNote: "Harga dalam {c}, termasuk cukai. Batal bila-bila masa, terus dalam aplikasi.", faqH: "Soalan",
     finalH: "Berhenti mencatat. Mula bercakap.", finalCta: "Saya mahu akses awal →", company: "· [SYARIKAT LTD], United Kingdom",
     privacy: "Privasi", terms: "Terma", contact: "Hubungi", partners: "Jadi rakan kongsi", joinErr: "Tidak dapat dihantar. Semak e-mel anda dan cuba lagi.", sending: "Menghantar…", planPicked: "Pelan dipilih: {n}. Tinggalkan e-mel anda dan kami akan maklumkan bila dibuka.", langLabel: "Bahasa", curLabel: "Mata wang", navAria: "Utama",
     cur: { GBP: "paun", EUR: "euro", USD: "dolar AS" } },
@@ -826,7 +887,7 @@ ms: {
     ["Adakah ia hantar e-mel sendiri?", "Tidak sama sekali. Balasan, minit dan jemputan kekal sebagai draf sehingga anda sentuh Hantar atau sebut “hantar”."],
     ["Adakah ia berfungsi dalam bahasa saya?", "Ya. Anda bercakap atau menaip dalam bahasa anda dan Fidus membalas dalam bahasa yang sama. Boleh juga campur."],
     ["Bolehkah saya tukar pelan kemudian?", "Ya, bila-bila masa. Jika anda minta sesuatu daripada pelan lebih tinggi, Fidus tunjukkan apa yang akan dibuka."],
-    ["Adakah ia berfungsi di iPhone?", "Akses awal bermula di Android. iPhone akan menyusul. [Sahkan tarikh.]"],
+    ["Adakah ia berfungsi di iPhone?", "Akses awal bermula di Android. iPhone akan menyusul."],
     ["Bagaimana untuk batal?", "Terus dalam aplikasi, bila-bila masa, tanpa panggilan dan tanpa caj."]]
 }
 };
@@ -849,7 +910,7 @@ class Component extends DCLogic {
   componentDidMount() {
     var self = this;
     this.timer = setInterval(function () { self.setState({ tick: self.state.tick + 1 }); }, 1700);
-    try { document.documentElement.lang = this.state.lang; } catch (e) {}
+    try { document.documentElement.lang = this.state.lang === "pt-pt" ? "pt-PT" : this.state.lang; } catch (e) {}
   }
   componentWillUnmount() { clearInterval(this.timer); }
   renderVals() {
@@ -882,7 +943,7 @@ class Component extends DCLogic {
     if (plat === "android" && !play && apple) storeNote = T.androidSoon;
     return {
       t: T,
-      x: { lang: lang, partnerHref: lang === "pt" ? "/parceiros" : "/partners?lang=" + lang, toast2s: f(T.toast2s), priceNote: T.priceNote.replace("{c}", T.cur[cur]),
+      x: { lang: lang, partnerHref: lang === "pt" ? "/parceiros" : lang === "pt-pt" ? "/parceiros?lang=pt-pt" : "/partners?lang=" + lang, toast2s: f(T.toast2s), priceNote: T.priceNote.replace("{c}", T.cur[cur]),
            showStores: showStores, showPlay: showPlay, showApple: showApple, playUrl: play || "#acesso", appleUrl: apple || "#acesso",
            showForm: !showStores || (plat === "ios" && !apple) || (plat === "android" && !play),
            storeNote: showStores && direct ? T.storeAfter : (showStores ? (plat === "desktop" ? T.storeAfter : storeNote) : ""),
@@ -924,7 +985,7 @@ class Component extends DCLogic {
       langs: LANGS.map(function (l) {
         var on = l[0] === lang;
         return { label: l[1], on: on ? "true" : "false", bg: on ? "#3DDC97" : "transparent", fg: on ? "#07090D" : "#B7C0CC",
-                 pick: function () { self.setState({ lang: l[0] }); try { document.documentElement.lang = l[0]; } catch (e) {} } };
+                 pick: function () { self.setState({ lang: l[0] }); try { document.documentElement.lang = l[0] === "pt-pt" ? "pt-PT" : l[0]; } catch (e) {} } };
       }),
       curs: CURS.map(function (k) {
         var on = k[0] === cur;

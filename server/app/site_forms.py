@@ -30,7 +30,10 @@ def limited(bucket: str, ip: str, n: int, window: float = 3600) -> bool:
 
 
 def _lang(lang: str | None) -> str:
-    lang = (lang or "").split("-")[0].lower()
+    raw = (lang or "").lower().replace("_", "-")
+    if raw.startswith("pt-pt"):
+        return "pt-pt"
+    lang = raw.split("-")[0]
     return lang if lang in ("pt", "en", "es") else "en"
 
 
@@ -40,6 +43,7 @@ def _base() -> str:
 
 def _footer(leave_link: str, lang: str) -> str:
     leave = {"pt": "Não quer mais receber? <a href='{u}'>Sair da lista</a>.",
+             "pt-pt": "Não quer receber mais? <a href='{u}'>Sair da lista</a>.",
              "en": "Don't want these emails? <a href='{u}'>Leave the list</a>.",
              "es": "¿No quieres recibir más? <a href='{u}'>Salir de la lista</a>."}[lang].format(u=html.escape(leave_link))
     return (f"<p style='margin-top:24px;color:#8A8F98;font-size:12px'>{leave}<br>"
@@ -55,6 +59,13 @@ WAIT_MAIL = {
            "<p>Enquanto isso: imagine falar <i>“marca o contador sexta às 10 e me lembra uma hora antes”</i> "
            "e pronto. É isso que o Fidus faz.</p><p>Alguma dúvida? É só responder este e-mail.</p>",
            "<p>Plano que chamou sua atenção: <b>{p}</b>.</p>"),
+    "pt-pt": ("Está na lista do Fidus",
+              "<p>Olá! Obrigado pelo interesse no Fidus.</p>"
+              "<p>Entrou na próxima turma de testes. Assim que a app estiver disponível para o seu telemóvel, "
+              "avisamos por este e-mail com o link direto da loja.</p>{plan}"
+              "<p>Entretanto, imagine dizer <i>“marca o contabilista sexta às 10 e lembra-me uma hora antes”</i> "
+              "e está feito. É isso que o Fidus faz.</p><p>Alguma dúvida? Basta responder a este e-mail.</p>",
+              "<p>Plano que lhe chamou a atenção: <b>{p}</b>.</p>"),
     "en": ("You're on the Fidus list",
            "<p>Hi! Thanks for your interest in Fidus.</p>"
            "<p>You're in the next test group. As soon as the app is available for your phone, we'll email you "
@@ -94,6 +105,9 @@ STORE_MAIL = {
     "pt": ("O Fidus chegou no seu celular", "<p>Chegou! O Fidus já está na loja do seu celular.</p>"
            "<p><a href='{u}' style='display:inline-block;background:#07090D;color:#fff;padding:12px 20px;border-radius:12px;"
            "text-decoration:none;font-weight:700'>Baixar o Fidus</a></p><p>Abra, entre com o Google e diga o que precisa.</p>"),
+    "pt-pt": ("O Fidus chegou ao seu telemóvel", "<p>Chegou! O Fidus já está na loja do seu telemóvel.</p>"
+              "<p><a href='{u}' style='display:inline-block;background:#07090D;color:#fff;padding:12px 20px;border-radius:12px;"
+              "text-decoration:none;font-weight:700'>Descarregar o Fidus</a></p><p>Abra, entre com o Google e diga do que precisa.</p>"),
     "en": ("Fidus is ready for your phone", "<p>It's here! Fidus is now in your phone's store.</p>"
            "<p><a href='{u}' style='display:inline-block;background:#07090D;color:#fff;padding:12px 20px;border-radius:12px;"
            "text-decoration:none;font-weight:700'>Get Fidus</a></p><p>Open it, sign in with Google and just say what you need.</p>"),
@@ -130,6 +144,8 @@ def notify_store_ready() -> dict:
 
 LEAVE_TEXT = {"pt": ("Pronto, você saiu da lista.", "Não vamos mais mandar e-mails sobre o lançamento.",
                      "Sair da lista do Fidus?", "Você não vai receber o aviso de quando o app chegar na loja.", "Sair da lista"),
+              "pt-pt": ("Pronto, saiu da lista.", "Não lhe enviaremos mais e-mails sobre o lançamento.",
+                        "Sair da lista do Fidus?", "Não vai receber o aviso de quando a app chegar à loja.", "Sair da lista"),
               "en": ("Done, you've left the list.", "We won't email you about the launch again.",
                      "Leave the Fidus list?", "You won't get the email when the app reaches the store.", "Leave the list"),
               "es": ("Listo, saliste de la lista.", "No te enviaremos más correos sobre el lanzamiento.",
@@ -203,6 +219,23 @@ PARTNER = {
     },
 }
 
+PARTNER["pt-pt"] = {**PARTNER["pt"],
+    "lead": "Recomende o Fidus a quem vive entre empresas, países e moedas, e ganhe com cada cliente que ficar.",
+    "points": ["O seu código próprio: quem entra com ele ganha {d}% de desconto no primeiro mês.",
+               "Recebe {p}% de cada mensalidade paga por esse cliente, durante {m} meses.",
+               "Tudo registado: registos e pagamentos acompanhados, acerto todos os meses.",
+               "Para criadores de conteúdo, contabilistas, consultores e comunidades de empreendedores."],
+    "form": "Fale-nos um pouco de si", "kind": "É", "kinds": [("criador", "Criador de conteúdo"),
+        ("contador", "Contabilista ou consultor"), ("comunidade", "Comunidade ou empresa"), ("outro", "Outro")],
+    "link": "Onde publica (Instagram, YouTube, site)", "message": "Como pensa divulgar o Fidus? (opcional)",
+    "consent": "Concordo que o Fidus guarde estes dados para responder ao meu pedido.",
+    "ok": "Recebemos o seu pedido! Respondemos por e-mail em até 3 dias úteis.",
+    "err": "Não foi possível enviar. Confirme os campos e tente de novo.",
+    "subject": "Recebemos o seu pedido de parceria",
+    "mail": "<p>Olá, {n}! Recebemos o seu pedido para ser parceiro do Fidus.</p><p>A nossa equipa responde em até 3 dias "
+            "úteis com o seu código e os próximos passos. Se quiser acrescentar algo, basta responder a este e-mail.</p>",
+}
+
 _CSS = """*{box-sizing:border-box}body{margin:0;background:#07090D;color:#F2F5F7;font-family:Figtree,system-ui,sans-serif;line-height:1.55}
 main{max-width:1080px;margin:0 auto;padding:28px 20px 72px}a{color:#3DDC97}
 .top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:40px}
@@ -231,7 +264,7 @@ def partner_page(lang: str) -> str:
     auds = "".join(f'<option>{e(a)}</option>' for a in T["auds"])
     js_t = {"sending": T["sending"], "send": T["send"], "ok": T["ok"], "err": T["err"]}
     import json
-    return f"""<!doctype html><html lang="{lg}"><head><meta charset="utf-8">
+    return f"""<!doctype html><html lang="{'pt-PT' if lg == 'pt-pt' else lg}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(T['title'])} · Fidus</title>
 <meta name="description" content="{e(T['lead'])}"><meta name="theme-color" content="#07090D">
 <link rel="icon" href="/favicon.ico" sizes="any"><link rel="icon" type="image/png" href="/favicon-32.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png">

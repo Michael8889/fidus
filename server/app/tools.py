@@ -12,7 +12,7 @@ import re
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from . import booking, config, features, google_client, meetings, payments, plans, store, web_tools
+from . import booking, config, features, google_client, meetings, payments, plans, portugal, store, web_tools
 
 TOOLS = [
     {
@@ -33,6 +33,13 @@ TOOLS = [
                 "vat": {"type": "number", "description": "IVA/VAT do recibo, se houver"},
                 "note": {"type": "string"},
                 "attach_receipt": {"type": "boolean", "description": "true quando o gasto veio da foto de recibo desta mensagem"},
+                "buyer_nif": {"type": "string", "description": "fatura portuguesa: NIF do CLIENTE impresso na fatura "
+                              "(o do usuário), se houver; vazio se a fatura não tem NIF de cliente"},
+                "supplier_nif": {"type": "string", "description": "fatura portuguesa: NIF do vendedor"},
+                "irs_category": {"type": "string", "enum": sorted(portugal.IRS_CATEGORIES),
+                                 "description": "fatura portuguesa: categoria do e-Fatura/IRS (supermercado, luz, "
+                                                "combustível = despesas_gerais; farmácia/médico = saude; restaurante = "
+                                                "restauracao_alojamento; gasto da empresa = atividade)"},
             },
             "required": ["amount", "category", "business"],
         },
@@ -167,7 +174,8 @@ PROFILE_TOOL = {
         "remove_business": {"type": "string"}}},
 }
 
-TOOLS += features.TOOLS + meetings.TOOLS + booking.TOOLS + web_tools.TOOLS + payments.TOOLS + [plans.UPSELL_TOOL, PROFILE_TOOL]
+TOOLS += features.TOOLS + meetings.TOOLS + booking.TOOLS + web_tools.TOOLS + payments.TOOLS + portugal.TOOLS + \
+    [plans.UPSELL_TOOL, PROFILE_TOOL]
 
 # foto de recibo da mensagem atual (definida pelo agente antes de rodar as ferramentas)
 class _PerRequest(threading.local):
@@ -204,7 +212,7 @@ def run(name: str, args: dict) -> dict:
         "prepare_email_reply": _prepare_reply,
         "prepare_new_email": _prepare_new,
     }.get(name) or features.DISPATCH.get(name) or meetings.DISPATCH.get(name) or booking.DISPATCH.get(name) \
-        or web_tools.DISPATCH.get(name) or payments.DISPATCH.get(name)
+        or web_tools.DISPATCH.get(name) or payments.DISPATCH.get(name) or portugal.DISPATCH.get(name)
     if name == "save_document":
         fn = lambda **a: features.save_document(**a, _path=CURRENT_RECEIPT.get("path"))  # noqa: E731
     if name == "offer_upgrade":
@@ -345,7 +353,7 @@ def _today() -> str:
 
 
 def _add_expense(amount, category, business, currency=None, date=None, merchant=None, vat=None, note=None,
-                 attach_receipt=False):
+                 attach_receipt=False, buyer_nif=None, supplier_nif=None, irs_category=None):
     amount = round(float(amount), 2)
     if amount <= 0:
         return {"error": "valor precisa ser maior que zero"}
@@ -359,14 +367,25 @@ def _add_expense(amount, category, business, currency=None, date=None, merchant=
             return {"error": f"empresa desconhecida: {business}. Empresas: {', '.join(store.businesses())}"}
     business = known
     receipt = CURRENT_RECEIPT.get("path") if attach_receipt else None
+    if irs_category and irs_category not in portugal.IRS_CATEGORIES:
+        irs_category = None
     eid = store.add_expense(date or _today(), amount, cur, category, business, merchant, note,
-                            float(vat) if vat is not None else None, receipt)
+                            float(vat) if vat is not None else None, receipt,
+                            portugal.clean_nif(supplier_nif), portugal.clean_nif(buyer_nif), irs_category)
     out = {"ok": True, "expense_id": eid, "amount": amount, "currency": cur, "category": category,
            "business": business, "merchant": merchant, "date": date or _today(), "receipt_saved": bool(receipt)}
     try:
         alerts = features.expense_alerts(eid, amount, cur, category, merchant, date or _today())
         if alerts:
             out["alerts"] = alerts
+    except Exception:
+        pass
+    try:  # Portugal: NIF e e-Fatura
+        pt = portugal.check_invoice(business, buyer_nif, supplier_nif, irs_category, cur)
+        if pt:
+            out["alerts"] = (out.get("alerts") or []) + pt
+        if irs_category:
+            out["irs_category"] = portugal.IRS_CATEGORIES[irs_category]
     except Exception:
         pass
     return out
