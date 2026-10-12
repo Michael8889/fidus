@@ -32,13 +32,13 @@ PLANS = {
     },
 }
 
-# Preço por moeda (valores redondos fixos, como nas lojas de apps). Euro ajustado ao poder de compra de Portugal
-# (primeiro mercado): os quatro planos com a mesma redução do Essencial (29,90 -> 16,90). Libra no Reino Unido, euro na Europa,
+# Preço por moeda (valores redondos fixos, como nas lojas de apps). Base: Portugal, o primeiro mercado
+# (16,90 / 29,90 / 39,90 / 49,90 €); libra e dólar seguem o mesmo nível, arredondados. Libra no Reino Unido, euro na Europa,
 # dólar no resto do mundo. A cobrança de verdade segue o país do cartão.
 PRICES = {
     "EUR": {"essencial": 16.90, "negocio": 29.90, "premium": 39.90, "global": 49.90},
-    "GBP": {"essencial": 24.90, "negocio": 42.90, "premium": 59.90, "global": 79.90},
-    "USD": {"essencial": 32.90, "negocio": 54.90, "premium": 74.90, "global": 99.90},
+    "GBP": {"essencial": 14.90, "negocio": 24.90, "premium": 34.90, "global": 44.90},
+    "USD": {"essencial": 18.90, "negocio": 32.90, "premium": 43.90, "global": 54.90},
 }
 SYMBOL = {"EUR": "€", "GBP": "£", "USD": "$"}
 EUROPE = set("AD AL AT AX BA BE BG BY CH CY CZ DE DK EE ES FI FO FR GG GI GR HR HU IE IM IS IT JE LI LT LU LV MC MD "

@@ -168,7 +168,7 @@ def test_conversations():
 def test_currency_by_country():
     assert plans.currency_for("GB") == "GBP" and plans.currency_for("pt") == "EUR" and plans.currency_for("NO") == "EUR"
     assert plans.currency_for("MY") == "USD" and plans.currency_for("") == "USD" and plans.currency_for("BR") == "USD"
-    assert plans.PRICES["GBP"]["negocio"] == 42.90 and plans.PRICES["USD"]["premium"] == 74.90
+    assert plans.PRICES["GBP"]["negocio"] == 24.90 and plans.PRICES["USD"]["premium"] == 43.90
 
 
 def test_profile_locale_and_plan_prices(monkeypatch):
@@ -178,7 +178,7 @@ def test_profile_locale_and_plan_prices(monkeypatch):
                                          "only_if_empty": True}, headers=tok).json()
     assert r["language"] == "ms" and r["currency"] == "USD" and r["profile"]["timezone"] == "Asia/Kuala_Lumpur"
     p = client.get("/v1/plan", headers=tok).json()
-    assert p["currency"] == "USD" and p["plans"][1]["month"] == 54.90
+    assert p["currency"] == "USD" and p["plans"][1]["month"] == 32.90
     # o celular manda de novo: não troca o que já foi escolhido
     client.post("/v1/profile", json={"language": "en", "country": "GB", "only_if_empty": True}, headers=tok)
     assert client.get("/v1/me", headers=tok).json()["language"] == "ms"
