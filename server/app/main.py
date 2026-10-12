@@ -390,7 +390,8 @@ def google_callback(request: Request, state: str = "", error: str = ""):
         if not full_access:
             return _page("Fidus", "<h1>Faltou permissão</h1><p>Para o Fidus cuidar da agenda e dos e-mails, marque todas as caixas na tela do Google. Tente de novo pelo app.</p>")
         with store.as_user(accounts.user_ctx(user)):
-            google_client.save_credentials(creds, email)
+            # Gmail e Outlook ficam os dois ligados; a agenda continua onde o cliente escolheu
+            google_client.save_credentials(creds, email, make_default=not _ms().is_connected())
         return _page("Fidus", "<h1>Google conectado ✓</h1><p>Pode voltar para o app.</p>")
     user = accounts.find_or_create(email, who.get("name"), who.get("sub"), pending.get("ref"))
     if user and pending.get("ref"):
@@ -480,6 +481,24 @@ def microsoft_callback(request: Request, state: str = "", code: str = "", error:
         store.add_activity("outlook_connected", "Outlook conectado", got["email"], "feito", "")
     return _page("Fidus", f"<h1>Outlook conectado ✓</h1><p>{html.escape(got['email'])}: agenda e e-mails agora pelo "
                           "Outlook. Pode voltar para o app.</p>")
+
+
+class PrimaryIn(BaseModel):
+    provider: str
+
+
+@app.post("/v1/mail_provider", dependencies=[Depends(auth)])
+def mail_primary(body: PrimaryIn):
+    """De onde vem a agenda (e a caixa principal). Os e-mails das duas contas continuam sendo lidos."""
+    before = google_client.provider()
+    try:
+        now = google_client.set_primary(body.provider)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if now != before:
+        store.add_activity("mail_primary", "Agenda: " + ("Google" if now == "google" else "Outlook"),
+                           "antes: " + ("Google" if before == "google" else "Outlook"), "feito", before or "")
+    return {"ok": True, "mail_provider": now, "mail_accounts": google_client.mail_accounts()}
 
 
 @app.post("/v1/auth/microsoft/disconnect", dependencies=[Depends(auth)])
@@ -623,6 +642,7 @@ def me(request: Request):
             "google_connected": google_client.google_connected(), "profile": store.profile(),
             "outlook_connected": _ms().is_connected(), "outlook_email": _ms().email(),
             "outlook_available": _ms().enabled(), "mail_provider": google_client.provider(),
+            "mail_accounts": google_client.mail_accounts(), "google_email": store.kv_get("google_email") or "",
             "language": store.user_lang(), "currency": plans.user_currency(), "countries": countries.info(),
             "staff_role": admin.role_for({**u, "email": u.get("email")}),
             "nps_due": _nps_due(u), "natural_voice": _tts_on(), "realtime": _rt_on(), "onboarding_pending": _onb_pending(), "voice_gender": store.profile().get("voice_gender") or "female"}
@@ -1282,6 +1302,7 @@ def _undo_countries(ref: str) -> None:
 
 UNDO = {
     "countries_changed": lambda ref: _undo_countries(ref),
+    "mail_primary": lambda ref: google_client.set_primary(ref),
     "event_created": lambda ref: tools.run_delete_event(ref),
     "reminder_created": lambda ref: tools.run_delete_event(ref),
     "expense_added": lambda ref: tools.run_delete_expense(int(ref)),

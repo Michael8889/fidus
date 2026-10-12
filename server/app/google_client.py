@@ -114,8 +114,24 @@ def calendar():
     return build("calendar", "v3", credentials=credentials(), cache_discovery=False)
 
 
-def gmail():
-    if provider() == "microsoft":
+def mail_accounts() -> list[str]:
+    """Todas as caixas de e-mail conectadas (Gmail e Outlook juntos), a principal primeiro."""
+    from . import ms_client
+    have = [p for p, ok in (("google", google_connected()), ("microsoft", ms_client.is_connected())) if ok]
+    first = provider()
+    return sorted(have, key=lambda p: p != first)
+
+
+def set_primary(which: str) -> str:
+    """Escolhe de onde vem a AGENDA (e a caixa principal de e-mail); a outra caixa continua sendo lida."""
+    if which not in mail_accounts():
+        raise ValueError("essa conta não está conectada")
+    store.kv_set("mail_provider", which)
+    return which
+
+
+def gmail(which: str | None = None):
+    if (which or provider()) == "microsoft":
         from . import ms_client
         return ms_client.Mail()
     return build("gmail", "v1", credentials=credentials(), cache_discovery=False)

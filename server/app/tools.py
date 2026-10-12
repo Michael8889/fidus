@@ -124,7 +124,7 @@ TOOLS = [
     },
     {
         "name": "search_emails",
-        "description": "Busca e-mails no Gmail com a sintaxe de busca do Gmail (ex. 'from:carlos orçamento newer_than:14d').",
+        "description": "Busca e-mails (Gmail e Outlook juntos, se os dois estiverem conectados) com a sintaxe de busca do Gmail (ex. 'from:carlos orçamento newer_than:14d').",
         "parameters": {
             "type": "object",
             "properties": {"query": {"type": "string"}, "max_results": {"type": "integer", "default": 5}},
@@ -155,7 +155,10 @@ TOOLS = [
             "type": "object",
             "properties": {"to": {"type": "string", "description": "e-mail(s) do destinatário, separados por vírgula"},
                            "subject": {"type": "string"}, "body": {"type": "string"},
-                           "cc": {"type": "string", "description": "opcional"}},
+                           "cc": {"type": "string", "description": "opcional"},
+                           "from_account": {"type": "string", "description": "só se o usuário tiver Gmail e Outlook "
+                                            "conectados e disser de qual enviar (e-mail da conta, 'gmail' ou 'outlook'); "
+                                            "vazio = conta principal"}},
             "required": ["to", "subject", "body"],
         },
     },
@@ -511,16 +514,59 @@ def _header(msg, name):
     return ""
 
 
+# Gmail e Outlook juntos: ids do Outlook ganham o prefixo "ms:" para cada e-mail voltar à caixa certa
+def _route(message_id: str) -> tuple[str, str]:
+    mid = str(message_id or "")
+    if mid.startswith("ms:"):
+        return "microsoft", mid[3:]
+    if google_client.google_connected():
+        return "google", mid
+    return (google_client.provider() or "google"), mid
+
+
+def _mail_id(which: str, mid: str) -> str:
+    return f"ms:{mid}" if which == "microsoft" else mid
+
+
+def _account_label(which: str) -> str:
+    if which == "microsoft":
+        from . import ms_client
+        return ms_client.email() or "Outlook"
+    return store.kv_get("google_email") or "Gmail"
+
+
 def _search_emails(query, max_results=5):
-    g = google_client.gmail()
-    ids = g.users().messages().list(userId="me", q=query, maxResults=max_results).execute().get("messages", [])
-    out = []
-    for m in ids:
-        msg = g.users().messages().get(userId="me", id=m["id"], format="metadata",
-                                       metadataHeaders=["From", "Subject", "Date"]).execute()
-        out.append({"id": m["id"], "from": _header(msg, "From"), "subject": _header(msg, "Subject"),
-                    "date": _header(msg, "Date"), "snippet": msg.get("snippet", "")})
-    return {"emails": out}
+    from email.utils import parsedate_to_datetime
+    out, errors = [], []
+    accounts = google_client.mail_accounts() or [None]
+    for which in accounts:
+        try:
+            g = google_client.gmail(which)
+            ids = g.users().messages().list(userId="me", q=query, maxResults=max_results).execute().get("messages", [])
+            for m in ids:
+                msg = g.users().messages().get(userId="me", id=m["id"], format="metadata",
+                                               metadataHeaders=["From", "Subject", "Date"]).execute()
+                out.append({"id": _mail_id(which, m["id"]), "account": _account_label(which) if len(accounts) > 1 else None,
+                            "from": _header(msg, "From"), "subject": _header(msg, "Subject"),
+                            "date": _header(msg, "Date"), "snippet": msg.get("snippet", "")})
+        except Exception as e:  # noqa: BLE001  uma caixa com problema não derruba a outra
+            if len(accounts) == 1:
+                raise
+            errors.append(f"{_account_label(which)}: {str(e)[:80]}")
+
+    def when(e):
+        try:
+            return parsedate_to_datetime(e["date"]).timestamp()
+        except Exception:  # noqa: BLE001
+            return 0
+    out.sort(key=when, reverse=True)
+    for e in out:
+        if not e["account"]:
+            e.pop("account")
+    res = {"emails": out[:max(max_results, 1) * len(accounts)]}
+    if errors:
+        res["errors"] = errors
+    return res
 
 
 def _body_text(payload) -> str:
@@ -544,7 +590,8 @@ def _part(payload, mime: str) -> str:
 
 
 def _read_email(message_id):
-    msg = google_client.gmail().users().messages().get(userId="me", id=message_id, format="full").execute()
+    which, mid = _route(message_id)
+    msg = google_client.gmail(which).users().messages().get(userId="me", id=mid, format="full").execute()
     body = _body_text(msg["payload"])
     html_part = _part(msg["payload"], "text/html")
     links = []
@@ -559,8 +606,9 @@ def _read_email(message_id):
 
 
 def _prepare_reply(message_id, body):
-    msg = google_client.gmail().users().messages().get(
-        userId="me", id=message_id, format="metadata",
+    which, mid = _route(message_id)
+    msg = google_client.gmail(which).users().messages().get(
+        userId="me", id=mid, format="metadata",
         metadataHeaders=["From", "Reply-To", "Subject", "Message-ID", "References"]).execute()
     subject = _header(msg, "Subject")
     payload = {
@@ -570,6 +618,7 @@ def _prepare_reply(message_id, body):
         "thread_id": msg.get("threadId"),
         "in_reply_to": _header(msg, "Message-ID"),
         "references": (_header(msg, "References") + " " + _header(msg, "Message-ID")).strip(),
+        "account": which, "from": _account_label(which),  # a resposta sai da mesma caixa que recebeu
     }
     pid = store.create_pending("send_email", payload)
     return {"ok": True, "pending_action_id": pid, "status": "aguardando confirmação do usuário", "draft": payload}
@@ -595,8 +644,23 @@ def clean_recipients(raw: str | None) -> str:
     return ", ".join(out)
 
 
-def _prepare_new(to, subject, body, cc=None):
+def _pick_account(from_account: str | None) -> str | None:
+    accounts = google_client.mail_accounts()
+    f = (from_account or "").strip().lower()
+    if f:
+        for which in accounts:
+            if f in (which, _account_label(which).lower()) or (f in ("gmail", "google") and which == "google") \
+                    or (f in ("outlook", "hotmail", "microsoft") and which == "microsoft"):
+                return which
+        raise ValueError("conta de envio não conectada: " + (", ".join(_account_label(a) for a in accounts) or "nenhuma"))
+    return accounts[0] if accounts else None
+
+
+def _prepare_new(to, subject, body, cc=None, from_account=None):
+    which = _pick_account(from_account)
     payload = {"to": clean_recipients(to), "subject": (subject or "").strip()[:200] or "(sem assunto)", "body": body}
+    if which:
+        payload.update(account=which, **({"from": _account_label(which)} if len(google_client.mail_accounts()) > 1 else {}))
     if cc:
         payload["cc"] = clean_recipients(cc)
     pid = store.create_pending("send_email", payload)
@@ -646,7 +710,7 @@ def send_confirmed_email(payload: dict) -> dict:
     body = {"raw": raw}
     if payload.get("thread_id"):
         body["threadId"] = payload["thread_id"]
-    sent = google_client.gmail().users().messages().send(userId="me", body=body).execute()
+    sent = google_client.gmail(payload.get("account")).users().messages().send(userId="me", body=body).execute()
     return {"ok": True, "message_id": sent["id"]}
 
 

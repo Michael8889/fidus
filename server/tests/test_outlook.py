@@ -122,9 +122,10 @@ def test_email_search_read_and_send_only_after_confirmation(monkeypatch):
     found = tools.run("search_emails", {"query": "from:carlos orçamento"})
     assert found["emails"][0]["from"] == "Carlos <carlos@obra.co.uk>" and found["emails"][0]["subject"] == "Orçamento da obra"
     assert sum(1 for c in fake.calls if c[1].startswith("/me/messages")) == 1  # cabeçalhos vêm da própria busca
-    msg = tools.run("read_email", {"message_id": "MSG1"})
+    assert found["emails"][0]["id"] in ("MSG1", "ms:MSG1")
+    msg = tools.run("read_email", {"message_id": "ms:MSG1"})
     assert "£1.200" in msg["body"] and any(l["url"] == "https://obra.co.uk/pdf" for l in msg["links"])
-    draft = tools.run("prepare_email_reply", {"message_id": "MSG1", "body": "Obrigado, **aprovado**."})
+    draft = tools.run("prepare_email_reply", {"message_id": "ms:MSG1", "body": "Obrigado, **aprovado**."})
     assert draft["draft"]["to"] == "Carlos <carlos@obra.co.uk>" and draft["draft"]["subject"] == "Re: Orçamento da obra"
     assert not fake.sent  # a ferramenta só prepara
     actions.send_pending(draft["pending_action_id"])
@@ -190,3 +191,81 @@ def test_token_refresh(monkeypatch):
     assert ms_client.access_token() == "new"
     assert json.loads(store.kv_get("ms_tokens"))["refresh_token"] == "r2"
     ms_client.disconnect()
+
+
+class _FakeGmail:
+    """Gmail falso: uma mensagem, guarda o que foi enviado."""
+    def __init__(self):
+        self.sent = []
+
+    def users(self):
+        return self
+
+    def messages(self):
+        return self
+
+    def list(self, **kw):
+        return _Exec({"messages": [{"id": "g1"}]})
+
+    def get(self, userId, id, format="full", metadataHeaders=None):  # noqa: A002
+        assert id == "g1"
+        return _Exec({"id": "g1", "threadId": "t1", "snippet": "oi",
+                      "payload": {"mimeType": "text/plain", "body": {"data": base64.urlsafe_b64encode(b"corpo").decode()},
+                                  "headers": [{"name": "From", "value": "Ana <ana@x.com>"},
+                                              {"name": "Subject", "value": "Visita"},
+                                              {"name": "Date", "value": "Sun, 11 Oct 2026 10:00:00 +0000"},
+                                              {"name": "Message-ID", "value": "<g1@x.com>"}]}})
+
+    def send(self, userId, body):
+        self.sent.append(body)
+        return _Exec({"id": "sent1"})
+
+
+class _Exec:
+    def __init__(self, v):
+        self.v = v
+
+    def execute(self):
+        return self.v
+
+
+def test_gmail_and_outlook_together(monkeypatch):
+    fake = _outlook(monkeypatch)
+    gm = _FakeGmail()
+    real = google_client.gmail
+    monkeypatch.setattr(google_client, "gmail", lambda which=None: gm if (which or google_client.provider()) == "google" else real(which))
+
+    class Creds:
+        def to_json(self):
+            return "{}"
+    before = (store.kv_get("google_creds"), store.kv_get("google_email"))
+    google_client.save_credentials(Creds(), "mike@gmail.com", make_default=False)  # liga o Gmail sem tirar o Outlook
+    try:
+        assert google_client.provider() == "microsoft" and google_client.mail_accounts() == ["microsoft", "google"]
+        found = tools.run("search_emails", {"query": "orçamento"})["emails"]
+        ids = {e["id"] for e in found}
+        assert ids == {"ms:MSG1", "g1"} and found[0]["id"] == "g1"  # mais recente primeiro, das duas caixas
+        assert {e["account"] for e in found} == {"mike@homb.co.uk", "mike@gmail.com"}
+        assert tools.run("read_email", {"message_id": "g1"})["body"] == "corpo"
+        assert "£1.200" in tools.run("read_email", {"message_id": "ms:MSG1"})["body"]
+        # a resposta sai da caixa que recebeu
+        d = tools.run("prepare_email_reply", {"message_id": "g1", "body": "Combinado"})
+        assert d["draft"]["account"] == "google" and d["draft"]["from"] == "mike@gmail.com"
+        actions.send_pending(d["pending_action_id"])
+        assert len(gm.sent) == 1 and not fake.sent
+        # e-mail novo: da principal (Outlook) ou da que ele pedir
+        n = tools.run("prepare_new_email", {"to": "x@y.com", "subject": "Oi", "body": "Olá"})
+        assert n["draft"]["account"] == "microsoft"
+        n2 = tools.run("prepare_new_email", {"to": "x@y.com", "subject": "Oi", "body": "Olá", "from_account": "gmail"})
+        assert n2["draft"]["account"] == "google"
+        # trocar a agenda principal pelo app (vai para a Atividade com Desfazer)
+        c = TestClient(main.app)
+        assert c.post("/v1/mail_provider", json={"provider": "google"}, headers=H).json()["mail_provider"] == "google"
+        assert google_client.provider() == "google" and ms_client.is_connected()
+        me = c.get("/v1/me", headers=H).json()
+        assert me["mail_accounts"] == ["google", "microsoft"] and me["google_email"] == "mike@gmail.com"
+        assert c.post("/v1/mail_provider", json={"provider": "yahoo"}, headers=H).status_code == 400
+    finally:
+        for k, v in zip(("google_creds", "google_email"), before):
+            store.kv_set(k, v) if v is not None else store.kv_del(k)
+        ms_client.disconnect()

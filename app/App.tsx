@@ -43,7 +43,8 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=0.15.0,ota=${UPDATE_ID.slice(0, 8)}`;
+const JS_VERSION = "0.15.1"; // única fonte da versão mostrada em Configurações e enviada ao servidor
+const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=${JS_VERSION},ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
 
@@ -453,7 +454,7 @@ function EmailCard({ a, c, dark, onSend, onCancel, onSave, onCopy, onEditing }: 
     <View style={[s.emailCard, { backgroundColor: c.card, borderColor: line }]}>
       <View style={[s.emailHead, { borderBottomColor: line }]}>
         <MailIcon color={c.sub} size={17} />
-        <Text style={{ color: c.text, fontWeight: "700", fontSize: 15, flex: 1, marginLeft: 8 }}>{t("Email")}</Text>
+        <Text style={{ color: c.text, fontWeight: "700", fontSize: 15, flex: 1, marginLeft: 8 }} numberOfLines={1}>{t("Email")}{a.payload.from ? ` · ${a.payload.from}` : ""}</Text>
         {pending && !editing && (
           <Pressable hitSlop={8} onPress={() => setEditing(true)} style={s.headBtn} accessibilityLabel={t("Editar")}>
             <PencilIcon color={c.sub} /></Pressable>)}
@@ -1894,6 +1895,21 @@ function FidusApp() {
     catch (e: any) { Alert.alert("Google", errMsg(e)); }
   }
 
+  // Gmail e Outlook ficam os dois ligados; aqui o cliente escolhe de qual vem a agenda
+  async function usePrimary(p: string) {
+    try { const r = await post("/v1/mail_provider", { provider: p }); setMe({ ...me, mail_provider: r.mail_provider, mail_accounts: r.mail_accounts });
+      flash(p === "google" ? t("Agenda: Google") : t("Agenda: Outlook")); }
+    catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
+  }
+
+  function googleMenu() {
+    if (!me?.google_connected) return reconnectGoogle();
+    Alert.alert("Google", `${me.google_email || ""}`, [
+      ...(me.outlook_connected && me.mail_provider === "microsoft" ? [{ text: t("Usar a agenda do Google"), onPress: () => usePrimary("google") }] : []),
+      { text: t("Reconectar"), onPress: reconnectGoogle },
+      { text: t("Cancelar"), style: "cancel" as const }]);
+  }
+
   // Outlook / Microsoft 365: abre a tela da Microsoft; ao voltar para o app, o /v1/me mostra conectado
   async function connectOutlook() {
     try { await Linking.openURL((await api("/v1/auth/microsoft/link", {}, 15000)).url); }
@@ -1903,6 +1919,7 @@ function FidusApp() {
   function outlookMenu() {
     if (!me?.outlook_connected) return connectOutlook();
     Alert.alert("Outlook", `${me.outlook_email || ""}`, [
+      ...(me.google_connected && me.mail_provider !== "microsoft" ? [{ text: t("Usar a agenda do Outlook"), onPress: () => usePrimary("microsoft") }] : []),
       { text: t("Reconectar"), onPress: connectOutlook },
       { text: t("Desconectar"), style: "destructive", onPress: async () => {
         try { const r = await post("/v1/auth/microsoft/disconnect", {}); setMe({ ...me, outlook_connected: false, outlook_email: "", mail_provider: r.mail_provider }); }
@@ -2802,7 +2819,7 @@ function FidusApp() {
             {SpeechRec ? "✅" : "❌"} {t("Transcrição no celular")}{SpeechRec ? "" : ` (${t("precisa do APK novo")})`}{"\n"}
             {me?.natural_voice ? "✅" : "❌"} {t("Voz natural")}{me?.natural_voice ? "" : ` (${t("falta a chave no servidor")})`}{"\n"}
             {RTC && me?.realtime && !rtErr ? "✅" : "❌"} {t("Conversa em tempo real")}{!RTC ? ` (${t("precisa do APK novo")})` : !me?.realtime ? ` (${t("desligada no servidor")})` : rtErr ? ` (${rtErr})` : ""}{"\n"}
-            {t("Versão")}: 0.15.0 · {UPDATE_ID.slice(0, 8)}</Text>
+            {t("Versão")}: {JS_VERSION} · {UPDATE_ID.slice(0, 8)}</Text>
           <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
         </Card>
         <Card c={c} onPress={() => { setScreen("chat"); startOnboarding(true); }}>
@@ -2813,13 +2830,13 @@ function FidusApp() {
           <Pressable onPress={() => Linking.openURL(`${base()}/privacy?lang=${LANG}`)}><Text style={{ color: c.sub, fontSize: 13 }}>{t("Privacidade")}</Text></Pressable>
           <Pressable onPress={() => Linking.openURL(`${base()}/terms?lang=${LANG}`)}><Text style={{ color: c.sub, fontSize: 13 }}>{t("Termos de uso")}</Text></Pressable>
         </View>
-        <Card c={c} onPress={reconnectGoogle}>
+        <Card c={c} onPress={googleMenu}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>Google</Text>
-            <Text style={{ color: c.sub, fontSize: 14 }}>{me?.google_connected ? (me?.mail_provider === "microsoft" ? t("Conectado · agenda e e-mail pelo Outlook") : t("Conectado · tocar para reconectar")) : t("Não conectado · tocar para conectar")}</Text></View>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{me?.google_connected ? `${t("Conectado")}${me.google_email ? " · " + me.google_email : ""}${me.outlook_connected ? " · " + (me.mail_provider === "microsoft" ? t("e-mail") : t("agenda e e-mail")) : ""}` : t("Não conectado · tocar para conectar")}</Text></View>
           <Text style={{ color: c.sub }}>›</Text></Card>
         {(me?.outlook_available || me?.outlook_connected) && <Card c={c} onPress={outlookMenu}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>Outlook · Microsoft 365</Text>
-            <Text style={{ color: c.sub, fontSize: 14 }}>{me?.outlook_connected ? `${t("Conectado")} · ${me.outlook_email || ""}` : t("Não conectado · tocar para conectar")}</Text></View>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{me?.outlook_connected ? `${t("Conectado")} · ${me.outlook_email || ""}${me.google_connected ? " · " + (me.mail_provider === "microsoft" ? t("agenda e e-mail") : t("e-mail")) : ""}` : t("Não conectado · tocar para conectar")}</Text></View>
           <Text style={{ color: c.sub }}>›</Text></Card>}
         {!!pendingMeet && <Card c={c} onPress={() => { const p = pendingMeet; setPendingMeet(null); setScreen("chat"); sendMeetingFile(p); }}>
           <Text style={{ color: c.text, flex: 1, fontSize: 15 }}>🎙 {t("Reenviar reunião")}</Text></Card>}
@@ -3462,7 +3479,11 @@ const I18N_KEYS: string[] = [
   "arquivo grande demais (máx. 15 MB).",
   "Arquivo",
   "arquivo",
+  "Agenda: Google",
+  "Agenda: Outlook",
+  "Usar a agenda do Google",
   "Reconectar",
+  "Usar a agenda do Outlook",
   "Desconectar",
   "Pedido cancelado. Se algo já tinha sido feito, está na Atividade, com Desfazer.",
   "Enviar convite?",
@@ -3669,10 +3690,10 @@ const I18N_KEYS: string[] = [
   "O Fidus pergunta de novo como você trabalha e se ajusta.",
   "Privacidade",
   "Termos de uso",
-  "Conectado · agenda e e-mail pelo Outlook",
-  "Conectado · tocar para reconectar",
-  "Não conectado · tocar para conectar",
   "Conectado",
+  "e-mail",
+  "agenda e e-mail",
+  "Não conectado · tocar para conectar",
   "Reenviar reunião",
   "Exportar meus dados",
   "Um arquivo com tudo: conversas, gastos, recibos, documentos",

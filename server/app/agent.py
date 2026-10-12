@@ -237,10 +237,16 @@ def _mail_line() -> str:
     """Agenda e e-mail do Outlook: as mesmas ferramentas, com dois detalhes que mudam."""
     try:
         from . import google_client
+        line = ""
         if google_client.provider() == "microsoft":
-            return ("\n- Agenda e e-mail: OUTLOOK (Microsoft), não Google. As ferramentas de agenda e e-mail funcionam "
+            line = ("\n- Agenda: OUTLOOK (Microsoft), não Google. As ferramentas de agenda e e-mail funcionam "
                     "igual; diga 'Outlook' ao falar delas. Busca de e-mail: palavras, from:, to:, subject:, "
                     "newer_than:7d. Reunião online gera link do Teams (contas de empresa), não do Meet.")
+        if len(google_client.mail_accounts()) > 1:
+            line += ("\n- E-mail: Gmail E Outlook conectados. search_emails procura nas duas caixas (campo account). "
+                     "Resposta sai da caixa que recebeu. E-mail novo sai da principal; se ele disser de qual, use "
+                     "from_account.")
+        return line
     except Exception:  # noqa: BLE001
         pass
     return ""

@@ -233,8 +233,11 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
   das bibliotecas do Google. Com o Outlook conectado, `google_client.calendar()`/`gmail()` devolvem os adaptadores e
   todas as funções (agenda, lembretes, convites, link de agendamento, e-mails) funcionam sem mudar nada nelas.
   Planilhas continuam só no Google.
-- Quem usa Outlook entra com e-mail (código) e conecta em Configurações › Outlook (ou no aviso do chat). Vale o último
-  conectado (`kv mail_provider`); entrar com o Google num celular novo não tira o Outlook.
+- Quem usa Outlook entra com e-mail (código) e conecta em Configurações › Outlook (ou no aviso do chat).
+- Gmail e Outlook podem ficar os DOIS ligados (v0.15.1): a busca de e-mail olha as duas caixas (ids do Outlook com
+  prefixo `ms:`), a resposta sai da caixa que recebeu e o e-mail novo sai da principal (ou da que o cliente pedir).
+  A agenda vem de uma só (`kv mail_provider`), escolhida no app (toque no Google ou no Outlook › Usar a agenda...).
+  Conectar um não desliga o outro.
 - Envio: igual ao Gmail, só depois da confirmação (o MIME pronto vai por `/me/sendMail`).
 - Configuração: app no Microsoft Entra (contas de qualquer empresa + pessoais), redirect
   `https://app.heyfidus.com/auth/microsoft/callback`, permissões delegadas `User.Read Calendars.ReadWrite Mail.Read
