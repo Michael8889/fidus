@@ -109,9 +109,17 @@ APP_SCHEME = env("FIDUS_APP_SCHEME", "fidus")  # link que reabre o app depois do
 REFERRAL_SIGNUP = (env("FIDUS_REFERRAL_SIGNUP", "0") or "0").strip() in ("1", "true", "yes")
 REFERRAL_TRIAL_DAYS = int(env("FIDUS_REFERRAL_TRIAL_DAYS", "7") or 7)
 REFERRAL_PERCENT = int(env("FIDUS_REFERRAL_PERCENT", "10") or 10)
+# Pagamento pelo site (Stripe Checkout): o app do beta não vem da Google Play, então a assinatura é pela web.
+# As chaves o dono cola no .env (nunca no código). Sem elas, o botão de assinar mostra "em breve".
+STRIPE_SECRET_KEY = (env("FIDUS_STRIPE_SECRET_KEY", "") or "").strip()
+STRIPE_WEBHOOK_SECRET = (env("FIDUS_STRIPE_WEBHOOK_SECRET", "") or "").strip()
+TRIAL_DAYS = int(env("FIDUS_TRIAL_DAYS", "7") or 0)  # dias grátis de conta nova (0 = sem teste)
 # Beta só com convite: N convites por membro (0 = desliga) e plano de quem entra pelo beta
 BETA_INVITES = int(env("FIDUS_BETA_INVITES", "3") or 0)
 BETA_PLAN = (env("FIDUS_BETA_PLAN", "premium") or "premium").strip()
+# Os primeiros N do site em português de Portugal entram sozinhos (sem esperar turma). 0 = só por turmas no painel.
+BETA_AUTO = int(env("FIDUS_BETA_AUTO", "100") or 0)
+BETA_AUTO_LANGS = tuple(x.strip() for x in (env("FIDUS_BETA_AUTO_LANGS", "pt-pt") or "").split(",") if x.strip())
 SITE_URL = (env("FIDUS_SITE_URL", "https://heyfidus.com") or "https://heyfidus.com").rstrip("/")
 APP_DOWNLOAD_URL = env("FIDUS_APP_DOWNLOAD_URL", "")  # página/loja para baixar o app (link de convite)
 BILLING_WEBHOOK_SECRET = (env("FIDUS_BILLING_WEBHOOK_SECRET", "") or "").strip()  # segredo do aviso da RevenueCat

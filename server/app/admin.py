@@ -248,7 +248,7 @@ def system(s: Session = Depends(need("system"))):
     if tasks24 >= 10 and _pct(failed, tasks24) > 10:
         problems.append("tasks_failing")
     return {"ok": not problems, "problems": problems, "uptime_s": int(time.time() - metrics.STARTED),
-            "version": "0.17.1", "llm": config.LLM_PROVIDER, "model": config.LLM_MODEL,
+            "version": "0.18.0", "llm": config.LLM_PROVIDER, "model": config.LLM_MODEL,
             "voice_stages": metrics.stage_p50(),
             "backup": {"age_hours": round(age, 1) if age is not None else None, **backup.last()},
             "disk_free_gb": free, "requests_24h": len(last24), "asks_24h": len(asks),
@@ -627,6 +627,7 @@ def beta_view(s: Session = Depends(need("site"))):
                        "platform": r.get("platform") or "", "lang": r.get("lang") or "", "since": r["created_at"]}
                       for r in q[:200]],
             "download_ready": bool(config.APP_DOWNLOAD_URL), "per_member": config.BETA_INVITES,
+            "auto_used": beta.auto_used(), "auto_limit": config.BETA_AUTO, "auto_langs": list(config.BETA_AUTO_LANGS),
             "can_manage": s["role"] in ("owner", "admin")}
 
 

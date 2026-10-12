@@ -100,7 +100,7 @@ const T = {
   b_title:"Beta (invite only)", b_help:"Invite the top of the queue in groups. Each friend someone brings moves them up {0} places. Each member has {1} invites of their own.",
   b_waiting:"In the queue", b_invited:"Invited", b_joined:"Signed in", b_ios:"iPhone (waiting)", b_count:"How many", b_preview:"See who",
   b_send:"Invite them", b_confirm:"Send the invite email to these {0} people?", b_done:"Invited: {0}. Still in the queue: {1}.",
-  b_no_apk:"Add FIDUS_APP_DOWNLOAD_URL (APK link) to .env to invite.", b_pos:"#", b_friends:"Friends"},
+  b_no_apk:"Add FIDUS_APP_DOWNLOAD_URL (APK link) to .env to invite.", b_pos:"#", b_friends:"Friends", b_auto:"Automatic entry (first from {0})"},
  pt: {title:"Painel do Fidus", language:"Idioma", logout:"Sair", system:"Sistema", heart:"HEART", business:"Negócio",
   clients:"Clientes", team:"Equipe", signin:"Entrar no painel", signin_help:"No app do Fidus, abra o menu › Painel da empresa e digite aqui o código de 8 letras. Ele vale 5 minutos.",
   enter:"Entrar", all_ok:"Tudo funcionando", problems:"Precisa de atenção", uptime:"No ar há", requests24:"Chamadas (24 h)", asks24:"Pedidos ao Fidus (24 h)",
@@ -140,7 +140,7 @@ const T = {
   b_title:"Beta (só com convite)", b_help:"Convide os primeiros da fila por turmas. Cada amigo que a pessoa traz sobe ela {0} lugares. Cada membro tem {1} convites próprios.",
   b_waiting:"Na fila", b_invited:"Convidados", b_joined:"Já entraram", b_ios:"iPhone (esperando)", b_count:"Quantos", b_preview:"Ver quem",
   b_send:"Convidar", b_confirm:"Mandar o e-mail do convite para estas {0} pessoas?", b_done:"Convidados: {0}. Ainda na fila: {1}.",
-  b_no_apk:"Coloque FIDUS_APP_DOWNLOAD_URL (link do APK) no .env para convidar.", b_pos:"Nº", b_friends:"Amigos"}
+  b_no_apk:"Coloque FIDUS_APP_DOWNLOAD_URL (link do APK) no .env para convidar.", b_pos:"Nº", b_friends:"Amigos", b_auto:"Entrada automática (primeiros de {0})"}
 };
 let L = "en";
 try { L = localStorage.getItem("fidus_admin_lang") || "en"; } catch (e) {}
@@ -367,7 +367,7 @@ async function betaBlock() {
   const b = await api("beta");
   const html = `<div class="sec" style="margin-top:0">${esc(t("b_title"))}</div>
     <p class="small muted">${esc(t("b_help", 10, b.per_member))}</p>
-    <div class="grid">${card(t("b_waiting"), num(b.waiting))}${card(t("b_invited"), num(b.invited))}${card(t("b_joined"), num(b.joined))}${card(t("b_ios"), num(b.ios_waiting))}</div>
+    <div class="grid">${card(t("b_waiting"), num(b.waiting))}${card(t("b_invited"), num(b.invited))}${card(t("b_joined"), num(b.joined))}${card(t("b_ios"), num(b.ios_waiting))}${b.auto_limit ? card(t("b_auto", (b.auto_langs || []).join(", ")), `${num(b.auto_used)} / ${num(b.auto_limit)}`) : ""}</div>
     ${b.can_manage ? `<p class="row"><input id="bn" type="number" min="1" max="500" value="20" style="width:90px" aria-label="${esc(t("b_count"))}">
       <button class="btn ghost" id="bprev">${esc(t("b_preview"))}</button>
       <button class="btn" id="bsend" ${b.download_ready ? "" : "disabled"}>${esc(t("b_send"))}</button></p>

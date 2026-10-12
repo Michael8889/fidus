@@ -202,6 +202,19 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
 - Faturação a clientes saiu do plano: em Portugal só software certificado pela AT pode emitir faturas. Se voltar,
   será ligando a um faturador certificado (InvoiceXpress, Moloni, Vendus).
 
+## Teste grátis e assinatura pelo Stripe (v0.18)
+- Conta nova do beta (ou por indicação) tem `FIDUS_TRIAL_DAYS` (7) dias grátis no plano do convite. Acabou sem
+  assinar: o Fidus responde com o cartão de assinar (sem gastar IA); os dados continuam lá. Convites da equipe e o dono
+  não têm teste. Estado em `plans.access()`: active / trial / expired.
+- Assinar: o app abre o Stripe Checkout (`POST /v1/billing/checkout`, mensal ou anual, preço da moeda do cliente).
+  Quem assina durante o teste não perde os dias que faltam (1.ª cobrança no fim do teste). Trocar cartão ou cancelar:
+  `POST /v1/billing/portal`. Aviso do Stripe em `POST /billing/stripe` (assinatura conferida, aviso repetido ignorado).
+- No Stripe: chave secreta e segredo do webhook no `.env`; webhook para `https://app.heyfidus.com/billing/stripe` com
+  `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`;
+  ativar o Customer portal. Não precisa criar produtos: os preços vêm de `plans.PRICES`.
+- Beta de Portugal: os primeiros `FIDUS_BETA_AUTO` (100) do site em pt-PT com Android entram sozinhos; o resto espera
+  a turma no painel.
+
 ## Assinaturas
 - Lojas (Google Play, App Store) e site (Stripe) via RevenueCat. O app compra pela loja (`react-native-purchases`,
   precisa do APK novo) com o cliente identificado pelo id dele no Fidus; a RevenueCat avisa o servidor em

@@ -43,7 +43,7 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const JS_VERSION = "0.17.1"; // única fonte da versão mostrada em Configurações e enviada ao servidor
+const JS_VERSION = "0.18.0"; // única fonte da versão mostrada em Configurações e enviada ao servidor
 const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=${JS_VERSION},ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
@@ -2189,6 +2189,7 @@ function FidusApp() {
       if (sc === "expenses") await loadExpenses(arg || "", expWallet);
       if (sc === "booking") setBooking(await api("/v1/booking", {}, 15000));
       if (sc === "invite") setReferral(await api("/v1/referral", {}, 15000));
+      if (sc === "plan") { setPlan(await api("/v1/plan", {}, 15000)); try { setBilling(await api("/v1/billing", {}, 15000)); } catch {} }
       if (sc === "team") {
         const [a, m] = await Promise.all([api("/v1/accountant", {}, 15000), api("/v1/members", {}, 15000)]);
         setTeam({ accountants: a.accountants || [], acc_allowed: a.allowed, portal: a.portal, members: m.members || [], mem_allowed: m.allowed });
@@ -2353,8 +2354,28 @@ function FidusApp() {
     catch (e: any) { Alert.alert(t("Convite"), errMsg(e)); }
   }
 
+  // Assinatura pelo site (Stripe): abre a página segura do Stripe; ao voltar, o plano já vem atualizado
+  async function webCheckout(planId: string, period: "month" | "year") {
+    try {
+      const r = await post("/v1/billing/checkout", { plan: planId, period }, 20000);
+      await Linking.openURL(r.url);
+      waitForPlan(planId).then((ok) => { if (ok) { flash(t("Assinatura confirmada")); api("/v1/me", {}, 15000).then(setMe).catch(() => {}); } });
+    } catch (e: any) { Alert.alert(t("Assinatura"), errMsg(e)); }
+  }
+
   async function subscribe(p: any) {
     const planId = p.plan || p.id;
+    if (billing?.web_checkout) {
+      const m = p.month ?? (plan?.plans || []).find((x: any) => x.id === planId)?.month;
+      const y = p.year ?? (plan?.plans || []).find((x: any) => x.id === planId)?.year;
+      const sym = p.symbol || plan?.symbol || "€";
+      const note = billing?.access === "trial" && billing?.trial_days_left
+        ? ` · ${t("1.ª cobrança daqui a {0} dias", billing.trial_days_left)}` : "";
+      return setSheet({ title: t("Plano {0}", t(p.name)) + note, items: [
+        [`${t("Mensal")} · ${m != null ? money(m, sym) : ""}`, () => webCheckout(planId, "month")],
+        [`${t("Anual")} · ${y != null ? money(y, sym) : ""} (${t("2 meses grátis")})`, () => webCheckout(planId, "year")],
+      ] as [string, () => void][] });
+    }
     if (storeReady) {
       try {
         const off = await Purchases.getOfferings();
@@ -2452,13 +2473,14 @@ function FidusApp() {
     <View style={[s.draft, { backgroundColor: c.card, borderColor: c.line }]}>
       <Text style={{ color: c.sub, fontSize: 12, fontWeight: "600", letterSpacing: 0.5 }}>{t("PLANO {0}", t(u.name).toUpperCase())}</Text>
       <Text style={{ color: c.text, fontSize: 24, fontWeight: "600", marginTop: 4 }}>{money(u.month, u.symbol)}<Text style={{ fontSize: 14, fontWeight: "400", color: c.sub }}> {t("/mês · ou {0}/ano", money(u.year, u.symbol))}</Text></Text>
-      <Text style={{ color: c.sub, marginTop: 6, fontSize: 15 }}>{t("Libera {0} e mais:", t(u.feature_label))}</Text>
+      <Text style={{ color: c.sub, marginTop: 6, fontSize: 15 }}>{(u as any).expired ? t("Os seus dados estão guardados. Assine para continuar:")
+        : t("Libera {0} e mais:", t(u.feature_label))}</Text>
       {u.highlights.slice(0, 4).map((h) => <Text key={h} style={{ color: c.text, marginTop: 4, fontSize: 15 }}>✓  {t(h)}</Text>)}
       <View style={[s.row, { marginTop: 14 }]}>
         {onClose && <Pressable style={[s.secondary, { borderColor: c.line }]} onPress={onClose}>
           <Text style={{ color: c.text }}>{t("Agora não")}</Text></Pressable>}
         <Pressable style={s.primarySm} onPress={() => subscribe(u)}>
-          <Text style={s.primaryText}>{t("Conhecer o {0}", t(u.name))}</Text></Pressable>
+          <Text style={s.primaryText}>{(u as any).expired ? t("Assinar o {0}", t(u.name)) : t("Conhecer o {0}", t(u.name))}</Text></Pressable>
       </View>
     </View>);
 
@@ -2802,6 +2824,8 @@ function FidusApp() {
         <Card c={c} style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
           <Text style={{ color: c.sub, fontSize: 12 }}>{t("SEU PLANO")}</Text>
           <Text style={{ color: c.text, fontSize: 22, fontWeight: "600" }}>{plan ? t(plan.name) : "…"}</Text>
+          {plan?.access === "trial" && <Text style={{ color: GREEN, fontSize: 14 }}>{t("Teste grátis: faltam {0} dias", plan.trial_days_left)}</Text>}
+          {plan?.access === "expired" && <Text style={{ color: RED, fontSize: 14 }}>{t("O teste grátis acabou. Escolha um plano para continuar.")}</Text>}
         </Card>
         <Text style={{ color: c.sub, fontSize: 12, marginTop: 8 }}>{t("MUDAR DE PLANO")}</Text>
         {(plan?.plans || []).map((p: any) => (
@@ -2814,10 +2838,16 @@ function FidusApp() {
             {p.id === plan.plan ? <Text style={{ color: GREEN, fontWeight: "700" }}>{t("Atual")}</Text> :
               <Pressable style={[s.chip, { borderColor: c.sub }]} onPress={() => subscribe(p)}><Text style={{ color: c.text }}>{t("Escolher")}</Text></Pressable>}
           </View>))}
-        <Card c={c} onPress={() => storeReady ? Linking.openURL(MANAGE_SUBS_URL).catch(() => {})
-          : Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Fidus`).catch(() => {})}>
+        <Card c={c} onPress={async () => {
+          if (billing?.web_checkout && billing?.subscription) {
+            try { Linking.openURL((await post("/v1/billing/portal", {}, 20000)).url); } catch (e: any) { Alert.alert(t("Assinatura"), errMsg(e)); }
+            return;
+          }
+          (storeReady ? Linking.openURL(MANAGE_SUBS_URL) : Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Fidus`)).catch(() => {});
+        }}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Cancelar ou gerenciar assinatura")}</Text>
-            <Text style={{ color: c.sub, fontSize: 14 }}>{storeReady ? t("Trocar forma de pagamento ou cancelar, direto na loja") : t("Fale com o suporte")}</Text></View>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{billing?.web_checkout && billing?.subscription ? t("Trocar o cartão ou cancelar, numa página segura do Stripe")
+              : storeReady ? t("Trocar forma de pagamento ou cancelar, direto na loja") : t("Fale com o suporte")}</Text></View>
           <Text style={{ color: c.sub }}>›</Text></Card>
         {storeReady && <Card c={c} onPress={restorePurchases}><Text style={{ color: c.text, flex: 1, fontSize: 15 }}>{t("Restaurar compras")}</Text></Card>}
       </ScrollView>
@@ -2880,7 +2910,7 @@ function FidusApp() {
             <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("País do pacote")}</Text>
               <Text style={{ color: c.sub, fontSize: 14 }}>{(me.countries.countries || []).map((k: string) => t(COUNTRY_NAMES[k] || k)).join(" · ")}</Text></View>
             <Text style={{ color: c.sub }}>›</Text></Card>)}
-        {!isMember && <Card c={c} onPress={() => setScreen("plan")}>
+        {!isMember && <Card c={c} onPress={() => go("plan")}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Meu plano")}</Text>
             <Text style={{ color: c.sub, fontSize: 14 }}>{plan ? t(plan.name) : t(me?.plan_name || PLAN_NAMES[me?.plan] || "…")}</Text></View>
           <Text style={{ color: c.sub }}>›</Text></Card>}
@@ -2997,7 +3027,12 @@ function FidusApp() {
         <View style={s.flex}>
         <FlatList
           ref={listRef} data={items} keyExtractor={(i) => i.id} contentContainerStyle={{ padding: 16, gap: 10 }}
-          ListHeaderComponent={me && !isMember && !me.google_connected && !me.outlook_connected ? (
+          ListHeaderComponent={me && !isMember && (me.access === "trial" || me.access === "expired") && me.google_connected !== undefined && (me.google_connected || me.outlook_connected) ? (
+            <Pressable onPress={() => go("plan")} style={[s.bubble, { backgroundColor: c.card, maxWidth: "100%", flexDirection: "row", alignItems: "center", gap: 10 }]}>
+              <Text style={{ color: c.text, fontSize: 14, flex: 1 }}>{me.access === "trial"
+                ? t("Teste grátis: faltam {0} dias.", me.trial_days_left) : t("O teste grátis acabou.")}</Text>
+              <Text style={{ color: GREEN, fontWeight: "700" }}>{t("Assinar")}</Text></Pressable>
+          ) : me && !isMember && !me.google_connected && !me.outlook_connected ? (
             <View style={[s.bubble, { backgroundColor: c.card, maxWidth: "100%", gap: 10 }]}>
               <Text style={{ color: c.text, fontSize: 15, fontWeight: "600" }}>{t("Conecte sua agenda e seu e-mail para o Fidus cuidar deles.")}</Text>
               <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
@@ -3656,8 +3691,10 @@ const I18N_KEYS: string[] = [
   "Digite APAGAR para confirmar.",
   "Estou usando o Fidus, um assessor pessoal por voz: agenda, e-mails, gastos e recibos. Com o meu convite você ganha {0} dias grátis: {1} (código {2})",
   "Pronto! Você ganhou {0} dias grátis.",
-  "Anual",
+  "1.ª cobrança daqui a {0} dias",
   "Mensal",
+  "Anual",
+  "2 meses grátis",
   "{0}% de desconto no 1º mês",
   "convite: dias grátis",
   "A assinatura pelo app chega em breve. Por enquanto, fale com a gente pelo e-mail de suporte.",
@@ -3689,8 +3726,10 @@ const I18N_KEYS: string[] = [
   "{0} faz parte do plano {1}.",
   "PLANO {0}",
   "/mês · ou {0}/ano",
+  "Os seus dados estão guardados. Assine para continuar:",
   "Libera {0} e mais:",
   "Agora não",
+  "Assinar o {0}",
   "Conhecer o {0}",
   "E-mail Google para convidar",
   "Convidar",
@@ -3772,12 +3811,15 @@ const I18N_KEYS: string[] = [
   "Copiar endereço",
   "Abrir aqui",
   "SEU PLANO",
+  "Teste grátis: faltam {0} dias",
+  "O teste grátis acabou. Escolha um plano para continuar.",
   "MUDAR DE PLANO",
   "/mês",
   "ou {0}/ano (2 meses grátis)",
   "Atual",
   "Escolher",
   "Cancelar ou gerenciar assinatura",
+  "Trocar o cartão ou cancelar, numa página segura do Stripe",
   "Trocar forma de pagamento ou cancelar, direto na loja",
   "Fale com o suporte",
   "Restaurar compras",
@@ -3844,6 +3886,9 @@ const I18N_KEYS: string[] = [
   "Sair da conta",
   "Menu",
   "Nova conversa",
+  "Teste grátis: faltam {0} dias.",
+  "O teste grátis acabou.",
+  "Assinar",
   "Conecte sua agenda e seu e-mail para o Fidus cuidar deles.",
   "Fidus está pensando…",
   "Toque no microfone, fale e toque de novo para enviar.\nEx.: “Marca o contabilista sexta às 10”,\n“Me lembra de pagar o IVA dia 20”,\n“Paguei 40 euros de combustível” ou\n📷 mande a foto de uma fatura: eu confiro o NIF.\n\n🎙 Reunião no topo grava e gera a ata.",

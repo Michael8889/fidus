@@ -169,10 +169,65 @@ def gate(tool: str, args: dict) -> dict | None:
     return None
 
 
+# ---------- teste grátis (conta nova) e acesso ----------
+def start_trial(days: int | None = None) -> str | None:
+    from datetime import datetime, timedelta, timezone
+    d = config.TRIAL_DAYS if days is None else days
+    if d <= 0:
+        return None
+    end = (datetime.now(timezone.utc) + timedelta(days=d)).isoformat()
+    store.kv_set("trial_ends", end)
+    return end
+
+
+def trial_ends() -> str | None:
+    return store.kv_get("trial_ends")
+
+
+def subscribed() -> bool:
+    return (store.kv_get("subscription") or "").startswith(("ativa", "teste", "cancelada", "problema_pagamento"))
+
+
+def access() -> str:
+    """'active' (assinante, dono ou conta sem teste), 'trial' (dias grátis) ou 'expired' (acabou o teste sem assinar)."""
+    from datetime import datetime, timezone
+    if store.current().get("is_owner") or subscribed():
+        return "active"
+    end = trial_ends()
+    if not end:
+        return "active"  # contas antigas e convites da equipe: sem teste
+    try:
+        left = datetime.fromisoformat(end) - datetime.now(timezone.utc)
+    except ValueError:
+        return "active"
+    return "trial" if left.total_seconds() > 0 else "expired"
+
+
+def trial_days_left() -> int | None:
+    from datetime import datetime, timezone
+    if access() != "trial":
+        return None
+    left = datetime.fromisoformat(trial_ends()) - datetime.now(timezone.utc)
+    return max(0, int(left.total_seconds() // 86400) + (1 if left.total_seconds() % 86400 else 0))
+
+
+def paywall() -> dict:
+    """Cartão de assinar quando o teste acabou: o plano que a pessoa estava a usar."""
+    u = upsell("extra_business")
+    p = current()
+    cur = user_currency()
+    m = price(p, cur)
+    u.update(feature="continue", feature_label="continuar a usar o Fidus", plan=p, name=PLANS[p]["name"], month=m,
+             year=year_price(m), highlights=PLANS[p]["highlights"], expired=True)
+    return u
+
+
 def info() -> dict:
     cur = current()
     money = user_currency()
     return {"plan": cur, "name": PLANS[cur]["name"], "url": config.UPGRADE_URL, "currency": money,
+            "access": access(), "trial_days_left": trial_days_left(), "trial_ends": trial_ends(),
+            "subscription": store.kv_get("subscription"), "web_checkout": bool(config.STRIPE_SECRET_KEY),
             "symbol": SYMBOL[money], "locked_features": sorted(f for f in FEATURE_MIN if not allows(f, cur)),
             "plans": [{"id": k, "name": v["name"], "month": price(k, money), "year": year_price(price(k, money)),
                        "highlights": v["highlights"]} for k, v in PLANS.items()]}

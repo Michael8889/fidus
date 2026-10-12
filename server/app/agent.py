@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import actions as _actions
-from . import config, features, i18n, llm, store, tools
+from . import config, features, i18n, llm, plans, store, tools
 
 MAX_STEPS = 6
 
@@ -570,9 +570,19 @@ def handle(user_text: str, image_b64: str | None = None, media_type: str = "imag
     return out
 
 
+EXPIRED_MSG = {
+    "pt": "Os seus dias grátis acabaram. Para continuar comigo, é só assinar: os seus dados estão todos guardados.",
+    "en": "Your free days are over. To keep going with me, just subscribe: all your data is safe.",
+}
+
+
 def _handle(user_text: str, image_b64: str | None = None, media_type: str = "image/jpeg",
             receipt_path: str | None = None, voice: bool = False, speak: bool = False,
             request_id: str | None = None) -> dict:
+    if plans.access() == "expired":  # acabou o teste sem assinar: mostra o cartão de assinar, sem gastar IA
+        reply = EXPIRED_MSG["pt" if store.user_lang().startswith("pt") else "en"]
+        return {"reply": reply, "speech": reply if speak else None, "pending_actions": [], "events": [], "documents": [],
+                "upsell": plans.paywall()}
     if over_fair_use():
         reply = FAIR_USE_MSG["pt" if store.user_lang().startswith("pt") else "en"]
         return {"reply": reply, "speech": reply if speak else None, "pending_actions": [], "events": [], "documents": [],

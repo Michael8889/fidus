@@ -65,6 +65,8 @@ def init() -> None:
                 link TEXT, audience TEXT, country TEXT, message TEXT, lang TEXT,
                 status TEXT NOT NULL DEFAULT 'nova', created_at TEXT NOT NULL);
             """)
+        if "source" not in {r[1] for r in c.execute("PRAGMA table_info(invites)").fetchall()}:
+            c.execute("ALTER TABLE invites ADD COLUMN source TEXT")  # 'equipe' (sem teste) ou 'beta' (7 dias grátis)
         wcols = {r[1] for r in c.execute("PRAGMA table_info(waitlist)").fetchall()}
         for col in ("plan", "ref", "token", "notified_at", "code", "invited_at", "invited_via"):
             if col not in wcols:
@@ -203,6 +205,8 @@ def find_or_create(email: str, name: str | None, sub: str | None = None, ref: st
         store.init_db()
         plans.set_plan(invite_plan or config.NEW_USER_PLAN)
         store.save_profile(name=(name or "").split(" ")[0] or None)
+        if _invite_source(email) != "equipe":
+            plans.start_trial()  # beta e indicações: dias grátis, depois assina
     with _db() as c:  # convidado do beta por um membro (pelo site): fica ligado a quem convidou
         w = c.execute("SELECT invited_via FROM waitlist WHERE lower(email)=lower(?)", (email,)).fetchone()
     if w and w["invited_via"] and referrer_for_code(w["invited_via"]):
@@ -210,10 +214,18 @@ def find_or_create(email: str, name: str | None, sub: str | None = None, ref: st
     return u
 
 
-def invite(email: str, plan: str) -> None:
+def invite(email: str, plan: str, source: str = "equipe") -> None:
+    """Convite para entrar. 'equipe' = convite do dono (sem período de teste); 'beta' = fila do site (teste grátis)."""
     with _db() as c:
-        c.execute("INSERT INTO invites(email,plan,created_at) VALUES(?,?,?) "
-                  "ON CONFLICT(email) DO UPDATE SET plan=excluded.plan", (email.strip().lower(), plan, store.now()))
+        c.execute("INSERT INTO invites(email,plan,created_at,source) VALUES(?,?,?,?) "
+                  "ON CONFLICT(email) DO UPDATE SET plan=excluded.plan, source=excluded.source",
+                  (email.strip().lower(), plan, store.now(), source))
+
+
+def _invite_source(email: str) -> str | None:
+    with _db() as c:
+        r = c.execute("SELECT source FROM invites WHERE lower(email)=lower(?)", (email,)).fetchone()
+    return (r["source"] or "equipe") if r else None
 
 
 def list_invites() -> list[dict]:

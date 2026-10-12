@@ -80,7 +80,7 @@ def invite(email: str, via: str = "turma") -> bool:
             return False
         c.execute("UPDATE waitlist SET invited_at=?, invited_via=? WHERE email=? AND invited_at IS NULL",
                   (datetime.now(timezone.utc).isoformat(), via, email))
-    accounts.invite(email, config.BETA_PLAN)
+    accounts.invite(email, config.BETA_PLAN, source="beta")
     _send_invite(dict(row), via)
     return True
 
@@ -97,12 +97,29 @@ def invite_batch(n: int, dry_run: bool = False) -> dict:
     return {"invited": len(sent), "emails": sent, "left_in_queue": len(queue())}
 
 
+def auto_used() -> int:
+    with accounts._db() as c:
+        return c.execute("SELECT COUNT(*) FROM waitlist WHERE invited_via='auto'").fetchone()[0]
+
+
+def _auto(email: str) -> str | None:
+    """Beta de Portugal: os primeiros BETA_AUTO do site (pt-PT, Android) entram na hora, sem esperar turma."""
+    if config.BETA_AUTO <= 0 or not config.APP_DOWNLOAD_URL or auto_used() >= config.BETA_AUTO:
+        return None
+    with accounts._db() as c:
+        row = c.execute("SELECT * FROM waitlist WHERE email=?", (email,)).fetchone()
+    if not row or not _can_invite(dict(row)) or site_forms._lang(row["lang"]) not in config.BETA_AUTO_LANGS:
+        return None
+    return "invited" if invite(email, "auto") else None
+
+
 def on_join(email: str, ref: str) -> str | None:
-    """Chamado quando alguém entra na lista. Se veio pelo link de um MEMBRO com convites, entra na hora."""
+    """Chamado quando alguém entra na lista. Pelo link de um MEMBRO com convites, ou entre os primeiros de Portugal,
+    entra na hora; senão espera a turma."""
     _code_for(email)
     member = accounts.referrer_for_code(ref) if ref and config.BETA_INVITES > 0 else None
     if not member or accounts.beta_invites_left(member["id"]) <= 0:
-        return None
+        return _auto(email)
     with accounts._db() as c:
         row = c.execute("SELECT * FROM waitlist WHERE email=?", (email,)).fetchone()
     if not row or not _can_invite(dict(row)) or not config.APP_DOWNLOAD_URL:

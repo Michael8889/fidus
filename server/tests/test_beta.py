@@ -21,6 +21,7 @@ def _clean(monkeypatch):
     site_forms._HITS.clear()
     monkeypatch.setattr(config, "APP_DOWNLOAD_URL", "https://expo.dev/artifacts/fidus.apk")
     monkeypatch.setattr(config, "BETA_INVITES", 3)
+    monkeypatch.setattr(config, "BETA_AUTO", 0)
     yield
     with accounts._db() as c:
         c.execute("DELETE FROM waitlist")
@@ -116,3 +117,15 @@ def test_admin_beta_tab(monkeypatch):
     r = b.post("/admin/api/beta/invite", json={"count": 1}, headers=X).json()
     assert r["invited"] == 1 and sent[0][0] == "adm1@x.com"
     assert b.get("/admin/api/beta").json()["invited"] == 1
+
+
+def test_first_portuguese_get_in_automatically(monkeypatch):
+    sent = _mails(monkeypatch)
+    monkeypatch.setattr(config, "BETA_AUTO", 2)
+    assert _join("pt1@x.pt", 60)["invited"] is True
+    assert _join("uk1@x.co.uk", 61, lang="en-GB")["invited"] is False  # só Portugal entra sozinho
+    assert _join("pt2@x.pt", 62, platform="ios")["invited"] is False  # iPhone espera
+    assert _join("pt3@x.pt", 63)["invited"] is True
+    assert _join("pt4@x.pt", 64)["invited"] is False and beta.auto_used() == 2  # os 2 lugares acabaram
+    assert {s[0] for s in sent} >= {"pt1@x.pt", "pt3@x.pt"}
+    assert accounts.can_signup("pt1@x.pt")[0] and not accounts.can_signup("pt4@x.pt")[0]

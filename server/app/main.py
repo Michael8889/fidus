@@ -684,7 +684,8 @@ def me(request: Request):
             "nps_due": _nps_due(u) and not store.member(), "natural_voice": _tts_on(), "realtime": _rt_on(),
             "onboarding_pending": _onb_pending() and not store.member(),
             "voice_gender": store.profile().get("voice_gender") or "female",
-            "member": store.member(), "account_owner": store.user_name() if store.member() else None}
+            "member": store.member(), "account_owner": store.user_name() if store.member() else None,
+            "access": plans.access(), "trial_days_left": plans.trial_days_left()}
 
 
 def _onb_pending() -> bool:
@@ -953,6 +954,8 @@ def tts_phrase(body: TtsIn):
 @app.post("/v1/realtime/session", dependencies=[Depends(auth)])
 def realtime_session():
     from . import realtime
+    if plans.access() == "expired":
+        raise HTTPException(402, agent.EXPIRED_MSG["pt" if store.user_lang().startswith("pt") else "en"])
     if not plans.allows("voice_conversation"):
         raise HTTPException(402, "modo conversa faz parte do plano Negócio")
     r = realtime.session()
@@ -1478,6 +1481,8 @@ class MeetingIn(BaseModel):
 def meeting_upload(body: MeetingIn):
     import base64
 
+    if plans.access() == "expired":
+        return {"locked": True, "upsell": plans.paywall()}
     if not plans.allows("meetings_record"):
         return {"locked": True, "upsell": plans.upsell("meetings_record")}
 
@@ -1913,7 +1918,71 @@ def billing_config():
             "trial_offer_tag": offer["tag"] if offer else "convite",
             "offer_kind": "partner_discount" if offer else ("referral_trial" if accounts.referral_trial(uid) else None),
             "offer_discount": offer["discount"] if offer else None,
-            "subscription": store.kv_get("subscription"), "plan": plans.current()}
+            "subscription": store.kv_get("subscription"), "plan": plans.current(),
+            "web_checkout": _billing().enabled(), "access": plans.access(), "trial_days_left": plans.trial_days_left()}
+
+
+def _billing():
+    from . import billing
+    return billing
+
+
+class CheckoutIn(BaseModel):
+    plan: str
+    period: str = "month"
+
+
+@app.post("/v1/billing/checkout", dependencies=[Depends(auth)])
+def billing_checkout(body: CheckoutIn):
+    """Link do Stripe para assinar (o app abre no navegador)."""
+    try:
+        return _billing().checkout(body.plan, body.period)
+    except (ValueError, PermissionError) as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(502, f"Stripe: {e}")
+
+
+@app.post("/v1/billing/portal", dependencies=[Depends(auth)])
+def billing_portal():
+    try:
+        return _billing().portal()
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(502, f"Stripe: {e}")
+
+
+@app.post("/billing/stripe")
+async def stripe_webhook(request: Request):
+    """Aviso do Stripe (assinatura criada, renovada, com problema, cancelada). Só vale com a assinatura certa."""
+    payload = await request.body()
+    try:
+        event = _billing().verify(payload, request.headers.get("stripe-signature", ""))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return _billing().handle(event)
+
+
+SUB_PAGE = {
+    "ok": {"pt": ("Assinatura confirmada ✓", "Pode voltar para o app do Fidus. O plano atualiza sozinho em alguns segundos."),
+           "pt-pt": ("Assinatura confirmada ✓", "Pode voltar à app do Fidus. O plano atualiza sozinho em alguns segundos."),
+           "en": ("Subscription confirmed ✓", "You can go back to the Fidus app. Your plan updates by itself in a few seconds.")},
+    "cancelada": {"pt": ("Nada foi cobrado", "Você pode assinar quando quiser, pelo app."),
+                  "pt-pt": ("Nada foi cobrado", "Pode assinar quando quiser, pela app."),
+                  "en": ("Nothing was charged", "You can subscribe any time from the app.")},
+}
+
+
+@app.get("/assinatura/{state}", response_class=HTMLResponse)
+def subscription_page(state: str, request: Request):
+    texts = SUB_PAGE.get(state)
+    if not texts:
+        raise HTTPException(404, "página não encontrada")
+    al = request.headers.get("accept-language", "").lower()
+    lg = "pt-pt" if al.startswith("pt-pt") else "pt" if al.startswith("pt") else "en"
+    h, p = texts[lg]
+    return _page("Fidus", f"<h1>{h}</h1><p>{p}</p><a class='b' href='{config.APP_SCHEME}://'>Fidus</a>")
 
 
 
