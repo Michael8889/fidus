@@ -33,7 +33,7 @@ def _allowed() -> set:
             return set(json.load(f))
     except (OSError, ValueError):
         return set()
-MAX_PER_REQUEST = 500
+MAX_PER_REQUEST = 1500
 CHUNK = 25
 _locks: dict = {}
 _guard = threading.Lock()
