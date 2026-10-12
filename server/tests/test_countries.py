@@ -34,7 +34,7 @@ def _names(ts):
 
 def test_global_plan_exists_and_prices():
     assert plans.PLANS["global"]["rank"] > plans.PLANS["premium"]["rank"]
-    assert plans.PRICES["EUR"]["global"] == 89.90 and plans.PRICES["GBP"]["global"] == 79.90
+    assert plans.PRICES["EUR"]["global"] == 49.90 and plans.PRICES["GBP"]["global"] == 79.90
     assert plans.FEATURE_MIN["multi_country"] == "global"
 
 

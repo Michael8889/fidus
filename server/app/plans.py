@@ -14,28 +14,29 @@ PLANS = {
                        "Gastos e recibos de 1 carteira", "Documentos com validade", "Tarefas"],
     },
     "negocio": {
-        "rank": 2, "name": "Negócio", "month": 49.90,
+        "rank": 2, "name": "Negócio", "month": 29.90,
         "highlights": ["Modo conversa: fale com o Fidus como numa ligação", "Empresas e moedas ilimitadas",
                        "Link de agendamento para clientes",
                        "Ata de reunião automática", "Pacote do contador", "Alerta de assinaturas",
                        "Resumo da semana"],
     },
     "premium": {
-        "rank": 3, "name": "Premium", "month": 69.90,
+        "rank": 3, "name": "Premium", "month": 39.90,
         "highlights": ["Pagar por voz: MB Way, Multibanco, Pix e transferências preparados para você", "Cobrança e fatura para clientes",
                        "Mais 1 pessoa na conta + acesso do contador", "Atas sem limite e suporte prioritário"],
     },
     "global": {
-        "rank": 4, "name": "Global", "month": 89.90,
+        "rank": 4, "name": "Global", "month": 49.90,
         "highlights": ["Tudo do Premium", "Portugal, Reino Unido e Brasil na mesma conta",
                        "Euro, libra e real lado a lado", "Calendário fiscal e pagamentos dos três países"],
     },
 }
 
-# Preço por moeda (valores redondos fixos, como nas lojas de apps). Libra no Reino Unido, euro na Europa,
+# Preço por moeda (valores redondos fixos, como nas lojas de apps). Euro ajustado ao poder de compra de Portugal
+# (primeiro mercado): os quatro planos com a mesma redução do Essencial (29,90 -> 16,90). Libra no Reino Unido, euro na Europa,
 # dólar no resto do mundo. A cobrança de verdade segue o país do cartão.
 PRICES = {
-    "EUR": {"essencial": 16.90, "negocio": 49.90, "premium": 69.90, "global": 89.90},
+    "EUR": {"essencial": 16.90, "negocio": 29.90, "premium": 39.90, "global": 49.90},
     "GBP": {"essencial": 24.90, "negocio": 42.90, "premium": 59.90, "global": 79.90},
     "USD": {"essencial": 32.90, "negocio": 54.90, "premium": 74.90, "global": 99.90},
 }
