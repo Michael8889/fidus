@@ -1,4 +1,4 @@
-"""Dicas por e-mail ("Notas do Mike"): só para quem marcou a caixa nas boas-vindas ou nas Configurações.
+"""Dicas por e-mail ("Notas do Fidus"): só para quem marcou a caixa nas boas-vindas ou nas Configurações.
 
 - A lista fica no banco de contas (Fidus Labs). Nada do conteúdo do cliente (e-mails, agenda, gastos) é usado aqui:
   só nome, e-mail, idioma, país e as respostas dadas nas boas-vindas (perfil e prioridades).

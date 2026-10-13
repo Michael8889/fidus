@@ -126,7 +126,7 @@ def test_newsletter_sequence_and_unsubscribe(monkeypatch):
     now = datetime.now(timezone.utc)
     newsletter.run_due(now)
     mine = [x for x in sent if x[0] == "lead1@x.com"]
-    assert len(mine) == 1 and "Notas do Mike #1" in mine[-1][1] and "Carla" in mine[-1][2]
+    assert len(mine) == 1 and "Notas do Fidus #1" in mine[-1][1] and "Carla" in mine[-1][2]
     assert "List-Unsubscribe" in mine[-1][3] and "/email/sair?t=" in mine[-1][2]
     newsletter.run_due(now + timedelta(hours=1))
     assert len([x for x in sent if x[0] == "lead1@x.com"]) == 1  # um por vez

@@ -165,7 +165,7 @@ def test_whatsapp_message_comes_as_a_card_and_is_never_sent(monkeypatch):
 def test_tips_email_is_designed_and_follows_the_country(monkeypatch):
     from app import newsletter, accounts
     s, page = newsletter.preview(0, "pt-pt")
-    assert s.startswith("Notas do Mike #1: porque criei") and "Porque criei o Fidus" in page
+    assert s.startswith("Notas do Fidus #1: porque criei") and "Porque criei o Fidus" in page
     assert "DICA DE HOJE" not in page and "Dica de hoje" in page and "Ao fim do dia" in page  # dica em destaque
     assert "Fundador do Fidus" in page and "Não quero receber mais" in page and "'Segoe" not in page
     s_en, page_en = newsletter.preview(0, "en")
@@ -194,4 +194,4 @@ def test_admin_sends_designed_tip_preview(monkeypatch):
     b = TestClient(main.app, base_url="https://testserver")
     b.post("/admin/api/login", json={"code": code})
     r = b.post("/admin/api/newsletter/preview", json={"step": 1, "lang": "pt-pt"}, headers={"X-Fidus-Admin": "1"}).json()
-    assert r["ok"] and sent[-1][1].startswith("[teste] Notas do Mike #2") and "<table" in sent[-1][2]
+    assert r["ok"] and sent[-1][1].startswith("[teste] Notas do Fidus #2") and "<table" in sent[-1][2]
