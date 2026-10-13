@@ -133,13 +133,17 @@ def test_newsletter_sequence_and_unsubscribe(monkeypatch):
     for d in (3, 7, 12):
         newsletter.run_due(now + timedelta(days=d, hours=1))
     mine = [x for x in sent if x[0] == "lead1@x.com"]
-    assert len(mine) == 4 and "diagnóstico" in mine[-1][2] and "fidus.test/book/mike" in mine[-1][2]
+    assert len(mine) == 4 and not any("fidus.test/book/mike" in m[2] for m in mine)  # convite só no último
+    for d in (19, 26):
+        newsletter.run_due(now + timedelta(days=d, hours=1))
+    mine = [x for x in sent if x[0] == "lead1@x.com"]
+    assert len(mine) == 6 and "diagnóstico" in mine[-1][2] and "fidus.test/book/mike" in mine[-1][2]
     token = re.search(r"t=([\w-]+)", mine[-1][2]).group(1)
     assert "Parar de receber" in client.get(f"/email/sair?t={token}").text
     client.post("/email/sair", data={"t": token})
     assert not newsletter.consent_of("lead-1")
     newsletter.run_due(now + timedelta(days=30))
-    assert len([x for x in sent if x[0] == "lead1@x.com"]) == 4
+    assert len([x for x in sent if x[0] == "lead1@x.com"]) == 6
 
 
 def test_leads_tab_and_csv():

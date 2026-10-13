@@ -1,5 +1,5 @@
 {
- "_como_editar": "Cada e-mail tem 'day' (dias depois de a pessoa aceitar) e o texto por idioma (pt = Brasil, pt-pt = Portugal, en = Reino Unido e o resto do mundo). {name} = primeiro nome, {booking} = link do diagnóstico (FIDUS_MENTOR_BOOKING_URL). Tudo depois de <!--cta--> some se o link não estiver configurado. Rascunho para o Mike revisar com a voz dele.",
+ "_como_editar": "Cada e-mail tem 'day' (dias depois de a pessoa aceitar) e o texto por idioma (pt = Brasil, pt-pt = Portugal, en = Reino Unido e o resto do mundo). {name} = primeiro nome, {booking} = link do diagnóstico (FIDUS_MENTOR_BOOKING_URL). Tudo depois de <!--cta--> some se o link não estiver configurado. Rascunho para o Mike revisar com a voz dele. O convite para o diagnóstico fica SÓ no último e-mail (#6), para não parecer marketing.",
  "emails": [
   {
    "day": 0,
@@ -49,16 +49,16 @@
   {
    "day": 12,
    "pt": {
-    "subject": "Notas do Fidus #4: 30 minutos sobre o seu negócio",
-    "body": "<p>{name},</p><p>Já vendi uma empresa de logística, trabalhei num banco internacional e hoje toco negócios em três países. Uma coisa que aprendi: quase todo negócio pequeno trava nos mesmos 3 ou 4 pontos, e quem está dentro não enxerga.</p><p>Toda semana eu abro alguns horários para um <b>diagnóstico gratuito de 30 minutos</b>: você me conta como o negócio funciona hoje e eu te digo onde eu mexeria primeiro. Sem compromisso.</p><!--cta--><p><a href='{booking}' style='display:inline-block;background:#111;color:#fff;padding:12px 20px;border-radius:999px;text-decoration:none'>Marcar meu diagnóstico</a></p><p>Mike</p>"
+    "subject": "Notas do Fidus #4: os prazos que escapam",
+    "body": "<p>{name},</p><p>Seguro do carro, alvará, contrato de aluguel, certificado digital: quase todo mundo já pagou multa ou correu atrás de algo que venceu sem perceber. Não é desorganização: ninguém consegue lembrar de tudo.</p><p><b>No Fidus:</b> mande a foto ou o PDF e diga <i>“guarda o seguro do carro, vence em março”</i>. Ele guarda o documento e avisa antes de vencer. Depois é só perguntar <i>“cadê o seguro do carro?”</i>.</p><p>Mike</p>"
    },
    "en": {
-    "subject": "Fidus Notes #4: 30 minutes on your business",
-    "body": "<p>{name},</p><p>I sold a logistics company, worked at an international bank, and today run businesses in three countries. One thing I've learned: almost every small business gets stuck on the same 3 or 4 things, and it's hard to see them from the inside.</p><p>Each week I open a few slots for a <b>free 30-minute diagnosis</b>: you tell me how the business runs today and I tell you where I'd start. No strings attached.</p><!--cta--><p><a href='{booking}' style='display:inline-block;background:#111;color:#fff;padding:12px 20px;border-radius:999px;text-decoration:none'>Book my diagnosis</a></p><p>Mike</p>"
+    "subject": "Fidus Notes #4: the deadlines that slip",
+    "body": "<p>{name},</p><p>Car insurance, licences, the lease, a certificate: almost everyone has paid a fine or chased something that expired without noticing. It isn't being disorganised: nobody can remember everything.</p><p><b>In Fidus:</b> send the photo or PDF and say <i>“save the car insurance, it expires in March”</i>. It keeps the document and warns you before it expires. Later, just ask <i>“where's the car insurance?”</i>.</p><p>Mike</p>"
    },
    "pt-pt": {
-    "subject": "Notas do Fidus #4: 30 minutos sobre o seu negócio",
-    "body": "<p>{name},</p><p>Já vendi uma empresa de logística, trabalhei num banco internacional e hoje tenho negócios em três países. Uma coisa que aprendi: quase todos os pequenos negócios encravam nos mesmos 3 ou 4 pontos, e quem está lá dentro não os vê.</p><p>Todas as semanas abro alguns horários para um <b>diagnóstico gratuito de 30 minutos</b>: conta-me como o negócio funciona hoje e eu digo-lhe onde mexeria primeiro. Sem compromisso.</p><!--cta--><p><a href='{booking}'>Marcar o meu diagnóstico</a></p><p>Mike</p>"
+    "subject": "Notas do Fidus #4: os prazos que fogem",
+    "body": "<p>{name},</p><p>Seguro do carro, licenças, contrato de arrendamento, certificado digital: quase toda a gente já pagou uma coima ou andou a correr atrás de algo que caducou sem dar por isso. Não é desorganização: ninguém consegue lembrar-se de tudo.</p><p><b>No Fidus:</b> envie a fotografia ou o PDF e diga <i>“guarda o seguro do carro, vence em março”</i>. Ele guarda o documento e avisa antes de caducar. Depois é só perguntar <i>“onde está o seguro do carro?”</i>.</p><p>Mike</p>"
    }
   },
   {
@@ -79,16 +79,16 @@
   {
    "day": 26,
    "pt": {
-    "subject": "Notas do Fidus #6: ainda dá tempo",
-    "body": "<p>{name},</p><p>Abri mais alguns horários do <b>diagnóstico gratuito de 30 minutos</b> para este mês. Se o seu negócio está crescendo mais devagar do que você gostaria, ou se você sente que está apagando incêndio o dia inteiro, vale a conversa.</p><!--cta--><p><a href='{booking}' style='display:inline-block;background:#111;color:#fff;padding:12px 20px;border-radius:999px;text-decoration:none'>Ver horários</a></p><p>Mike</p>"
+    "subject": "Notas do Fidus #6: 30 minutos sobre o seu negócio",
+    "body": "<p>{name},</p><p>Esta é a última nota desta série. Obrigado por ler até aqui.</p><p>Já vendi uma empresa de logística, trabalhei num banco internacional e hoje toco negócios em três países. Uma coisa que aprendi: quase todo negócio pequeno trava nos mesmos 3 ou 4 pontos, e quem está dentro não enxerga.</p><p>Se fizer sentido para você, eu abro um horário para um <b>diagnóstico gratuito de 30 minutos</b>: você me conta como o negócio funciona hoje e eu digo onde mexeria primeiro. Sem compromisso.</p><!--cta--><p><a href='{booking}'>Marcar o diagnóstico</a></p><p>Um abraço,<br>Mike</p>"
    },
    "en": {
-    "subject": "Fidus Notes #6: there's still time",
-    "body": "<p>{name},</p><p>I've opened a few more slots for the <b>free 30-minute diagnosis</b> this month. If your business is growing slower than you'd like, or you feel you spend all day putting out fires, it's worth a chat.</p><!--cta--><p><a href='{booking}' style='display:inline-block;background:#111;color:#fff;padding:12px 20px;border-radius:999px;text-decoration:none'>See available times</a></p><p>Mike</p>"
+    "subject": "Fidus Notes #6: 30 minutes on your business",
+    "body": "<p>{name},</p><p>This is the last note in this series. Thanks for reading this far.</p><p>I've sold a logistics company, worked at an international bank and now run businesses in three countries. One thing I've learned: almost every small business gets stuck on the same 3 or 4 things, and it's hard to see them from the inside.</p><p>If it's useful, I'll open a slot for a <b>free 30-minute review</b>: you tell me how the business runs today and I'll tell you where I'd start. No strings attached.</p><!--cta--><p><a href='{booking}'>Book the review</a></p><p>All the best,<br>Mike</p>"
    },
    "pt-pt": {
-    "subject": "Notas do Fidus #6: ainda vai a tempo",
-    "body": "<p>{name},</p><p>Abri mais alguns horários do <b>diagnóstico gratuito de 30 minutos</b> para este mês. Se o seu negócio está a crescer mais devagar do que gostaria, ou se sente que passa o dia a apagar fogos, vale a pena a conversa.</p><!--cta--><p><a href='{booking}'>Ver horários</a></p><p>Mike</p>"
+    "subject": "Notas do Fidus #6: 30 minutos sobre o seu negócio",
+    "body": "<p>{name},</p><p>Esta é a última nota desta série. Obrigado por ter lido até aqui.</p><p>Já vendi uma empresa de logística, trabalhei num banco internacional e hoje tenho negócios em três países. Uma coisa que aprendi: quase todos os pequenos negócios encravam nos mesmos 3 ou 4 pontos, e quem está lá dentro não os vê.</p><p>Se fizer sentido para si, abro um horário para um <b>diagnóstico gratuito de 30 minutos</b>: conta-me como o negócio funciona hoje e eu digo-lhe onde mexeria primeiro. Sem compromisso.</p><!--cta--><p><a href='{booking}'>Marcar o diagnóstico</a></p><p>Um abraço,<br>Mike</p>"
    }
   }
  ]
