@@ -120,6 +120,12 @@ BETA_PLAN = (env("FIDUS_BETA_PLAN", "premium") or "premium").strip()
 # Os primeiros N do site em português de Portugal entram sozinhos (sem esperar turma). 0 = só por turmas no painel.
 BETA_AUTO = int(env("FIDUS_BETA_AUTO", "100") or 0)
 BETA_AUTO_LANGS = tuple(x.strip() for x in (env("FIDUS_BETA_AUTO_LANGS", "pt-pt") or "").split(",") if x.strip())
+# Anúncios da Meta (Facebook/Instagram). O ID do Pixel não é segredo; o token da Conversions API é (fica só no .env).
+# Sem o ID, o site não mostra aviso de cookies nem carrega nada da Meta.
+META_PIXEL_ID = (env("FIDUS_META_PIXEL_ID", "") or "").strip()
+META_CAPI_TOKEN = (env("FIDUS_META_CAPI_TOKEN", "") or "").strip()
+META_API_VERSION = (env("FIDUS_META_API_VERSION", "v24.0") or "v24.0").strip()
+META_TEST_CODE = (env("FIDUS_META_TEST_CODE", "") or "").strip()  # código de teste do Gerenciador de Eventos
 SITE_URL = (env("FIDUS_SITE_URL", "https://heyfidus.com") or "https://heyfidus.com").rstrip("/")
 APP_DOWNLOAD_URL = env("FIDUS_APP_DOWNLOAD_URL", "")  # página/loja para baixar o app (link de convite)
 BILLING_WEBHOOK_SECRET = (env("FIDUS_BILLING_WEBHOOK_SECRET", "") or "").strip()  # segredo do aviso da RevenueCat

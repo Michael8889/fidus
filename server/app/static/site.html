@@ -1108,10 +1108,17 @@ class Component extends DCLogic {
           self.setState({ sending: false, joined: ok, joinErr: !ok, invited: !!d.invited, position: d.position || 0, statusUrl: d.status_url || "" });
         };
         try {
+          var payload = { email: em, lang: lang, platform: self.state.platform, plan: self.state.plan, ref: self.state.ref };
+          var evId = "lead-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+          if (window.fidusConsent && window.fidusConsent()) {  // só com "Aceitar" no aviso de cookies
+            var ck = window.fidusCookies ? window.fidusCookies() : {};
+            payload.ads_consent = true; payload.fbp = ck.fbp || ""; payload.fbc = ck.fbc || ""; payload.event_id = evId;
+          }
           fetch("/v1/site/waitlist", { method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: em, lang: lang, platform: self.state.platform, plan: self.state.plan, ref: self.state.ref }) })
+            body: JSON.stringify(payload) })
             .then(function (r) {
               if (!r.ok) return done(false);
+              if (window.fidusTrack) window.fidusTrack("Lead", { content_name: self.state.plan || "beta" }, evId);
               return r.json().then(function (d) { done(true, d); }, function () { done(true); });
             }, function () { done(false); });
         } catch (x) { done(false); }

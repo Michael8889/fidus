@@ -68,7 +68,7 @@ def init() -> None:
         if "source" not in {r[1] for r in c.execute("PRAGMA table_info(invites)").fetchall()}:
             c.execute("ALTER TABLE invites ADD COLUMN source TEXT")  # 'equipe' (sem teste) ou 'beta' (7 dias grátis)
         wcols = {r[1] for r in c.execute("PRAGMA table_info(waitlist)").fetchall()}
-        for col in ("plan", "ref", "token", "notified_at", "code", "invited_at", "invited_via"):
+        for col in ("plan", "ref", "token", "notified_at", "code", "invited_at", "invited_via", "ads_consent", "fbp", "fbc"):
             if col not in wcols:
                 c.execute(f"ALTER TABLE waitlist ADD COLUMN {col} TEXT")
         dcols = {r[1] for r in c.execute("PRAGMA table_info(device_logins)").fetchall()}
@@ -207,6 +207,8 @@ def find_or_create(email: str, name: str | None, sub: str | None = None, ref: st
         store.save_profile(name=(name or "").split(" ")[0] or None)
         if _invite_source(email) != "equipe":
             plans.start_trial()  # beta e indicações: dias grátis, depois assina
+            from . import ads
+            ads.send("StartTrial", email, f"trial-{uid}", value=0, currency=plans.user_currency())
     with _db() as c:  # convidado do beta por um membro (pelo site): fica ligado a quem convidou
         w = c.execute("SELECT invited_via FROM waitlist WHERE lower(email)=lower(?)", (email,)).fetchone()
     if w and w["invited_via"] and referrer_for_code(w["invited_via"]):

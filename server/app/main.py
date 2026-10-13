@@ -210,7 +210,12 @@ def home(request: Request):
     """Site do Fidus (heyfidus.com). Gerado de site/landing.dc.html por site/build_site.py; sem o arquivo, a página simples."""
     try:
         page = open(_SITE, encoding="utf-8").read()
-        return HTMLResponse(page.replace("__PLAY_URL__", config.PLAY_STORE_URL).replace("__APP_STORE_URL__", config.APP_STORE_URL))
+        from . import ads
+        page = page.replace("__PLAY_URL__", config.PLAY_STORE_URL).replace("__APP_STORE_URL__", config.APP_STORE_URL)
+        tag = ads.banner()
+        if tag:
+            page = page.replace("</body>", tag + "</body>", 1) if "</body>" in page else page + tag
+        return HTMLResponse(page)
     except OSError:
         pass
     al = (request.headers.get("accept-language") or "").lower()
@@ -234,6 +239,10 @@ class WaitlistIn(BaseModel):
     platform: str | None = None
     plan: str | None = None
     ref: str | None = None
+    ads_consent: bool | None = None
+    fbp: str | None = None
+    fbc: str | None = None
+    event_id: str | None = None
 
 
 def _client_ip(request: Request) -> str:
@@ -249,6 +258,13 @@ def site_waitlist(body: WaitlistIn, request: Request):
     r = site_forms.join(body.email, body.lang or "", body.platform or "", body.plan or "", body.ref or "")
     if r.get("error"):
         raise HTTPException(400, "e-mail inválido")
+    if body.ads_consent is not None:  # só quem tocou em "Aceitar" no aviso de cookies
+        from . import ads
+        email = body.email.strip().lower()
+        ads.remember(email, bool(body.ads_consent), body.fbp or "", body.fbc or "")
+        if body.ads_consent and r.get("new"):
+            ev = "".join(ch for ch in (body.event_id or "") if ch.isalnum() or ch in "-_")[:64] or f"lead-{email}"
+            ads.send("Lead", email, ev, url=config.SITE_URL, country="pt" if (body.lang or "") == "pt-pt" else "")
     out = {"ok": True, "invited": r.get("invited", False)}
     if r.get("token"):
         out.update(status_url=f"{config.PUBLIC_BASE_URL.rstrip('/')}/beta?t={r['token']}",

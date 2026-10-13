@@ -175,6 +175,10 @@ def handle(event: dict) -> dict:
                 countries.freeze()  # o país do plano fica fixo (no Global, os três)
                 store.add_activity("subscription", f"Assinatura do plano {plans.PLANS[plan]['name']}", "Stripe", "feito")
                 _mail(u, "sub_started", plan)
+                from . import ads
+                total = (obj.get("amount_total") or 0) / 100 or plans.price(plan, plans.user_currency())
+                ads.send("Subscribe", _owner_email(u), f"sub-{obj.get('id') or u['id']}", value=total,
+                         currency=(obj.get("currency") or plans.user_currency()))
             return {"ok": True, "plan": plan}
         if kind in ("customer.subscription.updated", "customer.subscription.created"):
             st = obj.get("status")
