@@ -179,6 +179,20 @@ PROFILE_TOOL = {
         "remove_business": {"type": "string"}}},
 }
 
+TOOLS.append({
+    "name": "draft_message",
+    "description": "Escreve uma mensagem para o USUÁRIO mandar ele mesmo por WhatsApp, SMS, Telegram, LinkedIn etc. "
+                   "(não é e-mail: e-mail usa prepare_new_email). O app mostra o texto num cartão com Copiar e Abrir no "
+                   "WhatsApp; quem envia é sempre o usuário. Use sempre que ele pedir para redigir/criar uma mensagem. "
+                   "Na resposta escrita, uma frase curta: o texto completo já aparece no cartão.",
+    "parameters": {"type": "object", "properties": {
+        "text": {"type": "string", "description": "a mensagem pronta, no tom e idioma certos para quem vai receber"},
+        "channel": {"type": "string", "enum": ["whatsapp", "sms", "outro"]},
+        "to": {"type": "string", "description": "nome de quem recebe, se dito"},
+        "phone": {"type": "string", "description": "número com código do país, só se o usuário disser"},
+    }, "required": ["text"]},
+})
+
 TOOLS += features.TOOLS + meetings.TOOLS + booking.TOOLS + web_tools.TOOLS + payments.TOOLS + portugal.TOOLS + \
     uk.TOOLS + [plans.UPSELL_TOOL, PROFILE_TOOL]
 
@@ -240,6 +254,7 @@ def run(name: str, args: dict) -> dict:
         "read_email": _read_email,
         "prepare_email_reply": _prepare_reply,
         "prepare_new_email": _prepare_new,
+        "draft_message": _draft_message,
     }.get(name) or features.DISPATCH.get(name) or meetings.DISPATCH.get(name) or booking.DISPATCH.get(name) \
         or web_tools.DISPATCH.get(name) or payments.DISPATCH.get(name) or portugal.DISPATCH.get(name) \
         or uk.DISPATCH.get(name)
@@ -663,6 +678,16 @@ def _pick_account(from_account: str | None) -> str | None:
                 return which
         raise ValueError("conta de envio não conectada: " + (", ".join(_account_label(a) for a in accounts) or "nenhuma"))
     return accounts[0] if accounts else None
+
+
+def _draft_message(text, channel="whatsapp", to=None, phone=None):
+    """Só monta o texto para o app mostrar. Não envia nada: o usuário copia ou abre o WhatsApp e envia ele mesmo."""
+    text = (text or "").strip()
+    if not text:
+        return {"error": "mensagem vazia"}
+    digits = re.sub(r"\D", "", phone or "")
+    return {"ok": True, "draft": {"text": text[:4000], "channel": channel if channel in ("whatsapp", "sms", "outro") else "outro",
+                                  "to": (to or "").strip()[:60], "phone": digits if 8 <= len(digits) <= 15 else ""}}
 
 
 def _prepare_new(to, subject, body, cc=None, from_account=None):

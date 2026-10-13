@@ -599,6 +599,7 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
     store.add_message("user", stored)
     pending_ids: list[str] = []
     events: list[dict] = []
+    drafts: list[dict] = []  # mensagens para o usuário mandar ele mesmo (WhatsApp, SMS): o app mostra com Copiar
     docs: dict[int, dict] = {}
     upsell: dict | None = None
     actions: list[str] = []
@@ -660,7 +661,7 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
                     "reply": reply, "speech": speech, **_voice_parts(speech),
                     "pending_actions": pend, "events": events,
                     "documents": [{**d, "url": features.sign(d["document_id"])} for d in docs.values()],
-                    "upsell": upsell}
+                    "message_drafts": drafts, "upsell": upsell}
 
         messages.append({"role": "assistant", "content": out["text"], "tool_calls": out["tool_calls"],
                          "raw": out.get("raw")})
@@ -688,6 +689,8 @@ def _handle(user_text: str, image_b64: str | None = None, media_type: str = "ima
                 pending_ids.append(result["pending_action_id"])
             if call["name"] == "create_calendar_event" and result.get("ok"):
                 events.append(result)
+            if call["name"] == "draft_message" and result.get("ok"):
+                drafts.append(result["draft"])
             messages.append({"role": "tool", "tool_call_id": call["id"], "content": tools.dumps(result)})
             if result.get("error") and light and light == config.LLM_MODEL_CHEAP:
                 light = None  # ferramenta deu erro com o modelo barato: o forte decide o que fazer

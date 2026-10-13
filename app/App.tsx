@@ -43,7 +43,7 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const JS_VERSION = "0.18.3"; // única fonte da versão mostrada em Configurações e enviada ao servidor
+const JS_VERSION = "0.19.0"; // única fonte da versão mostrada em Configurações e enviada ao servidor
 const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=${JS_VERSION},ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
@@ -179,6 +179,7 @@ type Item =
   | { id: string; type: "fidus"; text: string }
   | { id: string; type: "action"; action: Action }
   | { id: string; type: "doc"; doc: Doc }
+  | { id: string; type: "msgdraft"; d: { text: string; channel: string; to?: string; phone?: string } }
   | { id: string; type: "upsell"; up: Upsell }
   | { id: string; type: "nps" }
   | { id: string; type: "onb"; q: any };
@@ -1208,6 +1209,7 @@ function FidusApp() {
       const res = await post("/v1/realtime/tool", { name, arguments: args, call_id: callId }, 90000);
       output = res.output || "{}";
       for (const a of res.pending_actions || []) push({ id: uid(), type: "action", action: a });
+      for (const m of res.message_drafts || []) push({ id: uid(), type: "msgdraft", d: m });
       if (res.upsell) push({ id: uid(), type: "upsell", up: res.upsell });
     } catch {}
     if (rt.current !== r) return;
@@ -1798,6 +1800,7 @@ function FidusApp() {
     if (res.reply) push({ id: uid(), type: "fidus", text: res.reply });
     for (const a of res.pending_actions || []) push({ id: uid(), type: "action", action: a });
     for (const d of res.documents || []) push({ id: uid(), type: "doc", doc: d });
+    for (const m of res.message_drafts || []) push({ id: uid(), type: "msgdraft", d: m });
     if (res.upsell) push({ id: uid(), type: "upsell", up: res.upsell });
     for (const id of res.sent_actions || []) updateAction(id, { status: "sent" });  // "envia" na conversa
     if ((res.sent_actions || []).length) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -2962,7 +2965,7 @@ function FidusApp() {
             {SpeechRec ? "✅" : "❌"} {t("Transcrição no celular")}{SpeechRec ? "" : ` (${t("precisa do APK novo")})`}{"\n"}
             {me?.natural_voice ? "✅" : "❌"} {t("Voz natural")}{me?.natural_voice ? "" : ` (${t("falta a chave no servidor")})`}{"\n"}
             {RTC && me?.realtime && !rtErr ? "✅" : "❌"} {t("Conversa em tempo real")}{!RTC ? ` (${t("precisa do APK novo")})` : !me?.realtime ? ` (${t("desligada no servidor")})` : rtErr ? ` (${rtErr})` : ""}{"\n"}
-            {t("Versão")}: {JS_VERSION} · {UPDATE_ID.slice(0, 8)}{"\n"}i18n: {LANG} · {Object.keys(TR).length} · {I18N_DIAG || "—"} · {base() || "sem servidor"}</Text>
+            {t("Versão")}: {JS_VERSION} · {UPDATE_ID.slice(0, 8)}</Text>
           <Pressable onPress={logoutAll} style={{ marginTop: 6 }}><Text style={{ color: RED, fontWeight: "600" }}>{t("Sair de todos os aparelhos")}</Text></Pressable>
         </Card>
         {!isMember && <Card c={c} onPress={() => { setScreen("chat"); startOnboarding(true); }}>
@@ -3080,8 +3083,12 @@ function FidusApp() {
               return <View style={[s.bubble, s.userBubble]}><LinkText text={item.text} style={s.userText} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} /></View>;
             if (item.type === "fidus")
               return <View style={{ alignSelf: "flex-start", maxWidth: "85%" }}>
-                <View style={[s.bubble, { backgroundColor: "transparent", maxWidth: "100%", paddingHorizontal: 2 }]}>
-                  <LinkText text={item.text} style={{ color: c.text, fontSize: 17, lineHeight: 26 }} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} /></View>
+                <Pressable onLongPress={async () => { await copyText(item.text); flash(t("Copiado")); }} delayLongPress={350}
+                  style={[s.bubble, { backgroundColor: "transparent", maxWidth: "100%", paddingHorizontal: 2 }]}>
+                  <LinkText text={item.text} style={{ color: c.text, fontSize: 17, lineHeight: 26 }} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} /></Pressable>
+                {item.text.length > 40 && <Pressable hitSlop={8} onPress={async () => { await copyText(item.text); flash(t("Copiado")); }}
+                  style={{ paddingHorizontal: 2, marginTop: -2 }} accessibilityLabel={t("Copiar")}>
+                  <CopyIcon color={c.sub} /></Pressable>}
               </View>;
             if (item.type === "onb") {
               const q = item.q; const live = onbQ && onbQ.step === q.step;
@@ -3136,6 +3143,33 @@ function FidusApp() {
                 </View>);
             if (item.type === "upsell")
               return <UpsellCard u={item.up} onClose={() => setItems((prev) => prev.filter((x) => x.id !== item.id))} />;
+            if (item.type === "msgdraft") {  // mensagem para o usuário mandar ele mesmo (WhatsApp, SMS...)
+              const m = item.d;
+              const wa = m.channel === "whatsapp" || m.channel === "outro";
+              const openWa = async () => {
+                const q = `text=${encodeURIComponent(m.text)}`;
+                const app = `whatsapp://send?${m.phone ? `phone=${m.phone}&` : ""}${q}`;
+                const web = `https://wa.me/${m.phone || ""}?${q}`;
+                try { await Linking.openURL(app); } catch { Linking.openURL(web).catch(() => {}); }
+              };
+              const openSms = () => Linking.openURL(`sms:${m.phone ? "+" + m.phone : ""}?body=${encodeURIComponent(m.text)}`).catch(() => {});
+              return (
+                <View style={[s.draft, { backgroundColor: c.card, borderColor: c.line }]}>
+                  <Text style={{ color: c.sub, fontSize: 12, fontWeight: "600", letterSpacing: 0.5 }}>
+                    {(m.channel === "sms" ? "SMS" : m.channel === "whatsapp" ? "WHATSAPP" : t("MENSAGEM"))}{m.to ? ` · ${m.to.toUpperCase()}` : ""}</Text>
+                  <Text selectable style={{ color: c.text, fontSize: 16, lineHeight: 22, marginTop: 8 }}>{m.text}</Text>
+                  <View style={[s.row, { marginTop: 12, flexWrap: "wrap", gap: 8 }]}>
+                    <Pressable style={s.primarySm} onPress={async () => { await copyText(m.text); flash(t("Mensagem copiada")); }}>
+                      <Text style={s.primaryText}>{t("Copiar")}</Text></Pressable>
+                    {wa && <Pressable style={[s.secondary, { borderColor: c.line }]} onPress={openWa}>
+                      <Text style={{ color: c.text }}>{t("Abrir no WhatsApp")}</Text></Pressable>}
+                    {m.channel === "sms" && <Pressable style={[s.secondary, { borderColor: c.line }]} onPress={openSms}>
+                      <Text style={{ color: c.text }}>{t("Abrir nas mensagens")}</Text></Pressable>}
+                    <Pressable style={[s.secondary, { borderColor: c.line }]} onPress={() => Share.share({ message: m.text }).catch(() => {})}>
+                      <Text style={{ color: c.text }}>{t("Partilhar")}</Text></Pressable>
+                  </View>
+                </View>);
+            }
             if (item.type === "doc") {
               const d = item.doc;
               return (
@@ -3907,6 +3941,11 @@ const I18N_KEYS: string[] = [
   "Toque no microfone, fale e toque de novo para enviar.\nEx.: “Marca visita técnica quinta às 16h”,\n“Me lembra de pagar o VAT dia 7”,\n“Paguei 60 libras de gasolina” ou\n📷 mande a foto de um recibo ou documento.\n\n🎙 Reunião no topo grava e gera a ata.",
   "De 0 a 10, quanto você indicaria o Fidus a um amigo?",
   "O que faria o Fidus ser ainda melhor? (opcional)",
+  "MENSAGEM",
+  "Mensagem copiada",
+  "Abrir no WhatsApp",
+  "Abrir nas mensagens",
+  "Partilhar",
   "Transferência",
   "aguardando você",
   "pago ✓",

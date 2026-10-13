@@ -112,7 +112,8 @@ def run_tool(name: str, arguments: str | dict | None) -> dict:
         agent._record(name, args, result)
     with _lock:
         _ACTIONS.setdefault(_uid(), []).append(agent._describe(name, args, result))
-    out: dict = {"output": tools.dumps(result)[:8000], "pending_actions": [], "events": []}
+    out: dict = {"output": tools.dumps(result)[:8000], "pending_actions": [], "events": [],
+                 "message_drafts": [result["draft"]] if name == "draft_message" and result.get("ok") else []}
     pid = result.get("pending_action_id") if isinstance(result, dict) else None
     if pid:
         pa = store.get_pending(pid)

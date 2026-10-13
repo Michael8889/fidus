@@ -144,3 +144,19 @@ def test_translation_answers_at_once_even_if_ai_hangs(monkeypatch, tmp_path):
     t0 = time.time()
     out = i18n.translate("fi", keys)
     assert out == {"Pronto": "Valmis"} and time.time() - t0 < 1  # não espera a IA travada
+
+
+def test_whatsapp_message_comes_as_a_card_and_is_never_sent(monkeypatch):
+    from app import agent
+    r = tools.run("draft_message", {"text": "Olá Ana, confirmo amanhã às 10h.", "channel": "whatsapp", "to": "Ana",
+                                    "phone": "+351 912 345 678"})
+    assert r["draft"]["phone"] == "351912345678" and r["draft"]["channel"] == "whatsapp"
+    assert tools.run("draft_message", {"text": "  "})["error"]
+    steps = iter([
+        {"text": "", "tool_calls": [{"id": "1", "name": "draft_message",
+                                      "input": {"text": "Olá Ana, confirmo amanhã às 10h.", "channel": "whatsapp", "to": "Ana"}}]},
+        {"text": "Aqui está a mensagem para a Ana.", "tool_calls": []},
+    ])
+    monkeypatch.setattr(agent.llm, "chat", lambda s, m, t, **kw: next(steps))
+    out = agent.handle("escreve uma mensagem de whatsapp para a Ana a confirmar amanhã às 10")
+    assert out["message_drafts"][0]["text"].startswith("Olá Ana") and not out["pending_actions"]
