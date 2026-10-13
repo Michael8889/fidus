@@ -400,7 +400,7 @@ def clients(s: Session = Depends(need("clients"))):
             row.update({"price": u["price"], "currency": u["currency"], "ai_cost_month_usd": round(u["ai_cost_month"], 2),
                         "subscription": u["subscription"]})
         out.append(row)
-    return {"clients": out, "can_manage": s["role"] in ("owner", "admin")}
+    return {"clients": out, "can_manage": s["role"] in ("owner", "admin"), "plans": list(plans.PLANS)}
 
 
 class PlanIn(BaseModel):

@@ -307,8 +307,8 @@ async function showClients() {
       <td>${num(c.asks_30d)}</td><td>${when(c.last_ask)}</td><td>${dateIso(c.created_at)}</td>
       <td>${c.flags.map((f) => `<span class="pill ${f === "device_switching" ? "red" : "amber"}">${esc(t(f))}</span>`).join("")}</td>
       <td>${c.status === "ativo" ? `<span class="pill green">${esc(t("active"))}</span>` : `<span class="pill red">${esc(t("suspended"))}</span>`}</td>
-      ${d.can_manage ? `<td>${c.is_owner ? "" : `<div class="row"><select class="f" data-plan="${esc(c.id)}" aria-label="${esc(t("change_plan"))}">${["essencial", "negocio", "premium"].map((p) => `<option value="${p}" ${p === c.plan ? "selected" : ""}>${p}</option>`).join("")}</select>
-        <button class="btn ghost" data-status="${esc(c.id)}" data-to="${c.status === "ativo" ? "suspenso" : "ativo"}">${esc(c.status === "ativo" ? t("suspend") : t("reactivate"))}</button></div>`}</td>` : ""}</tr>`).join("")}
+      ${d.can_manage ? `<td>${c.is_owner && ME.role !== "owner" ? "" : `<div class="row"><select class="f" data-plan="${esc(c.id)}" aria-label="${esc(t("change_plan"))}">${(d.plans || ["essencial", "negocio", "premium", "global"]).map((p) => `<option value="${p}" ${p === c.plan ? "selected" : ""}>${p}</option>`).join("")}</select>
+        ${c.is_owner ? "" : `<button class="btn ghost" data-status="${esc(c.id)}" data-to="${c.status === "ativo" ? "suspenso" : "ativo"}">${esc(c.status === "ativo" ? t("suspend") : t("reactivate"))}</button>`}</div>`}</td>` : ""}</tr>`).join("")}
     </tbody></table></div>`;
   document.querySelectorAll("[data-plan]").forEach((s) => s.onchange = async () => { await api(`clients/${s.dataset.plan}/plan`, {method: "POST", body: JSON.stringify({plan: s.value})}); showClients(); });
   document.querySelectorAll("[data-status]").forEach((b) => b.onclick = async () => { await api(`clients/${b.dataset.status}/status`, {method: "POST", body: JSON.stringify({status: b.dataset.to})}); showClients(); });
