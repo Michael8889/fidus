@@ -25,3 +25,11 @@ def test_banner_and_consent_only(monkeypatch):
     body = sent[-1]["data"][0]
     assert body["user_data"]["fbp"] == "fb.1.1.2" and "comconsent" not in str(body["user_data"]["em"])
     assert body["custom_data"] == {"value": 16.9, "currency": "EUR"}
+
+
+def test_invoice_paid_finds_user_by_subscription_metadata():
+    from app import billing, store
+    obj = {"parent": {"subscription_details": {"metadata": {"fidus_user": store.OWNER_ID, "plan": "essencial"}}}}
+    assert billing._meta(obj)["fidus_user"] == store.OWNER_ID
+    assert billing._meta({"subscription_details": {"metadata": {"fidus_user": "x"}}})["fidus_user"] == "x"
+    assert billing._meta({"metadata": {"a": 1}}) == {"a": 1}

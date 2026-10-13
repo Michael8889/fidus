@@ -128,8 +128,18 @@ def verify(payload: bytes, header: str) -> dict:
     return json.loads(payload)
 
 
+def _meta(obj: dict) -> dict:
+    """metadata do objeto; na fatura, a da assinatura (vem em parent.subscription_details nas versões novas da API)."""
+    for m in (obj.get("metadata"),
+              ((obj.get("parent") or {}).get("subscription_details") or {}).get("metadata"),
+              (obj.get("subscription_details") or {}).get("metadata")):
+        if m and m.get("fidus_user"):
+            return m
+    return obj.get("metadata") or {}
+
+
 def _user_for(obj: dict) -> dict | None:
-    meta = obj.get("metadata") or {}
+    meta = _meta(obj)
     uid = meta.get("fidus_user") or obj.get("client_reference_id")
     if not uid and obj.get("customer"):
         uid = _customer_owner(obj["customer"])
