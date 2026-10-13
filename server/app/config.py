@@ -115,6 +115,7 @@ STRIPE_SECRET_KEY = (env("FIDUS_STRIPE_SECRET_KEY", "") or "").strip()
 STRIPE_WEBHOOK_SECRET = (env("FIDUS_STRIPE_WEBHOOK_SECRET", "") or "").strip()
 # Managed Payments: o Stripe vira o vendedor oficial (merchant of record) e cobra/paga o IVA de cada país. +3,5% por venda.
 STRIPE_MANAGED = (env("FIDUS_STRIPE_MANAGED", "1") or "1").strip() in ("1", "true", "yes")
+STRIPE_API_VERSION = (env("FIDUS_STRIPE_API_VERSION", "2026-09-30.endive") or "2026-09-30.endive").strip()
 STRIPE_TAX_CODE = (env("FIDUS_STRIPE_TAX_CODE", "txcd_10103000") or "txcd_10103000").strip()  # SaaS, uso pessoal (a categoria escolhida no Stripe)
 TRIAL_DAYS = int(env("FIDUS_TRIAL_DAYS", "7") or 0)  # dias grátis de conta nova (0 = sem teste)
 # Beta só com convite: N convites por membro (0 = desliga) e plano de quem entra pelo beta

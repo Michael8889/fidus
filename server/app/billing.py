@@ -26,7 +26,8 @@ def enabled() -> bool:
 
 
 def _call(method: str, path: str, data: dict | None = None) -> dict:
-    r = requests.request(method, API + path, data=data, auth=(config.STRIPE_SECRET_KEY, ""), timeout=20)
+    r = requests.request(method, API + path, data=data, auth=(config.STRIPE_SECRET_KEY, ""), timeout=20,
+                         headers={"Stripe-Version": config.STRIPE_API_VERSION})  # mesma versão do webhook
     out = r.json()
     if r.status_code >= 400:
         raise RuntimeError((out.get("error") or {}).get("message") or f"Stripe {r.status_code}")
