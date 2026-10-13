@@ -83,12 +83,15 @@ def checkout(plan: str, period: str = "month") -> dict:
         "line_items": [{"quantity": 1, "price_data": {
             "currency": cur.lower(), "unit_amount": int(round(amount * 100)),
             "recurring": {"interval": period},
-            "product_data": {"name": f"Fidus {plans.PLANS[plan]['name']}"}}}],
+            "tax_behavior": "inclusive",  # os preços do site já incluem o IVA
+            "product_data": {"name": f"Fidus {plans.PLANS[plan]['name']}", "tax_code": config.STRIPE_TAX_CODE}}}],
         "subscription_data": sub,
         "metadata": {"fidus_user": u["id"], "plan": plan},
         "success_url": f"{_base()}/assinatura/ok",
         "cancel_url": f"{_base()}/assinatura/cancelada",
     }
+    if config.STRIPE_MANAGED:
+        data["managed_payments"] = {"enabled": True}
     cust = store.kv_get("stripe_customer")
     if cust:
         data.pop("customer_email")

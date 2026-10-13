@@ -113,6 +113,9 @@ REFERRAL_PERCENT = int(env("FIDUS_REFERRAL_PERCENT", "10") or 10)
 # As chaves o dono cola no .env (nunca no código). Sem elas, o botão de assinar mostra "em breve".
 STRIPE_SECRET_KEY = (env("FIDUS_STRIPE_SECRET_KEY", "") or "").strip()
 STRIPE_WEBHOOK_SECRET = (env("FIDUS_STRIPE_WEBHOOK_SECRET", "") or "").strip()
+# Managed Payments: o Stripe vira o vendedor oficial (merchant of record) e cobra/paga o IVA de cada país. +3,5% por venda.
+STRIPE_MANAGED = (env("FIDUS_STRIPE_MANAGED", "1") or "1").strip() in ("1", "true", "yes")
+STRIPE_TAX_CODE = (env("FIDUS_STRIPE_TAX_CODE", "txcd_10105001") or "txcd_10105001").strip()  # IA na nuvem, uso pessoal
 TRIAL_DAYS = int(env("FIDUS_TRIAL_DAYS", "7") or 0)  # dias grátis de conta nova (0 = sem teste)
 # Beta só com convite: N convites por membro (0 = desliga) e plano de quem entra pelo beta
 BETA_INVITES = int(env("FIDUS_BETA_INVITES", "3") or 0)
