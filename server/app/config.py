@@ -137,3 +137,5 @@ APP_STORE_URL = (env("FIDUS_APP_STORE_URL", "") or "").strip()
 # link do diagnóstico gratuito de 30 min (vai nos e-mails de dicas); sem ele, os convites não saem
 MENTOR_BOOKING_URL = (env("FIDUS_MENTOR_BOOKING_URL", "") or "").strip()
 EMAIL_FROM = (env("FIDUS_EMAIL_FROM", "") or "").strip()  # ex. "Fidus <ola@seudominio.com>"
+# Para onde vão as RESPOSTAS dos clientes aos e-mails do Fidus (ex. "Mike <mike@heyfidus.com>"). Vazio = o remetente.
+EMAIL_REPLY_TO = (env("FIDUS_EMAIL_REPLY_TO", "") or "").strip()

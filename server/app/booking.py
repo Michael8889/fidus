@@ -52,7 +52,9 @@ TOOLS = [
                 "types": {"type": "array", "description": "tipos de horário",
                           "items": {"type": "object", "properties": {
                               "name": {"type": "string"}, "minutes": {"type": "integer"},
-                              "needs_address": {"type": "boolean"}}}},
+                              "needs_address": {"type": "boolean"},
+                              "online": {"type": "boolean", "description": "chamada de vídeo: cria o link do Google "
+                                         "Meet (ou Teams, no Outlook) e mostra ao cliente na confirmação"}}}},
                 "enabled": {"type": "boolean"},
                 "new_link": {"type": "boolean", "description": "true para gerar um link novo e desativar o antigo"},
             },
@@ -80,7 +82,9 @@ def link(s: dict | None = None) -> str:
 def get_booking_link():
     s = settings()
     dias = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
-    return {"link": link(s), "enabled": s["enabled"], "types": [f"{t['name']} ({t['minutes']} min)" for t in s["types"]],
+    return {"link": link(s), "enabled": s["enabled"],
+            "types": [f"{t['name']} ({t['minutes']} min{', vídeo' if t.get('online') else ''})" for t in s["types"]],
+            "type_links": {t["name"]: f"{link(s)}?t={t['id']}" for t in s["types"]},  # link direto para um tipo
             "days": ", ".join(dias[d] for d in s["weekdays"]), "hours": f"{s['start']}-{s['end']}",
             "min_notice_hours": s["min_notice_hours"]}
 
@@ -105,7 +109,8 @@ def update_booking_settings(**kw):
             v = str(v)[:60]
         if k == "types":
             v = [{"id": re.sub(r"\W+", "-", t["name"].lower()).strip("-")[:20] or f"t{i}", "name": str(t["name"])[:60],
-                  "minutes": int(t.get("minutes") or 30), "needs_address": bool(t.get("needs_address"))}
+                  "minutes": int(t.get("minutes") or 30), "needs_address": bool(t.get("needs_address")),
+                  "online": bool(t.get("online"))}
                  for i, t in enumerate(v) if t.get("name")]
         s[k] = v
     store.kv_set("booking", json.dumps(s))
@@ -207,24 +212,31 @@ def _book_locked(s, t, day, hhmm, name, email, phone, address, notes) -> dict:
             "reminders": {"useDefault": False, "overrides": [{"method": "popup", "minutes": 60}]}}
     if address:
         body["location"] = address.strip()[:300]
-    ev = google_client.calendar().events().insert(calendarId="primary", body=body).execute()
+    extra = {}
+    if t.get("online"):  # chamada de vídeo: Meet no Google, Teams no Outlook
+        body["conferenceData"] = {"createRequest": {"requestId": secrets.token_hex(12),
+                                                    "conferenceSolutionKey": {"type": "hangoutsMeet"}}}
+        extra["conferenceDataVersion"] = 1
+    ev = google_client.calendar().events().insert(calendarId="primary", body=body, **extra).execute()
+    call = ev.get("hangoutLink") or ((ev.get("onlineMeeting") or {}).get("joinUrl")) or ""
     store.insert("bookings", type_id=t["id"], start=start.isoformat(), name=name, email=email, phone=phone[:40],
                  address=address[:300], notes=notes[:500], event_id=ev["id"])
     store.add_activity("booking_received", f"{t['name']} · {name}", f"{start:%d/%m %H:%M}" + (f" · {address[:40]}" if address else ""),
                        "feito", ev["id"])
     store.add_message("assistant", f"Novo agendamento pelo seu link: {t['name']} com {name}, "
                                    f"{start:%d/%m} às {start:%H:%M}" + (f", em {address}" if address else "") +
-                                   ". Já está na sua agenda.")
+                                   (f". Chamada: {call}" if call else "") + ". Já está na sua agenda.")
     host = s.get("title") or store.user_name()
     return {"ok": True, "when": start.strftime("%d/%m/%Y %H:%M"), "type": t["name"], "host": host,
-            "start": start.isoformat(), "end": end.isoformat(), "tz": tz, "location": address or ""}
+            "start": start.isoformat(), "end": end.isoformat(), "tz": tz, "location": address or call or "",
+            "call_link": call}
 
 
 # ---------- página pública ----------
 def page(s: dict) -> str:
     title = html.escape(s.get("title") or store.user_name())
     # "<" escapado: um nome de tipo não consegue fechar o <script>
-    types = json.dumps([{k: t[k] for k in ("id", "name", "minutes", "needs_address")} for t in s["types"]]).replace("<", "\\u003c")
+    types = json.dumps([{k: t.get(k) for k in ("id", "name", "minutes", "needs_address", "online")} for t in s["types"]]).replace("<", "\\u003c")
     return PAGE.replace("{{TITLE}}", title).replace("{{TYPES}}", types).replace("{{SLUG}}", s["slug"])
 
 
@@ -283,8 +295,12 @@ $("form").onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);i
   "DTSTAMP:"+new Date().toISOString().replace(/[-:]/g,"").slice(0,15)+"Z","DTSTART;TZID="+j.tz+":"+st,"DTEND;TZID="+j.tz+":"+en,
   "SUMMARY:"+esc(j.type+" com "+j.host),"LOCATION:"+esc(j.location),"END:VEVENT","END:VCALENDAR"].join("\r\n");
  a.href=URL.createObjectURL(new Blob([ics],{type:"text/calendar"}));a.download="agendamento.ics";
- done.append(h,p,a)}
-drawTypes();
+ done.append(h,p);
+ if(j.call_link){const c=document.createElement("a");c.className="go";c.style.display="block";c.style.textAlign="center";c.style.textDecoration="none";c.style.marginBottom="10px";c.href=j.call_link;c.target="_blank";c.rel="noopener";c.textContent="Link da chamada de vídeo";
+  const n=document.createElement("p");n.style.fontSize="13px";n.textContent="Guarde este link: ele também fica no ficheiro da agenda. "+j.call_link;done.append(c,n)}
+ done.append(a)}
+{const q=new URLSearchParams(location.search).get("t");const pre=TYPES.find(x=>x.id===q);if(pre){T=pre}}
+drawTypes();if(T)loadDays();
 </script></body></html>"""
 
 DISPATCH = {"get_booking_link": get_booking_link, "update_booking_settings": update_booking_settings}

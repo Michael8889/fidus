@@ -20,6 +20,8 @@ def _deliver(to: str, subject: str, html_body: str, text: str, attachments: list
              headers: dict | None = None) -> None:
     import requests
     payload = {"from": config.EMAIL_FROM, "to": [to], "subject": subject, "html": html_body, "text": text}
+    if config.EMAIL_REPLY_TO:  # quem responde a um e-mail do Fidus cai na caixa da empresa
+        payload["reply_to"] = config.EMAIL_REPLY_TO
     if attachments:
         payload["attachments"] = attachments  # [{"filename": ..., "content": base64}]
     if headers:

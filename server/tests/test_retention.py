@@ -124,6 +124,29 @@ def test_booking_slots_respect_busy_and_book():
     assert store.recent_messages(1)[0]["content"].startswith("Novo agendamento")
 
 
+def test_booking_video_call_type_gets_meet_link(monkeypatch):
+    r = booking.update_booking_settings(types=[{"name": "Diagnóstico gratuito", "minutes": 30, "online": True},
+                                               {"name": "Visita", "minutes": 60, "needs_address": True}])
+    assert "Diagnóstico gratuito (30 min, vídeo)" in r["types"]
+    assert r["type_links"]["Diagnóstico gratuito"].endswith("?t=diagnóstico-gratuito") or "?t=" in r["type_links"]["Diagnóstico gratuito"]
+    tid = booking.settings()["types"][0]["id"]
+    orig = cal.insert
+    monkeypatch.setattr(cal, "insert", lambda calendarId, body, **kw: (cal.inserted.append((body, kw)),
+                        Exec({"id": "bv", "hangoutLink": "https://meet.google.com/abc-defg-hij"}))[1])
+    day = _future_weekday(4)
+    cal.busy = []
+    ok = client.post(f"/book/{booking.settings()['slug']}", json={"type": tid, "day": day, "time": "09:00",
+                                                                  "name": "Rui", "email": "rui@x.pt"}).json()
+    assert ok["ok"] and ok["call_link"] == "https://meet.google.com/abc-defg-hij"
+    body, kw = cal.inserted[-1]
+    assert kw.get("conferenceDataVersion") == 1 and "attendees" not in body  # cria o Meet, sem convite por e-mail
+    assert "meet.google.com" in store.recent_messages(1)[0]["content"]
+    page = client.get(f"/book/{booking.settings()['slug']}?t={tid}").text
+    assert "Link da chamada de vídeo" in page
+    monkeypatch.setattr(cal, "insert", orig)
+    booking.update_booking_settings(types=booking.DEFAULTS["types"])
+
+
 def test_booking_settings_and_new_link():
     old = booking.settings()["slug"]
     r = booking.update_booking_settings(start="08:00", end="17:00", weekdays=[0, 2], new_link=True)
