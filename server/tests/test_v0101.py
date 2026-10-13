@@ -20,7 +20,7 @@ def test_home_serves_site_with_store_links_and_company(monkeypatch):
     r = client.get("/")
     assert r.status_code == 200 and "__mount(Component" in r.text and "__PLAY_URL__" not in r.text
     assert "play.google.com/store/apps/details?id=x" in r.text and "Fidus Labs Limited" in r.text
-    assert "[EMPRESA LTD]" not in r.text and "mailto:suporte@heyfidus.com" in r.text
+    assert "[EMPRESA LTD]" not in r.text and "suporte@heyfidus.com" in r.text and "support@heyfidus.com" in r.text and "LTD]" not in r.text
 
 
 def test_home_fallback_page_languages(monkeypatch):
@@ -51,7 +51,7 @@ def test_app_points_to_new_domain_and_migrates_old():
     src = open(os.path.join(ROOT, "app", "App.tsx"), encoding="utf-8").read()
     assert 'DEFAULT_SERVER = "https://app.heyfidus.com"' in src
     assert "LEGACY_SERVERS" in src and "fidus.148-230-123-44.sslip.io" in src
-    assert 'SUPPORT_EMAIL = "suporte@heyfidus.com"' in src
+    assert '"suporte@heyfidus.com" : "support@heyfidus.com"' in src
     assert 'screen === "plan"' in src
 
 

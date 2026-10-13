@@ -43,7 +43,7 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const JS_VERSION = "0.19.0"; // única fonte da versão mostrada em Configurações e enviada ao servidor
+const JS_VERSION = "0.19.4"; // única fonte da versão mostrada em Configurações e enviada ao servidor
 const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=${JS_VERSION},ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
@@ -162,7 +162,8 @@ function randomSecret(): string {
 const DEFAULT_SERVER = "https://app.heyfidus.com";
 // endereços antigos do mesmo servidor: quem entrou por eles passa para o novo assim que ele responder
 const LEGACY_SERVERS = ["https://fidus.148-230-123-44.sslip.io"];
-const SUPPORT_EMAIL = "suporte@heyfidus.com";
+// suporte@ em português, support@ nos outros idiomas (as duas caixas são a mesma)
+const supportEmail = () => (LANG.startsWith("pt") ? "suporte@heyfidus.com" : "support@heyfidus.com");
 const PLAN_NAMES: Record<string, string> = { essencial: "Essencial", negocio: "Negócio", premium: "Premium", global: "Global" };
 const COUNTRY_NAMES: Record<string, string> = { PT: "🇵🇹 Portugal", GB: "🇬🇧 Reino Unido", BR: "🇧🇷 Brasil" };
 const fmtClock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
@@ -2857,7 +2858,7 @@ function FidusApp() {
             try { Linking.openURL((await post("/v1/billing/portal", {}, 20000)).url); } catch (e: any) { Alert.alert(t("Assinatura"), errMsg(e)); }
             return;
           }
-          (storeReady ? Linking.openURL(MANAGE_SUBS_URL) : Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Fidus`)).catch(() => {});
+          (storeReady ? Linking.openURL(MANAGE_SUBS_URL) : Linking.openURL(`mailto:${supportEmail()}?subject=Fidus`)).catch(() => {});
         }}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Cancelar ou gerenciar assinatura")}</Text>
             <Text style={{ color: c.sub, fontSize: 14 }}>{billing?.web_checkout && billing?.subscription ? t("Trocar o cartão ou cancelar, numa página segura do Stripe")
@@ -3002,9 +3003,9 @@ function FidusApp() {
             </View>
           </>)}
         </Card></>}
-        <Card c={c} onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Fidus`).catch(() => {})}>
+        <Card c={c} onPress={() => Linking.openURL(`mailto:${supportEmail()}?subject=Fidus`).catch(() => {})}>
           <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{t("Ajuda e contato")}</Text>
-            <Text style={{ color: c.sub, fontSize: 14 }}>{SUPPORT_EMAIL}</Text></View>
+            <Text style={{ color: c.sub, fontSize: 14 }}>{supportEmail()}</Text></View>
           <Text style={{ color: c.sub }}>›</Text></Card>
         <Card c={c} onPress={testConnection}><Text style={{ color: c.text, flex: 1, fontSize: 15 }}>{t("Testar conexão")}</Text></Card>
         <Card c={c} onPress={() => Alert.alert(t("Sair da conta?"), "", [{ text: t("Cancelar"), style: "cancel" }, { text: t("Sair"), style: "destructive", onPress: logout }])}>

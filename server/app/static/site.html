@@ -385,7 +385,7 @@ input::placeholder{color:#6F7B8C}
 <a href="{{x.partnerHref}}" style="color: #8D98A8">{{t.partners}}</a>
 <a href="/privacy?lang={{x.lang}}" style="color: #8D98A8">{{t.privacy}}</a>
 <a href="/terms?lang={{x.lang}}" style="color: #8D98A8">{{t.terms}}</a>
-<a href="mailto:suporte@heyfidus.com" style="color: #8D98A8">{{t.contact}}</a>
+<a href="{{x.mailto}}" style="color: #8D98A8">{{t.contact}}</a>
 </div>
 </div>
 <div style="max-width: 1200px; margin: 0 auto; padding: 0 24px 32px; display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; font-size: 13px; color: #8D98A8">
@@ -1041,7 +1041,7 @@ class Component extends DCLogic {
     if (plat === "android" && !play && apple) storeNote = T.androidSoon;
     return {
       t: T,
-      x: { lang: lang, partnerHref: lang === "pt" ? "/parceiros" : lang === "pt-pt" ? "/parceiros?lang=pt-pt" : "/partners?lang=" + lang, toast2s: f(T.toast2s), priceNote: T.priceNote.replace("{c}", T.cur[cur]),
+      x: { lang: lang, mailto: "mailto:" + (lang.indexOf("pt") === 0 ? "suporte@heyfidus.com" : "support@heyfidus.com"), partnerHref: lang === "pt" ? "/parceiros" : lang === "pt-pt" ? "/parceiros?lang=pt-pt" : "/partners?lang=" + lang, toast2s: f(T.toast2s), priceNote: T.priceNote.replace("{c}", T.cur[cur]),
            showStores: showStores, showPlay: showPlay, showApple: showApple, playUrl: play || "#acesso", appleUrl: apple || "#acesso",
            showForm: !showStores || (plat === "ios" && !apple) || (plat === "android" && !play),
            storeNote: showStores && direct ? T.storeAfter : (showStores ? (plat === "desktop" ? T.storeAfter : storeNote) : ""),

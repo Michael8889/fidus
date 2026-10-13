@@ -289,7 +289,7 @@ def partner_page(lang: str) -> str:
 <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
 <label class="check"><input type="checkbox" name="consent" required><span>{e(T['consent'])} <a href="/privacy?lang={lg}">{e(T['priv'])}</a></span></label>
 <button type="submit">{e(T['send'])}</button><p class="msg" id="pm" role="status" aria-live="polite"></p></form></div>
-<footer>Fidus Labs Limited · {e(config.COMPANY_ADDRESS)} · <a href="mailto:{e(config.SUPPORT_EMAIL)}">{e(config.SUPPORT_EMAIL)}</a></footer>
+<footer>Fidus Labs Limited · {e(config.COMPANY_ADDRESS)} · <a href="mailto:{e(config.support_email(lg))}">{e(config.support_email(lg))}</a></footer>
 </main><script>
 var T={json.dumps(js_t, ensure_ascii=False)};
 document.getElementById("pf").addEventListener("submit",function(ev){{

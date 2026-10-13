@@ -13,10 +13,10 @@ ICO_REG = "ZC271147"  # registro no ICO (Information Commissioner's Office), 12/
 UPDATED = "12 October 2026"
 
 
-def _vals() -> dict:
+def _vals(lang: str = "en") -> dict:
     return {"company": COMPANY, "number": NUMBER, "ico": ICO_REG, "updated": UPDATED,
             "address": html.escape(config.COMPANY_ADDRESS or "[registered office address]"),
-            "email": html.escape(config.SUPPORT_EMAIL or config.OWNER_EMAIL or "[support email]")}
+            "email": html.escape(config.support_email(lang) or config.OWNER_EMAIL or "[support email]")}
 
 
 PRIVACY = {
@@ -103,4 +103,4 @@ def page(kind: str, lang: str) -> str:
     lang = "pt" if (lang or "").lower().startswith("pt") else "en"
     other = "en" if lang == "pt" else "pt"
     switch = f'<p class="small"><a href="?lang={other}">{"English" if other == "en" else "Português"}</a></p>'
-    return switch + texts[lang].format(**_vals())
+    return switch + texts[lang].format(**_vals(lang))

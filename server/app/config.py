@@ -131,6 +131,12 @@ RESEND_API_KEY = (env("FIDUS_RESEND_API_KEY", "") or "").strip()
 # dados da empresa nas páginas de privacidade e termos (/privacy, /terms)
 COMPANY_ADDRESS = (env("FIDUS_COMPANY_ADDRESS", "") or "").strip() or "2 Connaught Road, Harrow, London, United Kingdom"
 SUPPORT_EMAIL = (env("FIDUS_SUPPORT_EMAIL", "") or "").strip() or "suporte@heyfidus.com"
+SUPPORT_EMAIL_EN = (env("FIDUS_SUPPORT_EMAIL_EN", "") or "").strip() or "support@heyfidus.com"
+
+
+def support_email(lang: str | None) -> str:
+    """suporte@ para quem fala português; support@ para os outros idiomas (as duas chegam à mesma caixa)."""
+    return SUPPORT_EMAIL if (lang or "pt").lower().startswith("pt") else SUPPORT_EMAIL_EN
 # links das lojas no site (vazio = lista de espera no lugar do botão)
 PLAY_STORE_URL = (env("FIDUS_PLAY_STORE_URL", "") or "").strip()
 APP_STORE_URL = (env("FIDUS_APP_STORE_URL", "") or "").strip()

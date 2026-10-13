@@ -216,7 +216,7 @@ def home(request: Request):
     al = (request.headers.get("accept-language") or "").lower()
     lang = "pt" if al.startswith("pt") else "en"
     T = HOME_TEXT[lang]
-    mail = html.escape(config.SUPPORT_EMAIL or "suporte@heyfidus.com")
+    mail = html.escape(config.support_email(lang))
     feats = "".join(f'<div style="text-align:left;padding:14px 0;border-top:1px solid #8883"><b>{html.escape(a)}</b>'
                     f'<div style="color:#777;margin-top:2px">{html.escape(b)}</div></div>' for a, b in T["feats"])
     body = (f'<h1 style="font-size:40px;margin-bottom:4px">Fidus</h1><h1>{T["head"]}</h1><p>{T["sub"]}</p>'

@@ -102,7 +102,7 @@ def main() -> None:
     for ph in ("[EMPRESA LTD]", "[COMPANY LTD]", "[AZIENDA LTD]", "[FIRMA LTD]", "[SOCIÉTÉ LTD]", "[SYARIKAT LTD]"):
         logic = logic.replace(ph, "Fidus Labs Limited")
     # links reais (privacidade, termos, contato, parceiros) e a lista de espera de verdade já estão no desenho
-    for must in ("/v1/site/waitlist", "/privacy?lang=", "mailto:suporte@heyfidus.com", "partnerHref"):
+    for must in ("/v1/site/waitlist", "/privacy?lang=", "suporte@heyfidus.com", "support@heyfidus.com", "partnerHref"):
         assert must in body + logic, f"o desenho perdeu: {must}"
 
     html = f"""<!doctype html>
