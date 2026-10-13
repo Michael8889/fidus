@@ -280,6 +280,19 @@ def beta_page(t: str = ""):
     return _page(title, body)
 
 
+APK_PATH = os.path.join(config.DATA_DIR, "download", "fidus.apk")
+
+
+@app.get("/baixar/fidus.apk", include_in_schema=False)
+def apk_download():
+    """O APK do Android, servido pelo próprio servidor (o link da Expo expira). O dono copia o arquivo para
+    deploy/data/download/fidus.apk no servidor; trocar o arquivo = nova versão para quem baixar."""
+    if not os.path.isfile(APK_PATH):
+        raise HTTPException(404, "app ainda não publicado")
+    return FileResponse(APK_PATH, media_type="application/vnd.android.package-archive", filename="fidus.apk",
+                        headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/beta/app")
 def beta_download(t: str = ""):
     from . import beta

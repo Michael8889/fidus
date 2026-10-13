@@ -38,7 +38,7 @@ def run() -> dict:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     out = os.path.join(_dir(), f"fidus-{stamp}.tar.gz")
     data_root = os.path.realpath(config.DATA_DIR)
-    skip = {os.path.realpath(os.path.join(data_root, x)) for x in ("backups", "deleted")}
+    skip = {os.path.realpath(os.path.join(data_root, x)) for x in ("backups", "deleted", "download")}  # download: o APK (público, não é dado de cliente)
     try:
         with tempfile.TemporaryDirectory() as tmp, tarfile.open(out + ".part", "w:gz") as tar:
             for db in _databases():  # cópia consistente de cada banco

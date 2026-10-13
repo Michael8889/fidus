@@ -33,3 +33,13 @@ def test_invoice_paid_finds_user_by_subscription_metadata():
     assert billing._meta(obj)["fidus_user"] == store.OWNER_ID
     assert billing._meta({"subscription_details": {"metadata": {"fidus_user": "x"}}})["fidus_user"] == "x"
     assert billing._meta({"metadata": {"a": 1}}) == {"a": 1}
+
+
+def test_apk_download(tmp_path, monkeypatch):
+    from app import main
+    c = TestClient(main.app)
+    monkeypatch.setattr(main, "APK_PATH", str(tmp_path / "fidus.apk"))
+    assert c.get("/baixar/fidus.apk").status_code == 404
+    (tmp_path / "fidus.apk").write_bytes(b"PK\x03\x04apk")
+    r = c.get("/baixar/fidus.apk")
+    assert r.status_code == 200 and r.headers["content-type"] == "application/vnd.android.package-archive"
