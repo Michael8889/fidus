@@ -160,3 +160,38 @@ def test_whatsapp_message_comes_as_a_card_and_is_never_sent(monkeypatch):
     monkeypatch.setattr(agent.llm, "chat", lambda s, m, t, **kw: next(steps))
     out = agent.handle("escreve uma mensagem de whatsapp para a Ana a confirmar amanhã às 10")
     assert out["message_drafts"][0]["text"].startswith("Olá Ana") and not out["pending_actions"]
+
+
+def test_tips_email_is_designed_and_follows_the_country(monkeypatch):
+    from app import newsletter, accounts
+    s, page = newsletter.preview(0, "pt-pt")
+    assert s.startswith("Notas do Mike #1: porque criei") and "Porque criei o Fidus" in page
+    assert "DICA DE HOJE" not in page and "Dica de hoje" in page and "Ao fim do dia" in page  # dica em destaque
+    assert "Fundador do Fidus" in page and "Não quero receber mais" in page and "'Segoe" not in page
+    s_en, page_en = newsletter.preview(0, "en")
+    assert "why I built Fidus" in s_en and "Founder, Fidus" in page_en
+    # idioma de hoje: perfil em pt-PT → texto de Portugal; sem idioma, o país do plano decide
+    store.save_profile(language="pt-PT", country="PT")
+    assert newsletter.current_lang({"user_id": store.OWNER_ID, "lang": "en"}) == "pt-pt"
+    import json as _j
+    from app import config as _c
+    monkeypatch.setattr(_c, "OWNER_LANGUAGE", "")
+    raw = _j.loads(store.kv_get("profile") or "{}")
+    raw.pop("language", None)
+    store.kv_set("profile", _j.dumps(raw))
+    store.save_profile(countries=["GB"], country="GB")
+    assert newsletter.current_lang({"user_id": store.OWNER_ID, "lang": "pt"}) == "en"
+
+
+def test_admin_sends_designed_tip_preview(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import main
+    sent = []
+    monkeypatch.setattr(mailer, "enabled", lambda: True)
+    monkeypatch.setattr(mailer, "send_raw", lambda to, subject, body, **k: sent.append((to, subject, k.get("page_html"))) or True)
+    c = TestClient(main.app)
+    code = c.post("/v1/admin/panel_code", headers={"Authorization": "Bearer t"}).json()["code"]
+    b = TestClient(main.app, base_url="https://testserver")
+    b.post("/admin/api/login", json={"code": code})
+    r = b.post("/admin/api/newsletter/preview", json={"step": 1, "lang": "pt-pt"}, headers={"X-Fidus-Admin": "1"}).json()
+    assert r["ok"] and sent[-1][1].startswith("[teste] Notas do Mike #2") and "<table" in sent[-1][2]

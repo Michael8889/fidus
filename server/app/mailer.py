@@ -53,11 +53,12 @@ def send(to: str, kind: str, lang: str = "pt", wait: bool = False, **v) -> bool:
 
 
 def send_raw(to: str, subject: str, body_html: str, attachments: list | None = None, headers: dict | None = None,
-             wait: bool = True, footer: str = "") -> bool:
-    """E-mail montado por quem chama (newsletter, exportação de gastos). Mesmo visual dos outros."""
+             wait: bool = True, footer: str = "", page_html: str | None = None) -> bool:
+    """E-mail montado por quem chama (newsletter, exportação de gastos). Mesmo visual dos outros.
+    `page_html` = página completa já pronta (newsletter com visual próprio); o texto simples sai de `body_html`."""
     if not enabled() or not to:
         return False
-    page = _layout(body_html + footer)
+    page = page_html or _layout(body_html + footer)
     text = body_html
     for tag in ("<b>", "</b>", "<p>", "</p>", "<br>"):
         text = text.replace(tag, "\n" if tag in ("</p>", "<br>") else "")

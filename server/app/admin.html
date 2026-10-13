@@ -89,7 +89,7 @@ const T = {
   p_code:"Code", p_name:"Name", p_percent:"Commission %", p_discount:"Follower discount %", p_months:"Months", p_signups:"Sign-ups", p_paying:"Paying",
   p_month:"This month", p_due:"To pay", p_mark:"Mark as paid", p_active:"Active", p_pause:"Pause", p_resume:"Resume", p_confirm:"Mark everything owed to {0} as paid?",
   l_title:"Email tips list", l_help:"Only people who ticked “send me tips by email”. Never their emails, diary or spending.", l_active:"Subscribed", l_unsub:"Unsubscribed",
-  l_sent:"Emails sent", l_since:"Since", l_work:"Profile", l_prio:"Priorities", l_csv:"Download CSV",
+  l_sent:"Emails sent", l_since:"Since", l_work:"Profile", l_prio:"Priorities", l_csv:"Download CSV", l_prev:"Send me a test tip", l_prev_done:"Sent to {0}: {1}",
   site:"Site", s_wait:"Waiting list (heyfidus.com)", s_help:"People who asked to be told when the app reaches their phone's store. They get one confirmation email and can leave at any time.",
   s_total:"On the list", s_notified:"Already told", s_platform:"Phone", s_plan:"Plan", s_ref:"Partner code", s_notify:"Tell the list the app is in the store",
   s_notify_help:"Sends one email per person with their store's link (Android → Google Play, iPhone → App Store). Nobody gets it twice.",
@@ -129,7 +129,7 @@ const T = {
   p_code:"Código", p_name:"Nome", p_percent:"Comissão %", p_discount:"Desconto do seguidor %", p_months:"Meses", p_signups:"Entraram", p_paying:"Pagando",
   p_month:"Este mês", p_due:"A pagar", p_mark:"Marcar como pago", p_active:"Ativo", p_pause:"Pausar", p_resume:"Reativar", p_confirm:"Marcar tudo o que se deve a {0} como pago?",
   l_title:"Lista de dicas por e-mail", l_help:"Só quem marcou “quero receber dicas por e-mail”. Nunca os e-mails, a agenda ou os gastos da pessoa.", l_active:"Inscritos", l_unsub:"Saíram",
-  l_sent:"E-mails enviados", l_since:"Desde", l_work:"Perfil", l_prio:"Prioridades", l_csv:"Baixar CSV",
+  l_sent:"E-mails enviados", l_since:"Desde", l_work:"Perfil", l_prio:"Prioridades", l_csv:"Baixar CSV", l_prev:"Mandar uma dica de teste para mim", l_prev_done:"Enviado para {0}: {1}",
   site:"Site", s_wait:"Lista de espera (heyfidus.com)", s_help:"Quem pediu para ser avisado quando o app chegar na loja do celular. Recebe um e-mail de confirmação e pode sair quando quiser.",
   s_total:"Na lista", s_notified:"Já avisados", s_platform:"Celular", s_plan:"Plano", s_ref:"Código de parceiro", s_notify:"Avisar a lista que o app chegou na loja",
   s_notify_help:"Manda um e-mail por pessoa com o link da loja dela (Android → Google Play, iPhone → App Store). Ninguém recebe duas vezes.",
@@ -350,10 +350,16 @@ async function showPartners() {
 
 async function showLeads() {
   const d = await api("leads");
+  setTimeout(() => { const b = $("#nlp"); if (b) b.onclick = async () => {
+    try { const r = await api("newsletter/preview", {method: "POST", body: JSON.stringify({step: +$("#nls").value, lang: $("#nll").value})});
+      $("#nlr").textContent = t("l_prev_done", r.to, r.subject); } catch (e) { $("#nlr").textContent = e.message; } }; }, 0);
   $("#main").innerHTML = `<div class="sec" style="margin-top:0">${esc(t("l_title"))}</div>
     <p class="small muted">${esc(t("l_help"))}</p>
     <div class="grid">${card(t("l_active"), num(d.active))}${card(t("l_unsub"), num(d.unsubscribed))}</div>
-    <p><a class="btn ghost" href="/admin/api/leads.csv">${esc(t("l_csv"))}</a></p>
+    <p class="row"><a class="btn ghost" href="/admin/api/leads.csv">${esc(t("l_csv"))}</a>
+      <select class="f" id="nls">${[1, 2, 3, 4, 5, 6].map((n) => `<option value="${n - 1}">#${n}</option>`).join("")}</select>
+      <select class="f" id="nll"><option value="pt-pt">PT</option><option value="pt">BR</option><option value="en">EN</option></select>
+      <button class="btn" id="nlp">${esc(t("l_prev"))}</button></p><p id="nlr" class="small"></p>
     <div class="card tablebox"><table><thead><tr><th>${esc(t("email"))}</th><th>${esc(t("l_work"))}</th><th>${esc(t("l_prio"))}</th>
       <th>${esc(t("l_since"))}</th><th>${esc(t("l_sent"))}</th><th>${esc(t("status"))}</th></tr></thead><tbody>
       ${d.leads.map((l) => `<tr><td>${esc(l.email)}<div class="small">${esc(l.name || "")} ${esc(l.country || "")} ${esc(l.lang || "")}</div></td>

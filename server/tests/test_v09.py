@@ -197,7 +197,8 @@ def test_i18n_translates_once_and_caches(monkeypatch):
     calls = []
 
     def fake(system, messages, t, **kw):
-        calls.append(1)
+        if "Bahasa Melayu" in system:  # traduções de outros idiomas (de outros testes) podem estar rodando ao fundo
+            calls.append(1)
         strings = json.loads(messages[-1]["content"])
         return {"text": json.dumps({s: f"[ms] {s}" for s in strings}), "tool_calls": []}
     monkeypatch.setattr(llm, "chat", fake)

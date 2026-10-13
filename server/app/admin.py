@@ -248,7 +248,7 @@ def system(s: Session = Depends(need("system"))):
     if tasks24 >= 10 and _pct(failed, tasks24) > 10:
         problems.append("tasks_failing")
     return {"ok": not problems, "problems": problems, "uptime_s": int(time.time() - metrics.STARTED),
-            "version": "0.19.0", "llm": config.LLM_PROVIDER, "model": config.LLM_MODEL,
+            "version": "0.19.1", "llm": config.LLM_PROVIDER, "model": config.LLM_MODEL,
             "voice_stages": metrics.stage_p50(),
             "backup": {"age_hours": round(age, 1) if age is not None else None, **backup.last()},
             "disk_free_gb": free, "requests_24h": len(last24), "asks_24h": len(asks),
@@ -569,6 +569,26 @@ def leads_csv(s: Session = Depends(need("leads"))):
                         r["consent_at"], r["step"]])
     return Response(buf.getvalue(), media_type="text/csv",
                     headers={"Content-Disposition": "attachment; filename=fidus-leads.csv"})
+
+
+class NlPreviewIn(BaseModel):
+    step: int = 0
+    lang: str = "pt-pt"
+
+
+@router.post("/admin/api/newsletter/preview")
+def newsletter_preview(body: NlPreviewIn, s: Session = Depends(manager)):
+    """Manda para quem está no painel uma dica da sequência, no visual final (para conferir antes dos clientes)."""
+    from . import mailer, newsletter
+    seq = newsletter.sequence()
+    if not 0 <= body.step < len(seq):
+        raise HTTPException(400, f"escolha de 1 a {len(seq)}")
+    subject, page = newsletter.preview(body.step, body.lang, "Mike")
+    if not mailer.enabled():
+        raise HTTPException(503, "e-mail não configurado")
+    mailer.send_raw(s["email"], "[teste] " + subject, subject, page_html=page)
+    audit(s["email"], "newsletter.preview", f"#{body.step + 1} {body.lang}")
+    return {"ok": True, "to": s["email"], "subject": subject, "total": len(seq)}
 
 
 # ---------- site (lista de espera e pedidos de parceria) ----------
