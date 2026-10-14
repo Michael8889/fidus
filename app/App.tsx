@@ -43,7 +43,7 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const JS_VERSION = "0.19.4"; // única fonte da versão mostrada em Configurações e enviada ao servidor
+const JS_VERSION = "0.19.5"; // única fonte da versão mostrada em Configurações e enviada ao servidor
 const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=${JS_VERSION},ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
@@ -597,6 +597,9 @@ function FidusApp() {
   const [live, setLive] = useState<{ text: string; status: string; transcript?: string }>({ text: "", status: "" });  // resposta sendo escrita
   const [payIn, setPayIn] = useState<Record<string, { key: string; type: string }>>({});  // chave digitada no cartão
   const [atBottom, setAtBottom] = useState(true);
+  // "grudado no fim": enquanto true, cada vez que a lista cresce/mede ela volta para a última mensagem.
+  // Solta quando a pessoa arrasta para cima (não puxa a tela de volta enquanto ela lê).
+  const stick = useRef(true);
   // enquanto o Fidus escreve, acompanha o texto (só se a pessoa já está no fim da conversa)
   useEffect(() => { if ((live.text || live.transcript) && atBottom) listRef.current?.scrollToEnd({ animated: false }); }, [live.text, live.transcript]);
   const [nameEdit, setNameEdit] = useState("");
@@ -734,9 +737,10 @@ function FidusApp() {
       const msgs = (await api("/v1/history", {}, 15000)).messages || [];
       histLen.current = msgs.length;
       setItems((prev) => [
-        ...msgs.map((m: any) => ({ id: uid(), type: m.role === "user" ? "user" : "fidus", text: m.text } as Item)),
+        ...msgs.map((m: any, i: number) => ({ id: `h${i}`, type: m.role === "user" ? "user" : "fidus", text: m.text } as Item)),
         ...prev.filter((it) => it.type === "action"),  // mantém os cartões de rascunho na tela
       ]);
+      stick.current = true;  // ao abrir: vai para o fim e fica lá enquanto a lista termina de medir as mensagens
       setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 100);
       return msgs;
     } catch { return null; }
@@ -885,6 +889,7 @@ function FidusApp() {
 
   const push = (it: Item) => {
     setItems((prev) => [...prev, it]);
+    stick.current = true;
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
   };
   const uid = () => Math.random().toString(36).slice(2);
@@ -3060,8 +3065,15 @@ function FidusApp() {
           keyboardShouldPersistTaps="handled" scrollEventThrottle={100}
           onScroll={(e) => {
             const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-            setAtBottom(contentSize.height - (contentOffset.y + layoutMeasurement.height) < 250);
+            const bottom = contentSize.height - (contentOffset.y + layoutMeasurement.height) < 250;
+            setAtBottom(bottom);
           }}
+          onScrollBeginDrag={() => { stick.current = false; }}
+          onMomentumScrollEnd={(e) => {  // parou de rolar perto do fim: volta a acompanhar as mensagens novas
+            const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+            if (contentSize.height - (contentOffset.y + layoutMeasurement.height) < 80) stick.current = true;
+          }}
+          onContentSizeChange={() => { if (stick.current) listRef.current?.scrollToEnd({ animated: false }); }}
           ListFooterComponent={busy ? (<View style={{ gap: 10 }}>
             {!!live.transcript && <View style={[s.bubble, s.userBubble]}><Text style={s.userText}>{live.transcript}</Text></View>}
             {live.text ? (
@@ -3253,7 +3265,7 @@ function FidusApp() {
           }}
         />
         {!atBottom && items.length > 3 && (
-          <Pressable onPress={() => { listRef.current?.scrollToEnd({ animated: true }); setAtBottom(true); }}
+          <Pressable onPress={() => { stick.current = true; listRef.current?.scrollToEnd({ animated: true }); setAtBottom(true); }}
             accessibilityLabel={t("Ir para o fim da conversa")}
             style={[s.toBottom, { backgroundColor: c.card, borderColor: c.line }]}>
             <ArrowUpIcon color={c.text} size={18} down />
