@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator, Alert, Animated, AppState, Dimensions, Easing, FlatList, I18nManager, Keyboard, KeyboardAvoidingView, Linking,
   Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, useColorScheme,
@@ -43,7 +43,7 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const JS_VERSION = "0.19.5"; // única fonte da versão mostrada em Configurações e enviada ao servidor
+const JS_VERSION = "0.19.6"; // única fonte da versão mostrada em Configurações e enviada ao servidor
 const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=${JS_VERSION},ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
@@ -416,6 +416,31 @@ function LinkText({ text, style, linkColor }: { text: string; style: any; linkCo
   return <Text selectable style={style}>{parts}</Text>;
 }
 
+// Resposta do Fidus na conversa: parágrafos com respiro curto (não uma linha inteira em branco) e listas
+// "• ", "- " ou "1. " com recuo, como num app de chat bem acabado. Links continuam tocáveis.
+function ChatText({ text, color, linkColor }: { text: string; color: string; linkColor: string }) {
+  const base = { color, fontSize: 16, lineHeight: 24 };
+  const blocks: any[] = [];
+  let gap = false;
+  text.split("\n").forEach((raw, i) => {
+    const line = raw.replace(/\s+$/, "");
+    if (!line.trim()) { gap = true; return; }
+    const mt = blocks.length === 0 ? 0 : gap ? 12 : 2;
+    gap = false;
+    const m = /^\s*(?:([•\-–*])|(\d{1,2})[.)])\s+(.*)$/.exec(line);
+    if (m) {
+      blocks.push(
+        <View key={i} style={{ flexDirection: "row", marginTop: mt, paddingRight: 4 }}>
+          <Text style={[base, { width: m[2] ? 24 : 16, color: m[2] ? color : color }]}>{m[2] ? `${m[2]}.` : "•"}</Text>
+          <View style={{ flex: 1 }}><LinkText text={m[3]} style={base} linkColor={linkColor} /></View>
+        </View>);
+    } else {
+      blocks.push(<View key={i} style={{ marginTop: mt }}><LinkText text={line} style={base} linkColor={linkColor} /></View>);
+    }
+  });
+  return <View>{blocks}</View>;
+}
+
 // Corpo de e-mail com **negrito** e listas com • (igual ao que o destinatário vai ver)
 function FormattedText({ text, color }: { text: string; color: string }) {
   const inline = (line: string, key: string) => line.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((p, i) =>
@@ -597,6 +622,7 @@ function FidusApp() {
   const [live, setLive] = useState<{ text: string; status: string; transcript?: string }>({ text: "", status: "" });  // resposta sendo escrita
   const [payIn, setPayIn] = useState<Record<string, { key: string; type: string }>>({});  // chave digitada no cartão
   const [atBottom, setAtBottom] = useState(true);
+  const lastFidusId = useMemo(() => { for (let i = items.length - 1; i >= 0; i--) if (items[i].type === "fidus") return items[i].id; return ""; }, [items]);
   // "grudado no fim": enquanto true, cada vez que a lista cresce/mede ela volta para a última mensagem.
   // Solta quando a pessoa arrasta para cima (não puxa a tela de volta enquanto ela lê).
   const stick = useRef(true);
@@ -3030,7 +3056,7 @@ function FidusApp() {
         <View style={s.topbar}>
           <Pressable onPress={openDrawer} hitSlop={10} style={s.iconBtn} accessibilityLabel={t("Menu")}>
             <MenuIcon color={c.text} /></Pressable>
-          <Text style={[s.header, { color: c.text, flex: 1, fontSize: 15 }]} numberOfLines={1}>{SCREEN_TITLE()[screen]}</Text>
+          <Text style={[s.header, { color: c.text, flex: 1, fontSize: 17, fontWeight: "600", letterSpacing: -0.2, marginLeft: 2 }]} numberOfLines={1}>{SCREEN_TITLE()[screen]}</Text>
           {screen === "chat" ? (<>
             <Pressable style={[s.chip, meeting ? { backgroundColor: RED, borderColor: RED } : { borderColor: c.line }]} onPress={meetingMenu}
               accessibilityLabel={t("Gravar reunião")}>
@@ -3046,7 +3072,7 @@ function FidusApp() {
         {screen !== "chat" ? renderScreen() : (<>
         <View style={s.flex}>
         <FlatList
-          ref={listRef} data={items} keyExtractor={(i) => i.id} contentContainerStyle={{ padding: 16, gap: 10 }}
+          ref={listRef} data={items} keyExtractor={(i) => i.id} contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 12, paddingBottom: 20, gap: 10 }}
           ListHeaderComponent={me && !isMember && (me.access === "trial" || me.access === "expired") && me.google_connected !== undefined && (me.google_connected || me.outlook_connected) ? (
             <Pressable onPress={() => go("plan")} style={[s.bubble, { backgroundColor: c.card, maxWidth: "100%", flexDirection: "row", alignItems: "center", gap: 10 }]}>
               <Text style={{ color: c.text, fontSize: 14, flex: 1 }}>{me.access === "trial"
@@ -3077,9 +3103,9 @@ function FidusApp() {
           ListFooterComponent={busy ? (<View style={{ gap: 10 }}>
             {!!live.transcript && <View style={[s.bubble, s.userBubble]}><Text style={s.userText}>{live.transcript}</Text></View>}
             {live.text ? (
-            <View style={{ alignSelf: "flex-start", maxWidth: "85%" }}>
-              <View style={[s.bubble, { backgroundColor: "transparent", maxWidth: "100%", paddingHorizontal: 2 }]}>
-                <Text style={{ color: c.text, fontSize: 17, lineHeight: 26 }}>{live.text}<Text style={{ color: c.sub }}> ▍</Text></Text></View>
+            <View style={{ alignSelf: "stretch", marginTop: 4 }}>
+              <View style={{ paddingHorizontal: 2, paddingRight: 12 }}>
+                <Text style={{ color: c.text, fontSize: 16, lineHeight: 24 }}>{live.text}<Text style={{ color: c.sub }}> ▍</Text></Text></View>
             </View>) : (
             <View style={[s.bubble, { backgroundColor: c.card, flexDirection: "row", alignItems: "center", gap: 8 }]}>
               <ActivityIndicator color={c.sub} /><Text style={{ color: c.sub }}>{live.status || t("Fidus está pensando…")}</Text>
@@ -3094,15 +3120,17 @@ function FidusApp() {
           renderItem={({ item }) => {
             if (item.type === "user")
               return <View style={[s.bubble, s.userBubble]}><LinkText text={item.text} style={s.userText} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} /></View>;
-            if (item.type === "fidus")
-              return <View style={{ alignSelf: "flex-start", maxWidth: "85%" }}>
+            if (item.type === "fidus") {
+              const lastFidus = item.id === lastFidusId;
+              return <View style={{ alignSelf: "stretch", marginTop: 4, marginBottom: lastFidus ? 0 : 10 }}>
                 <Pressable onLongPress={async () => { await copyText(item.text); flash(t("Copiado")); }} delayLongPress={350}
-                  style={[s.bubble, { backgroundColor: "transparent", maxWidth: "100%", paddingHorizontal: 2 }]}>
-                  <LinkText text={item.text} style={{ color: c.text, fontSize: 17, lineHeight: 26 }} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} /></Pressable>
-                {item.text.length > 40 && <Pressable hitSlop={8} onPress={async () => { await copyText(item.text); flash(t("Copiado")); }}
-                  style={{ paddingHorizontal: 2, marginTop: -2 }} accessibilityLabel={t("Copiar")}>
-                  <CopyIcon color={c.sub} /></Pressable>}
+                  style={{ paddingHorizontal: 2, paddingRight: 12 }}>
+                  <ChatText text={item.text} color={c.text} linkColor={dark ? "#7DB3FF" : "#1E5BD8"} /></Pressable>
+                {lastFidus && item.text.length > 40 && <Pressable hitSlop={10} onPress={async () => { await copyText(item.text); flash(t("Copiado")); }}
+                  style={{ alignSelf: "flex-start", marginTop: 10, marginLeft: 2, padding: 4, borderRadius: 8 }} accessibilityLabel={t("Copiar")}>
+                  <CopyIcon color={c.sub} size={15} /></Pressable>}
               </View>;
+            }
             if (item.type === "onb") {
               const q = item.q; const live = onbQ && onbQ.step === q.step;
               return (
@@ -3297,8 +3325,8 @@ function FidusApp() {
               </Pressable>
             </>) : (<>
               <Pressable onPress={photoMenu} disabled={busy} accessibilityLabel={t("Adicionar foto ou arquivo")} hitSlop={6}
-                style={[s.iconBtn, { borderWidth: 1, borderColor: dark ? "#2C3F66" : "#D5DCE6" }]}>
-                <PlusIcon color={c.text} />
+                style={s.iconBtn}>
+                <PlusIcon color={c.sub} />
               </Pressable>
               <TextInput style={[s.composerInput, { color: c.text }]}
                 placeholder={t("Fale ou escreva…")} multiline placeholderTextColor={c.sub} value={typed}
@@ -3306,7 +3334,7 @@ function FidusApp() {
               {activeReq ? (
                 <Pressable onPress={stopRequest} accessibilityLabel={t("Parar")} hitSlop={6}
                   style={[s.sendBtn2, { backgroundColor: NAVY }]}>
-                  <View style={{ width: 13, height: 13, borderRadius: 2, backgroundColor: {ON_INK} }} />
+                  <View style={{ width: 13, height: 13, borderRadius: 2, backgroundColor: ON_INK }} />
                 </Pressable>
               ) : typed.trim().length > 0 ? (
                 <Pressable onPress={() => sendText()} disabled={busy} accessibilityLabel={t("Enviar")}
@@ -4008,9 +4036,9 @@ const I18N_KEYS: string[] = [
 // @i18n-keys-end
 
 const makeStyles = (ink: string, onInk: string, soft: string, text: string, line: string) => ({
-  composer: { flex: 1, flexDirection: "row", alignItems: "flex-end", gap: 6, borderWidth: 1, borderRadius: 26,
-    paddingHorizontal: 8, paddingVertical: 7, minHeight: 54 },
-  composerInput: { flex: 1, fontSize: 17, paddingHorizontal: 6, paddingTop: 9, paddingBottom: 9, maxHeight: 130 },
+  composer: { flex: 1, flexDirection: "row", alignItems: "flex-end", gap: 4, borderWidth: StyleSheet.hairlineWidth * 2, borderRadius: 24,
+    paddingHorizontal: 6, paddingVertical: 5, minHeight: 50, elevation: 1, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 6, shadowOffset: { width: 0, height: 1 } },
+  composerInput: { flex: 1, fontSize: 16, paddingHorizontal: 6, paddingTop: 10, paddingBottom: 10, maxHeight: 130 },
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   sendBtn2: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   meetBar: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 12, marginBottom: 8, padding: 12, borderRadius: 12, borderWidth: 1.5 },
@@ -4035,8 +4063,8 @@ const makeStyles = (ink: string, onInk: string, soft: string, text: string, line
   primaryText: { color: onInk, fontWeight: "600" },
   secondary: { borderWidth: 1, borderRadius: 999, paddingVertical: 10, paddingHorizontal: 16 },
   bubble: { borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, maxWidth: "88%" },
-  userBubble: { backgroundColor: soft, alignSelf: "flex-end", borderRadius: 20, paddingHorizontal: 16 },
-  userText: { color: text, fontSize: 17, lineHeight: 26 },
+  userBubble: { backgroundColor: soft, alignSelf: "flex-end", borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10, maxWidth: "82%", marginVertical: 6 },
+  userText: { color: text, fontSize: 16, lineHeight: 23 },
   draft: { borderRadius: 14, padding: 14, borderWidth: 1 },
   draftLabel: { fontSize: 12, marginBottom: 6 },
   row: { flexDirection: "row", justifyContent: "flex-end", gap: 10 },
