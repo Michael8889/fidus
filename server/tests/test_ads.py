@@ -52,3 +52,14 @@ def test_strip_action_log():
     assert agent.strip_action_log(t) == "Pronto, remarcado.\n\n• Pagar CUF"
     assert agent.strip_action_log(t + "\n\n[ações executadas: x (ok)]") == "Pronto, remarcado.\n\n• Pagar CUF"
     assert agent.strip_action_log("Uma lista [com colchetes] fica.") == "Uma lista [com colchetes] fica."
+
+
+def test_old_requests_carry_their_date():
+    from datetime import datetime, timedelta, timezone
+    from app import agent
+    old = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    new = datetime.now(timezone.utc).isoformat()
+    out = agent._dated([{"role": "user", "content": "marca hoje às 21h", "created_at": old},
+                        {"role": "assistant", "content": "ok", "created_at": old},
+                        {"role": "user", "content": "e agora?", "created_at": new}])
+    assert out[0]["content"].startswith("[pedido feito em ") and out[1]["content"] == "ok" and out[2]["content"] == "e agora?"

@@ -391,7 +391,29 @@ def _history(limit: int = 10) -> list[dict]:
             clean.append(m)
     if clean and clean[-1]["role"] == "user":
         clean.pop()
-    return clean[-limit:]
+    return _dated(clean[-limit:])
+
+
+def _dated(msgs: list[dict]) -> list[dict]:
+    """Pedidos de outros dias levam a data em que foram feitos: "hoje"/"amanhã" ditos ontem não viram hoje/amanhã."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    try:
+        tz = ZoneInfo(store.user_tz())
+    except Exception:  # noqa: BLE001
+        return msgs
+    today = datetime.now(tz).date()
+    out = []
+    for m in msgs:
+        m = dict(m)
+        try:
+            when = datetime.fromisoformat(m.get("created_at") or "").astimezone(tz)
+        except (ValueError, TypeError):
+            when = None
+        if m["role"] == "user" and when and when.date() != today:
+            m["content"] = f"[pedido feito em {when:%d/%m %H:%M}] {m['content']}"
+        out.append(m)
+    return out
 
 
 def _describe(name: str, args: dict, result: dict) -> str:
