@@ -43,3 +43,12 @@ def test_apk_download(tmp_path, monkeypatch):
     (tmp_path / "fidus.apk").write_bytes(b"PK\x03\x04apk")
     r = c.get("/baixar/fidus.apk")
     assert r.status_code == 200 and r.headers["content-type"] == "application/vnd.android.package-archive"
+
+
+def test_strip_action_log():
+    from app import agent
+    t = ("Pronto, remarcado.\n\n• Pagar CUF\n\n[ações executadas: delete_calendar_event (ok); criou lembrete 'X' "
+         "para 2026-10-15T14:00:00 (event_id abc, ok)]")
+    assert agent.strip_action_log(t) == "Pronto, remarcado.\n\n• Pagar CUF"
+    assert agent.strip_action_log(t + "\n\n[ações executadas: x (ok)]") == "Pronto, remarcado.\n\n• Pagar CUF"
+    assert agent.strip_action_log("Uma lista [com colchetes] fica.") == "Uma lista [com colchetes] fica."

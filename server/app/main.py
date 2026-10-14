@@ -1239,7 +1239,7 @@ def history(limit: int = 60):
 
     out = []
     for m in store.recent_messages(min(max(limit, 1), 300)):
-        text = re.sub(r"\n*\[ações executadas:.*\]\s*$", "", m["content"], flags=re.S).strip()
+        text = agent.strip_action_log(m["content"])
         out.append({"role": m["role"], "text": text})
     return {"messages": out, "conversation": store.current_conv()}
 
