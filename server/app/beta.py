@@ -117,6 +117,8 @@ def on_join(email: str, ref: str) -> str | None:
     """Chamado quando alguém entra na lista. Pelo link de um MEMBRO com convites, ou entre os primeiros de Portugal,
     entra na hora; senão espera a turma."""
     _code_for(email)
+    if ref and config.REVIEW_CODE and ref.upper() == config.REVIEW_CODE.upper() and config.APP_DOWNLOAD_URL:
+        return "invited" if invite(email, "review") else None  # revisores (Google, Apple): entram na hora
     member = accounts.referrer_for_code(ref) if ref and config.BETA_INVITES > 0 else None
     if not member or accounts.beta_invites_left(member["id"]) <= 0:
         return _auto(email)

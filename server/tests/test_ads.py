@@ -63,3 +63,16 @@ def test_old_requests_carry_their_date():
                         {"role": "assistant", "content": "ok", "created_at": old},
                         {"role": "user", "content": "e agora?", "created_at": new}])
     assert out[0]["content"].startswith("[pedido feito em ") and out[1]["content"] == "ok" and out[2]["content"] == "e agora?"
+
+
+def test_review_code_invites_immediately(monkeypatch):
+    from app import beta, config, site_forms
+    monkeypatch.setattr(config, "REVIEW_CODE", "GREVIEW26")
+    monkeypatch.setattr(config, "APP_DOWNLOAD_URL", "https://heyfidus.com/baixar/fidus.apk")
+    monkeypatch.setattr(config, "BETA_AUTO", 0)
+    sent = []
+    monkeypatch.setattr(beta.mailer, "send_raw", lambda *a, **k: sent.append(a) or True)
+    r = site_forms.join("reviewer@example.com", "en", "android", "", "GREVIEW26")
+    assert r["invited"] is True
+    r2 = site_forms.join("other@example.com", "en", "android", "", "WRONG")
+    assert r2["invited"] is False

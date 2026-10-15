@@ -85,8 +85,13 @@ GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/spreadsheets",  # planilhas: opcional (quem conectou antes reconecta para ganhar)
 ]
+# Planilhas do Google: desligado enquanto a verificação do Google (só e-mail e agenda) não sai. Com 1, volta a pedir
+# a permissão de planilhas e as ferramentas de planilha voltam para a IA (precisa da permissão aprovada no Google).
+GOOGLE_SHEETS = (env("FIDUS_GOOGLE_SHEETS", "0") or "0").strip() in ("1", "true", "yes")
+if GOOGLE_SHEETS:
+    GOOGLE_SCOPES.append("https://www.googleapis.com/auth/spreadsheets")
+SHEET_TOOLS = {"remember_sheet", "read_sheet", "append_rows", "update_cells"}
 
 # Microsoft (Outlook / Microsoft 365): app registrado no Microsoft Entra. Sem as chaves, a opção não aparece.
 MS_CLIENT_ID = (env("FIDUS_MS_CLIENT_ID", "") or "").strip()
@@ -130,6 +135,8 @@ META_PIXEL_ID = (env("FIDUS_META_PIXEL_ID", "") or "").strip()
 META_CAPI_TOKEN = (env("FIDUS_META_CAPI_TOKEN", "") or "").strip()
 META_API_VERSION = (env("FIDUS_META_API_VERSION", "v24.0") or "v24.0").strip()
 META_TEST_CODE = (env("FIDUS_META_TEST_CODE", "") or "").strip()  # código de teste do Gerenciador de Eventos
+# Código para revisores (Google, Apple) entrarem na hora pelo site: heyfidus.com/?lang=en&ref=<código>. Vazio = desligado.
+REVIEW_CODE = (env("FIDUS_REVIEW_CODE", "") or "").strip()
 SITE_URL = (env("FIDUS_SITE_URL", "https://heyfidus.com") or "https://heyfidus.com").rstrip("/")
 APP_DOWNLOAD_URL = env("FIDUS_APP_DOWNLOAD_URL", "")  # página/loja para baixar o app (link de convite)
 BILLING_WEBHOOK_SECRET = (env("FIDUS_BILLING_WEBHOOK_SECRET", "") or "").strip()  # segredo do aviso da RevenueCat

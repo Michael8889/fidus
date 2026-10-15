@@ -213,6 +213,8 @@ def available_tools() -> list[dict]:
     for t in TOOLS:
         if not countries.tool_allowed(t["name"]) or (member and t["name"] in MEMBER_BLOCKED):
             continue
+        if t["name"] in config.SHEET_TOOLS and not config.GOOGLE_SHEETS:
+            continue  # planilhas desligadas (permissão fora da verificação do Google)
         if t["name"] == "add_expense":
             props = {k: v for k, v in t["parameters"]["properties"].items()
                      if k not in _EXPENSE_FIELDS or countries.enabled(_EXPENSE_FIELDS[k])}
