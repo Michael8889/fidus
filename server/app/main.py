@@ -1205,6 +1205,7 @@ class PhotoIn(BaseModel):
     image_b64: str
     media_type: str = "image/jpeg"
     text: str = ""
+    batch: str = ""  # "2/5": foto 2 de 5 enviadas juntas pela galeria
 
 
 @app.post("/v1/photo", dependencies=[Depends(auth)])
@@ -1225,9 +1226,16 @@ def photo(body: PhotoIn):
     path = os.path.join(folder, f"{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}{ext}")
     with open(path, "wb") as f:
         f.write(raw)
-    text = body.text.strip() or (("PDF enviado." if body.media_type == "application/pdf" else "Foto enviada.") + (" Se for recibo ou nota de compra, lance o gasto. Se for documento "
-                                 "(seguro, contrato, carta, MOT, apólice, garantia...), guarde com save_document. "
-                                 "Se não der para saber, pergunte."))
+    guide = (" Se for recibo ou nota de compra, lance o gasto. Se for documento (seguro, contrato, carta, MOT, apólice, "
+             "garantia...), guarde com save_document. Se não der para saber, pergunte.")
+    import re as _re
+    b = _re.fullmatch(r"(\d{1,2})/(\d{1,2})", body.batch.strip())
+    if b:  # várias fotos de uma vez: cada uma é um pedido; a resposta deve ser curta e citar qual foto é
+        head = (f"Foto {b[1]} de {b[2]} enviadas juntas. Trate só esta foto (as outras vêm em seguida) e responda em "
+                f"uma ou duas linhas começando por \"Foto {b[1]}:\".")
+        text = head + (f" Pedido do usuário para as fotos: {body.text.strip()}" if body.text.strip() else guide)
+    else:
+        text = body.text.strip() or (("PDF enviado." if body.media_type == "application/pdf" else "Foto enviada.") + guide)
     return {"transcript": "", **agent.handle(text, image_b64=body.image_b64, media_type=body.media_type,
                                              receipt_path=path, kind="pdf" if body.media_type == "application/pdf" else "foto")}
 

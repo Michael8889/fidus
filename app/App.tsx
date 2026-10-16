@@ -43,7 +43,8 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const JS_VERSION = "0.19.6"; // única fonte da versão mostrada em Configurações e enviada ao servidor
+const JS_VERSION = "0.19.7"; // única fonte da versão mostrada em Configurações e enviada ao servidor
+const MAX_PHOTOS = 10; // fotos por vez na galeria
 const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=${JS_VERSION},ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
@@ -1908,19 +1909,29 @@ function FidusApp() {
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) return fail(t("permissão negada para câmera/galeria."));
       const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.5, base64: true };
-      const res = source === "camera" ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
-      if (res.canceled || !res.assets?.[0]?.base64) return;
-      const asset = res.assets[0];
+      // galeria: até MAX_PHOTOS de uma vez (cada foto vira um pedido, na ordem: um recibo = um gasto)
+      const res = source === "camera" ? await ImagePicker.launchCameraAsync(opts)
+        : await ImagePicker.launchImageLibraryAsync({ ...opts, allowsMultipleSelection: true, selectionLimit: MAX_PHOTOS, orderedSelection: true });
+      const assets = (res.canceled ? [] : res.assets || []).filter((a: any) => a?.base64).slice(0, MAX_PHOTOS);
+      if (!assets.length) return;
+      if ((res.assets || []).length > MAX_PHOTOS) flash(t("Máximo de {0} fotos por vez", MAX_PHOTOS));
       const note = typed.trim();
       setTyped("");
-      push({ id: uid(), type: "user", text: `📷 ${t("Foto enviada")}${note ? `: ${note}` : ""}` });
+      const n = assets.length;
+      push({ id: uid(), type: "user", text: `📷 ${n > 1 ? t("{0} fotos enviadas", n) : t("Foto enviada")}${note ? `: ${note}` : ""}` });
       setBusy(true);
-      const before = historyCount();
       try {
-        const media_type = asset.mimeType && ["image/jpeg", "image/png", "image/webp"].includes(asset.mimeType) ? asset.mimeType : "image/jpeg";
-        showResult(await post("/v1/photo", { image_b64: asset.base64, media_type, text: note }), false);
-      } catch (e: any) { await recover(e, before); }
-      finally { setBusy(false); }
+        for (let i = 0; i < n; i++) {
+          const asset: any = assets[i];
+          const before = historyCount();
+          const media_type = asset.mimeType && ["image/jpeg", "image/png", "image/webp"].includes(asset.mimeType) ? asset.mimeType : "image/jpeg";
+          const text = note;
+          if (n > 1) setLive({ text: "", status: t("Lendo foto {0} de {1}…", i + 1, n) });
+          try {
+            showResult(await post("/v1/photo", { image_b64: asset.base64, media_type, text, ...(n > 1 ? { batch: `${i + 1}/${n}` } : {}) }), false);
+          } catch (e: any) { await recover(e, before); }
+        }
+      } finally { setBusy(false); if (n > 1) setLive({ text: "", status: "" }); }
     } catch (e: any) { fail(`${t("foto")}: ${e?.message ?? e}`); }
   }
 
@@ -3704,7 +3715,10 @@ const I18N_KEYS: string[] = [
   "ao parar gravação",
   "nenhum áudio foi gravado. Tente de novo.",
   "permissão negada para câmera/galeria.",
+  "Máximo de {0} fotos por vez",
+  "{0} fotos enviadas",
   "Foto enviada",
+  "Lendo foto {0} de {1}…",
   "foto",
   "Recibo, fatura, contrato ou documento",
   "Tirar foto",

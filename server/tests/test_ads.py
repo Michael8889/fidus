@@ -76,3 +76,18 @@ def test_review_code_invites_immediately(monkeypatch):
     assert r["invited"] is True
     r2 = site_forms.join("other@example.com", "en", "android", "", "WRONG")
     assert r2["invited"] is False
+
+
+def test_photo_batch_text(monkeypatch):
+    import base64
+    from app import agent, main
+    got = {}
+    monkeypatch.setattr(agent, "handle", lambda text, **k: got.update(text=text) or {"reply": "ok"})
+    c = TestClient(main.app)
+    img = base64.b64encode(b"\xff\xd8fakejpeg").decode()
+    c.post("/v1/photo", json={"image_b64": img, "batch": "2/5"}, headers={"Authorization": "Bearer t"})
+    assert got["text"].startswith("Foto 2 de 5") and "lance o gasto" in got["text"]
+    c.post("/v1/photo", json={"image_b64": img, "batch": "1/2", "text": "são do jantar"}, headers={"Authorization": "Bearer t"})
+    assert "são do jantar" in got["text"]
+    c.post("/v1/photo", json={"image_b64": img}, headers={"Authorization": "Bearer t"})
+    assert got["text"].startswith("Foto enviada.")
