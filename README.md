@@ -315,7 +315,7 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
   pôr a chave `appl_...` em `FIDUS_REVENUECAT_IOS_KEY`.
 
 ## Conversa nova ao abrir e e-mails com botão (v0.20.1)
-- O app abre sempre numa conversa nova (tela limpa, como no ChatGPT/Claude); voltar depois de 30 min fora também
+- O app abre sempre numa conversa nova (tela limpa, como no ChatGPT/Claude); voltar depois de 3 min fora também
   começa limpo. As conversas antigas ficam em Conversas; rascunhos que esperam o toque continuam na tela.
 - Notas do Fidus com a cara do Fidus (faixa escura, ilustração `/email-hero.png`, dica com botão, cartões). O botão
   "Experimentar no Fidus" leva a `/abrir?q=...`, que abre o app (`fidus://ask?q=...`) numa conversa nova com o pedido

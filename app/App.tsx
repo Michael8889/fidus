@@ -45,8 +45,9 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const JS_VERSION = "0.20.1"; // única fonte da versão mostrada em Configurações e enviada ao servidor
+const JS_VERSION = "0.20.2"; // única fonte da versão mostrada em Configurações e enviada ao servidor
 const MAX_PHOTOS = 10; // fotos por vez na galeria
+const FRESH_AFTER_MS = 3 * 60000; // fora do app por mais que isso: ao voltar, conversa nova
 const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=${JS_VERSION},ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
   : "https://play.google.com/store/account/subscriptions";
@@ -2313,13 +2314,14 @@ function FidusApp() {
     return true;
   }
 
-  // voltou ao app depois de 30 min fora: começa limpo de novo (a conversa anterior fica em Conversas)
+  // voltou ao app depois de alguns minutos fora: começa limpo de novo (a conversa anterior fica em Conversas).
+  // O Android muitas vezes não fecha o app de verdade ao arrastar dos recentes, então "abrir" chega aqui.
   const awayAt = useRef(0);
   useEffect(() => {
     if (!configured) return;
     const sub = AppState.addEventListener("change", (st) => {
       if (st === "background") awayAt.current = Date.now();
-      if (st === "active" && awayAt.current && Date.now() - awayAt.current > 30 * 60000
+      if (st === "active" && awayAt.current && Date.now() - awayAt.current > FRESH_AFTER_MS
           && !busy && !voiceActive.current && histLen.current + items.filter((it) => it.type !== "action").length > 0) {
         awayAt.current = 0;
         freshChat();
