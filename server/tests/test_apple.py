@@ -138,3 +138,7 @@ def test_email_try_button_opens_app_with_prompt():
     assert "fidus://ask?q=o%20que%20ficou%20pendente%20hoje%3F%3C%2Fscript%3E%3Cb%3E" in r.text
     assert "</script><b>" not in r.text.split("<script>")[0]  # o pedido aparece escapado na página
     assert client.get("/email-hero.png").status_code == 200
+
+
+def test_health_answers_head_for_monitors():
+    assert client.head("/health").status_code in (200, 503)

@@ -99,7 +99,7 @@ class EditIn(BaseModel):
     subject: str | None = None
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])  # HEAD: o UptimeRobot pergunta assim
 def health():
     """Para monitor externo (ex. UptimeRobot): responde 503 se o backup está atrasado ou o disco quase cheio."""
     from fastapi.responses import JSONResponse
