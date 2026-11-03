@@ -321,6 +321,13 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
   "Experimentar no Fidus" leva a `/abrir?q=...`, que abre o app (`fidus://ask?q=...`) numa conversa nova com o pedido
   já escrito; a pessoa confere e envia. Textos em `server/app/newsletter.json`.
 
+## Buscadores e assistentes de IA (v0.20.3)
+- O site é desenhado com JavaScript; robôs de IA (ChatGPT, Claude, Perplexity) normalmente não rodam JavaScript.
+  `app/seo.py` dá a eles texto puro: `/sobre` e `/about` (o que é o Fidus, recursos, preços, perguntas), `/llms.txt`,
+  `/robots.txt` (libera GPTBot, OAI-SearchBot, ClaudeBot, Claude-SearchBot, PerplexityBot), `/sitemap.xml`, e na
+  página inicial JSON-LD (schema.org) + `<noscript>`. Preços vêm de `plans.PRICES`.
+- Mike: enviar o sitemap no Google Search Console e no Bing Webmaster Tools (o ChatGPT busca pelo Bing).
+
 ## Configuração
 Tudo no `server/.env` (modelo em `server/.env.example`). Trocar de IA = mudar `FIDUS_LLM_PROVIDER`.
 Reconectar o Google: no app, menu ⋯ › Reconectar Google.

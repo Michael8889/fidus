@@ -2,11 +2,12 @@
 import html
 import json
 import os
+import re
 import shutil
 import tempfile
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
 from . import account_data, accounts, countries, newsletter, partners, actions, admin, agent, backup, booking, metrics, web_tools, config, features, google_client, i18n, mailer, meetings, plans, store, tools
@@ -243,6 +244,9 @@ def home(request: Request):
         tag = ads.banner()
         if tag:
             page = page.replace("</body>", tag + "</body>", 1) if "</body>" in page else page + tag
+        from . import seo  # texto legível sem JavaScript (buscadores e assistentes de IA)
+        page = page.replace("</head>", seo.head_tags() + "</head>", 1)
+        page = re.sub(r"(<body[^>]*>)", lambda m: m.group(1) + seo.noscript(), page, count=1)
         return HTMLResponse(page)
     except OSError:
         pass
@@ -259,6 +263,39 @@ def home(request: Request):
             f'<p style="font-size:13px">Fidus Labs Limited · Company no. 17510962 · England &amp; Wales<br>'
             f'{html.escape(config.COMPANY_ADDRESS)}</p>')
     return _page("Fidus", body)
+
+
+# ---------- Buscadores e assistentes de IA (ChatGPT, Claude, Perplexity) ----------
+@app.get("/sobre", response_class=HTMLResponse)
+def about_pt():
+    from . import seo
+    return HTMLResponse(seo.about_page("pt"))
+
+
+@app.get("/about", response_class=HTMLResponse)
+def about_en():
+    from . import seo
+    return HTMLResponse(seo.about_page("en"))
+
+
+@app.get("/llms.txt", include_in_schema=False)
+def llms_txt():
+    from fastapi.responses import PlainTextResponse
+    from . import seo
+    return PlainTextResponse(seo.llms_txt(), media_type="text/markdown; charset=utf-8")
+
+
+@app.get("/robots.txt", include_in_schema=False)
+def robots_txt():
+    from fastapi.responses import PlainTextResponse
+    from . import seo
+    return PlainTextResponse(seo.ROBOTS)
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def sitemap_xml():
+    from . import seo
+    return Response(seo.sitemap(), media_type="application/xml")
 
 
 class WaitlistIn(BaseModel):
