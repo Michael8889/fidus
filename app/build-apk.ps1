@@ -16,6 +16,8 @@ Copy-Item (Join-Path $PSScriptRoot "App.tsx") $dest -Force
 Copy-Item (Join-Path $PSScriptRoot "eas.json") $dest -Force
 New-Item -ItemType Directory -Force (Join-Path $dest "assets") | Out-Null
 Copy-Item (Join-Path $PSScriptRoot "assets\*") (Join-Path $dest "assets") -Force
+New-Item -ItemType Directory -Force (Join-Path $dest "locales") | Out-Null
+Copy-Item (Join-Path $PSScriptRoot "locales\*") (Join-Path $dest "locales") -Force
 
 $cfg = Get-Content (Join-Path $PSScriptRoot "app.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($projectId) {
@@ -29,7 +31,7 @@ Write-Host "1/4 Login na Expo" -ForegroundColor Yellow
 npx --yes eas-cli@latest whoami 2>$null
 if ($LASTEXITCODE -ne 0) { npx --yes eas-cli@latest login }
 Write-Host "2/4 Instalando modulos (atualizacoes, notificacoes, tela ligada, PDF)" -ForegroundColor Yellow
-npx expo install expo-updates expo-notifications expo-keep-awake expo-document-picker expo-speech expo-clipboard react-native-purchases expo-local-authentication expo-speech-recognition react-native-svg react-native-webrtc @config-plugins/react-native-webrtc react-native-incall-manager expo-contacts
+npx expo install expo-updates expo-notifications expo-keep-awake expo-document-picker expo-speech expo-clipboard react-native-purchases expo-local-authentication expo-speech-recognition react-native-svg react-native-webrtc @config-plugins/react-native-webrtc react-native-incall-manager expo-contacts expo-apple-authentication
 Write-Host "3/4 Conferindo dependencias" -ForegroundColor Yellow
 npx expo install --check
 Write-Host "4/4 Compilando o APK na nuvem. Responda Y (sim) as perguntas." -ForegroundColor Yellow

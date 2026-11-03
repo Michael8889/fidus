@@ -17,5 +17,8 @@
       },
       "channel": "production"
     }
+  },
+  "submit": {
+    "production": {}
   }
 }

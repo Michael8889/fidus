@@ -1,0 +1,9 @@
+{
+  "CFBundleDisplayName": "Fidus",
+  "NSMicrophoneUsageDescription": "Fidus uses the microphone to hear your requests and to record the meetings you ask it to.",
+  "NSSpeechRecognitionUsageDescription": "Fidus transcribes your speech on your phone to answer faster.",
+  "NSCameraUsageDescription": "Fidus uses the camera to read receipts.",
+  "NSPhotoLibraryUsageDescription": "Fidus accesses your photos to read receipts.",
+  "NSFaceIDUsageDescription": "Fidus uses Face ID to protect your account.",
+  "NSContactsUsageDescription": "Fidus uses your contacts only when you choose a contact to pay."
+}

@@ -595,7 +595,36 @@ def auth_exchange(body: CodeIn, request: Request):
 # ---------- Entrar com e-mail (código de 6 números) ----------
 @app.get("/v1/auth/options")
 def auth_options():
-    return {"google": True, "email": mailer.enabled(), "microsoft": _ms().enabled()}
+    return {"google": True, "email": mailer.enabled(), "microsoft": _ms().enabled(), "apple": True}
+
+
+class AppleIn(BaseModel):
+    identity_token: str
+    nonce: str
+    name: str | None = None   # a Apple só manda o nome na 1.ª vez, e só para o app (não vem no token)
+    ref: str = ""
+    device_id: str | None = None
+    device_name: str | None = None
+
+
+@app.post("/v1/auth/apple")
+def auth_apple(body: AppleIn, request: Request):
+    """Entrar com a Apple (iPhone). O app manda o token da Apple e o nonce que ele criou; nada é guardado da Apple
+    além do ID permanente (sub) e do e-mail que a pessoa escolheu mostrar."""
+    import re as _re
+    from . import apple_auth
+    _rate_check(request, 20, "apple")
+    claims = apple_auth.verify(body.identity_token, body.nonce)
+    if not claims:
+        _rate_record(request, "apple")
+        raise HTTPException(400, "a Apple não confirmou a entrada. Tente de novo.")
+    ref = body.ref.strip() if _re.fullmatch(r"[A-Za-z0-9-]{3,14}", body.ref.strip() or "") else None
+    name = " ".join((body.name or "").split())[:80] or None
+    token, u, err = accounts.apple_login(claims["sub"], claims.get("email"), apple_auth.is_true(claims.get("email_verified")),
+                                         name, ref, body.device_id, body.device_name, _client_ip(request))
+    if not token:
+        raise HTTPException(403, err or "sem acesso")
+    return {"token": token, "user": {"id": u["id"], "email": u.get("email"), "name": u.get("name")}}
 
 
 class EmailStartIn(BaseModel):

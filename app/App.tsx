@@ -27,6 +27,8 @@ const hasNativePurchases = !!opt(() => {
 });
 const PurchasesMod: any = hasNativePurchases ? opt(() => require("react-native-purchases")) : null;
 const Purchases: any = PurchasesMod ? (PurchasesMod.default || PurchasesMod) : null;
+// Entrar com a Apple (só iPhone; a App Store exige quando há "Entrar com o Google")
+const AppleAuth: any = Platform.OS === "ios" ? opt(() => require("expo-apple-authentication")) : null;
 // trava com digital/rosto (APK com expo-local-authentication)
 const LocalAuth: any = opt(() => require("expo-local-authentication"));
 // transcrição no próprio celular enquanto a pessoa fala (APK com expo-speech-recognition): bem mais rápido
@@ -43,7 +45,7 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const JS_VERSION = "0.19.7"; // única fonte da versão mostrada em Configurações e enviada ao servidor
+const JS_VERSION = "0.20.0"; // única fonte da versão mostrada em Configurações e enviada ao servidor
 const MAX_PHOTOS = 10; // fotos por vez na galeria
 const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=${JS_VERSION},ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
@@ -96,6 +98,7 @@ const _SERVER_TEXTS = () => [
   t("lazer"), t("viagem"), t("salários e prestadores"), t("outros"),
   t("código expirado. Peça um novo."), t("código errado."), t("este e-mail não tem acesso ao Fidus."),
   t("esta conta entra com o Google."), t("muitas tentativas. Tente amanhã ou entre com o Google."),
+  t("a Apple não mandou um e-mail confirmado. Tente entrar com e-mail."), t("sem acesso"),
 ];
 
 // modo conversa: gravação com medidor de volume para saber quando a pessoa parou de falar
@@ -641,6 +644,7 @@ function FidusApp() {
   const [panel, setPanel] = useState<any>(null);
   const [authOpts, setAuthOpts] = useState<any>(null);
   const [emailMode, setEmailMode] = useState(false);
+  const [appleAvail, setAppleAvail] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [emailSent, setEmailSent] = useState(false);
   const [emailCode, setEmailCode] = useState("");
@@ -1741,6 +1745,36 @@ function FidusApp() {
     finally { setLoggingIn(false); }
   }
 
+  // ---------- Entrar com a Apple (iPhone) ----------
+  useEffect(() => {
+    if (!AppleAuth?.isAvailableAsync) return;
+    AppleAuth.isAvailableAsync().then((ok: boolean) => setAppleAvail(!!ok)).catch(() => setAppleAvail(false));
+  }, []);
+
+  async function loginApple() {
+    const sv = normServer();
+    setLoggingIn(true);
+    try {
+      const nonce = randomSecret();  // a Apple devolve o hash dentro do token; o servidor confere com este
+      const cred = await AppleAuth.signInAsync({
+        requestedScopes: [AppleAuth.AppleAuthenticationScope.FULL_NAME, AppleAuth.AppleAuthenticationScope.EMAIL],
+        nonce: sha256hex(nonce),
+      });
+      if (!cred?.identityToken) throw new Error(t("a Apple não confirmou a entrada. Tente de novo."));
+      const name = [cred.fullName?.givenName, cred.fullName?.familyName].filter(Boolean).join(" ");
+      const ref = refCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+      const r = await fetch(`${sv}/v1/auth/apple`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identity_token: cred.identityToken, nonce, name, ref, ...(await deviceInfo()) }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(t(String(j?.detail || r.status)));
+      await SecureStore.setItemAsync("server", sv); await SecureStore.setItemAsync("token", j.token);
+      setServer(sv); setToken(j.token); kicked.current = false; setConfigured(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      if (e?.code !== "ERR_REQUEST_CANCELED") Alert.alert(t("Não deu certo"), e?.message ?? String(e));
+    } finally { setLoggingIn(false); }
+  }
+
   // ---------- Entrar com e-mail (código de 6 números) ----------
   async function emailStart() {
     const email = loginEmail.trim().toLowerCase();
@@ -2422,7 +2456,7 @@ function FidusApp() {
 
   async function subscribe(p: any) {
     const planId = p.plan || p.id;
-    if (billing?.web_checkout) {
+    if (billing?.web_checkout && Platform.OS !== "ios") {  // no iPhone a assinatura é só pela App Store (regra da Apple)
       const m = p.month ?? (plan?.plans || []).find((x: any) => x.id === planId)?.month;
       const y = p.year ?? (plan?.plans || []).find((x: any) => x.id === planId)?.year;
       const sym = p.symbol || plan?.symbol || "€";
@@ -2463,6 +2497,12 @@ function FidusApp() {
         <ScrollView contentContainerStyle={s.setup} keyboardShouldPersistTaps="handled">
           <Text style={[s.logo, { color: c.text }]}>Fidus</Text>
           <Text style={{ color: c.sub, marginBottom: 28, fontSize: 16 }}>{t("Fale. O Fidus resolve.")}</Text>
+          {appleAvail && authOpts?.apple && !emailMode && (
+            <AppleAuth.AppleAuthenticationButton
+              buttonType={AppleAuth.AppleAuthenticationButtonType.SIGN_IN}
+              buttonStyle={dark ? AppleAuth.AppleAuthenticationButtonStyle.WHITE : AppleAuth.AppleAuthenticationButtonStyle.BLACK}
+              cornerRadius={14} style={{ height: 52, marginBottom: 10, opacity: loggingIn ? 0.5 : 1 }}
+              onPress={() => { if (!loggingIn) loginApple(); }} />)}
           <Pressable style={[s.primary, { flexDirection: "row", justifyContent: "center", gap: 10 }]} onPress={loginGoogle}>
             <Text style={[s.primaryText, { fontSize: 17 }]}>{t("Entrar com o Google")}</Text></Pressable>
           {authOpts?.email && !emailMode && (
@@ -3555,6 +3595,8 @@ const I18N_KEYS: string[] = [
   "este e-mail não tem acesso ao Fidus.",
   "esta conta entra com o Google.",
   "muitas tentativas. Tente amanhã ou entre com o Google.",
+  "a Apple não mandou um e-mail confirmado. Tente entrar com e-mail.",
+  "sem acesso",
   "☀️ Bom dia",
   "Bom dia! O que eu tenho hoje?",
   "💷 Gastos do mês",
@@ -3699,6 +3741,7 @@ const I18N_KEYS: string[] = [
   "código inválido ou expirado. Entre com o Google de novo.",
   "erro",
   "Não deu certo",
+  "a Apple não confirmou a entrada. Tente de novo.",
   "Digite um e-mail válido.",
   "Muitos códigos pedidos. Tente mais tarde.",
   "Digite os 6 números que chegaram no seu e-mail.",

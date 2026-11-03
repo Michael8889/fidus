@@ -137,6 +137,8 @@ META_API_VERSION = (env("FIDUS_META_API_VERSION", "v24.0") or "v24.0").strip()
 META_TEST_CODE = (env("FIDUS_META_TEST_CODE", "") or "").strip()  # código de teste do Gerenciador de Eventos
 # Código para revisores (Google, Apple) entrarem na hora pelo site: heyfidus.com/?lang=en&ref=<código>. Vazio = desligado.
 REVIEW_CODE = (env("FIDUS_REVIEW_CODE", "") or "").strip()
+# Entrar com a Apple (iPhone): o token da Apple tem que ser para este app (bundle id do app.json). Sem chave secreta.
+APPLE_AUDIENCES = {a.strip() for a in (env("FIDUS_APPLE_BUNDLE_ID", "com.fidus.app") or "com.fidus.app").split(",") if a.strip()}
 SITE_URL = (env("FIDUS_SITE_URL", "https://heyfidus.com") or "https://heyfidus.com").rstrip("/")
 APP_DOWNLOAD_URL = env("FIDUS_APP_DOWNLOAD_URL", "")  # página/loja para baixar o app (link de convite)
 BILLING_WEBHOOK_SECRET = (env("FIDUS_BILLING_WEBHOOK_SECRET", "") or "").strip()  # segredo do aviso da RevenueCat

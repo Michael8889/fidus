@@ -84,6 +84,8 @@ def init() -> None:
         cols = {r[1] for r in c.execute("PRAGMA table_info(users)").fetchall()}
         if "google_sub" not in cols:  # banco antigo: acrescenta a coluna
             c.execute("ALTER TABLE users ADD COLUMN google_sub TEXT")
+        if "apple_sub" not in cols:  # Entrar com a Apple (iPhone)
+            c.execute("ALTER TABLE users ADD COLUMN apple_sub TEXT")
         c.execute("INSERT OR IGNORE INTO users(id,email,name,created_at) VALUES(?,?,?,?)",
                   (store.OWNER_ID, config.OWNER_EMAIL or None, config.USER_NAME, store.now()))
     from . import team
@@ -138,6 +140,8 @@ def can_signup(email: str, ref: str | None = None) -> tuple[bool, str | None]:
         inv = c.execute("SELECT plan FROM invites WHERE lower(email)=lower(?)", (email,)).fetchone()
     if inv:
         return True, inv["plan"]
+    if ref and config.REVIEW_CODE and ref.strip().upper() == config.REVIEW_CODE.upper():
+        return True, config.BETA_PLAN  # revisores do Google/Apple: o código de convite abre o cadastro na hora
     from . import team
     if team.member_invite_for(email):
         return True, None  # 2.ª pessoa convidada por um titular Premium
@@ -647,6 +651,37 @@ def verify_email_login(email: str, code: str, app_verifier: str | None, device_i
     return issue_token(u["id"], device_id, device_name, ip), u, None
 
 
+def apple_login(sub: str, email: str | None, email_verified: bool, name: str | None, ref: str | None,
+                device_id: str | None = None, device_name: str | None = None,
+                ip: str | None = None) -> tuple[str | None, dict | None, str | None]:
+    """(token, usuário, erro) para quem entrou com a Apple. A conta fica presa ao ID permanente da Apple (sub).
+
+    O e-mail pode ser o "esconder meu e-mail" da Apple (@privaterelay.appleid.com); ele recebe nossos e-mails."""
+    with _db() as c:
+        r = c.execute("SELECT * FROM users WHERE apple_sub=?", (sub,)).fetchone()
+    if r:
+        u = dict(r)
+        if u["status"] != "ativo":
+            return None, None, "este e-mail não tem acesso ao Fidus."
+    else:
+        email = (email or "").strip().lower()
+        if not email or "@" not in email or not email_verified:
+            return None, None, "a Apple não mandou um e-mail confirmado. Tente entrar com e-mail."
+        existing = by_email(email)
+        if existing and (existing.get("google_sub") or existing["id"] == store.OWNER_ID):
+            return None, None, "esta conta entra com o Google."
+        if existing and existing.get("apple_sub") and existing["apple_sub"] != sub:
+            return None, None, "este e-mail não tem acesso ao Fidus."
+        u = find_or_create(email, name, None, ref)
+        if not u:
+            return None, None, "este e-mail não tem acesso ao Fidus."
+        with _db() as c:
+            c.execute("UPDATE users SET apple_sub=? WHERE id=? AND apple_sub IS NULL", (sub, u["id"]))
+        if ref and not existing:
+            apply_referral(u["id"], ref)
+    return issue_token(u["id"], device_id, device_name, ip), u, None
+
+
 def is_new_user(uid: str, days: int = 2) -> bool:
     from datetime import datetime, timedelta, timezone
     u = get_user(uid)
@@ -660,7 +695,7 @@ def forget_user(uid: str, email: str | None) -> None:
     """Conta apagada: encerra acessos e desliga tudo que aponta para ela. Fica só o id, sem e-mail nem nome."""
     with _db() as c:
         c.execute("UPDATE tokens SET revoked=1, revoked_reason='saiu' WHERE user_id=?", (uid,))
-        c.execute("UPDATE users SET status='apagado', email=NULL, name=NULL, google_sub=NULL WHERE id=?", (uid,))
+        c.execute("UPDATE users SET status='apagado', email=NULL, name=NULL, google_sub=NULL, apple_sub=NULL WHERE id=?", (uid,))
         c.execute("DELETE FROM public_slugs WHERE user_id=?", (uid,))
         c.execute("DELETE FROM referral_codes WHERE user_id=?", (uid,))
         c.execute("DELETE FROM login_codes WHERE user_id=?", (uid,))

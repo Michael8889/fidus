@@ -7,8 +7,15 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.fidus.app",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "usesAppleSignIn": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "O Fidus usa o microfone para ouvir seus pedidos."
+        "NSMicrophoneUsageDescription": "O Fidus usa o microfone para ouvir seus pedidos e gravar as reuniões que você pedir.",
+        "UIBackgroundModes": [
+          "audio"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -35,6 +42,7 @@
         }
       ],
       "expo-secure-store",
+      "expo-apple-authentication",
       [
         "expo-image-picker",
         {
@@ -88,6 +96,10 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "scheme": "fidus"
+    "scheme": "fidus",
+    "locales": {
+      "pt": "./locales/pt.json",
+      "en": "./locales/en.json"
+    }
   }
 }

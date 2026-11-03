@@ -5,9 +5,10 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 ## Fase 0 — Agora (esta semana)
 - [x] **Você**: instalar a versão nova (servidor: `deploy-hetzner.ps1`; app: `update-app.ps1`)
 - [x] **Você**: instalar a v0.10 (servidor + `update-app.ps1`) e gerar/instalar o APK novo (`build-apk.ps1`)
-- [ ] **Você**: no `server\.env`: `FIDUS_COMPANY_ADDRESS`, `FIDUS_SUPPORT_EMAIL`, `FIDUS_MENTOR_BOOKING_URL`
+- [x] **Você**: no `server\.env`: `FIDUS_COMPANY_ADDRESS` (02/11) e e-mails suporte@/support@ recebendo (grupo no Workspace)
+- [ ] **Você**: `FIDUS_MENTOR_BOOKING_URL` (link do diagnóstico; sem ele a newsletter só não mostra o convite)
 - [ ] **Você**: Google Cloud: ativar a Cloud Text-to-Speech API, criar chave restrita e pôr `FIDUS_GOOGLE_TTS_KEY` no `server\.env`
-- [ ] **Você**: cadastrar o endereço `/health` do servidor num monitor grátis (UptimeRobot) para alerta se cair
+- [x] **Você**: UptimeRobot vigiando `app.heyfidus.com/health` e `heyfidus.com`, alerta por e-mail (02/11)
 - [ ] **Você**: convidar sua esposa (menu › Clientes) e usar os dois por 1–2 semanas, anotando o que der errado
 - [ ] **Claude**: corrigir o que aparecer no uso real
 - [x] **Claude**: painel da empresa (/admin), links em e-mails, planilhas Google e escalas do Connecteam (v0.9.4)
@@ -80,7 +81,7 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 
 ## Fase 1 — Empresa e contas (em paralelo)
 - [x] **Você**: conta bancária da empresa (Revolut Business)
-- [ ] **Você**: D-U-N-S grátis pela ferramenta da Apple (developer.apple.com/enroll/duns-lookup), nome e endereço iguais ao Companies House
+- [x] **Você**: D-U-N-S 235227663 (Fidus Labs Limited, 13/10)
 - [x] **Você**: registro no ICO feito: nº ZC271147 (débito direto ativo, 12/10), já na página de privacidade
 - [x] **Você**: busca de marca no Reino Unido (08/10): nenhuma "FIDUS" viva em software (classes 9/42); atenção a
       "FEEDUS" (classes 35/42, parecida no som)
@@ -93,22 +94,24 @@ Atualize marcando [x] o que ficou pronto. Quem faz: **Você** (Mike) ou **Claude
 - [x] **Você**: Google Cloud › OAuth: redirect `https://app.heyfidus.com/auth/google/callback` + domínio heyfidus.com
 - [x] **Você**: v0.10.1 instalada (servidor nos 4 endereços + app). Pasta de sempre: `Downloads\fidus-v0.2\fidus`
 - [x] **Você**: abrir a empresa: **Fidus Labs Limited** (número 17510962, registrada na Companies House em 09/10/2026)
-- [ ] **Você**: conta Google Play Console no nome da empresa (US$ 25)
+- [ ] **Você**: conta Google Play Console no nome da empresa: criada com mike@heyfidus.com (02/11), Google verificando a
+      identidade; depois verificar os 2 telefones, criar o perfil de pagamentos e o app
 - [x] **Você**: conta Resend + domínio verificado (Irlanda), chave no `.env` (falta só o deploy) → liga os e-mails e a entrada por e-mail (`.env`)
 - [ ] **Você**: conta RevenueCat + assinaturas na Play (passo a passo no README › Assinaturas)
 
 ## iPhone (em paralelo com a Play)
-- [ ] **Você**: Apple Developer Program como empresa (US$ 99/ano; usa o MESMO D-U-N-S da Play; leva de dias a ~2 semanas)
-- [ ] **Claude**: ajustes de iPhone: entrar com a Apple (exigido pela Apple quando há entrar com Google), gravação
-      de reunião com a tela apagada, permissões e textos, chave da RevenueCat para iOS, build pela nuvem da Expo
-      (não precisa de Mac)
+- [ ] **Você**: Apple Developer Program como empresa: pedido enviado (02/11, nº SJCWR7KMB3), Apple verificando; depois pagar US$ 99
+- [x] **Claude**: ajustes de iPhone (v0.20): entrar com a Apple, áudio em segundo plano, permissões em PT/EN, assinatura só
+      pela App Store no iPhone, código de revisor no app, `build-ios.ps1` (nuvem da Expo, direto para o TestFlight)
+- [ ] **Claude**: ao apagar a conta, revogar o acesso na Apple (precisa da chave .p8 da conta Apple aprovada)
 - [ ] **Você**: App Store Connect: criar o app e as 3 assinaturas (mesmos ids da Play), TestFlight para testar
 - [ ] **Você + Claude**: revisão da Apple (1–3 dias; costuma pedir conta de teste e vídeo das funções)
 
 ## Fase 2 — Google libera o Gmail para o público
 - [x] **Claude**: política de privacidade e termos de uso (`/privacy`, `/terms`, EN e PT; revisão de advogado recomendada)
-- [ ] **Você**: no Google Cloud, mudar o app para "Externo", preencher a verificação e contratar a avaliação de
-      segurança CASA (exigida para Gmail; leva semanas — começar assim que a empresa existir)
+- [x] **Você**: app "Externo" e pedido de verificação enviado (12/10); resposta ao Google com justificativa, vídeo novo,
+      acesso de revisor (código no .env) e política com proteção de dados enviada (02/11)
+- [ ] **Você**: quando o Google aprovar essa etapa, contratar a avaliação de segurança CASA (exigida para Gmail; leva semanas)
 - [ ] **Você + Claude**: enquanto isso, beta pago fechado com até 100 usuários de teste
 
 ## Fase 3 — Produção

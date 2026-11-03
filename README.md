@@ -297,6 +297,23 @@ O `install.sh` escolhe uma porta livre, sobe o contêiner, cria só o site do Fi
 - Guarde uma cópia dessa chave fora do servidor (ex. gerenciador de senhas). Sem ela, um backup restaurado funciona,
   mas os clientes precisam reconectar Google/Outlook.
 
+## iPhone (v0.20)
+- **Entrar com a Apple** (a App Store exige quando há "Entrar com o Google"): botão só no iPhone, acima do Google
+  (`expo-apple-authentication`). O app manda o token da Apple e o nonce para `POST /v1/auth/apple`; o servidor confere
+  a assinatura com as chaves públicas da Apple, o bundle id (`FIDUS_APPLE_BUNDLE_ID`), a validade e o nonce
+  (`app/apple_auth.py`). A conta fica presa ao ID da Apple (`users.apple_sub`). Conta que já entra pelo Google
+  continua só pelo Google. O e-mail "escondido" da Apple (@privaterelay.appleid.com) recebe nossos e-mails.
+- **Código de revisor** (`FIDUS_REVIEW_CODE`) no campo "código de convite" do app abre o cadastro na hora (plano do
+  beta), também com o e-mail escondido da Apple. Use isso nas instruções para a revisão da Apple.
+- **Assinatura no iPhone só pela App Store** (regra da Apple): o app não abre o Stripe no iOS. Quem já assina pelo
+  site continua gerenciando pelo Stripe.
+- Textos das permissões em português e inglês (`app/locales/`), áudio em segundo plano (reunião com a tela
+  apagada), sem pergunta de criptografia no envio (`ITSAppUsesNonExemptEncryption=false`).
+- **Gerar e mandar para o TestFlight** (sem Mac): pasta `app`, `build-ios.ps1`. Na 1.ª vez a Expo pede o Apple ID da
+  empresa e cria certificados, o identificador do app e o app no App Store Connect. O número do build é a data/hora.
+- Depois: no App Store Connect, criar as assinaturas com os mesmos ids da Play, ligar a App Store na RevenueCat e
+  pôr a chave `appl_...` em `FIDUS_REVENUECAT_IOS_KEY`.
+
 ## Configuração
 Tudo no `server/.env` (modelo em `server/.env.example`). Trocar de IA = mudar `FIDUS_LLM_PROVIDER`.
 Reconectar o Google: no app, menu ⋯ › Reconectar Google.
