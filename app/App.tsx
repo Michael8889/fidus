@@ -45,7 +45,7 @@ const InCall: any = hasNative("InCallManager") ? opt(() => require("react-native
 const createPlayer: any = opt(() => require("expo-audio").createAudioPlayer);
 // o que este app tem (o servidor guarda para o painel e para o suporte saber se o APK está certo)
 const UPDATE_ID: string = String(opt(() => require("expo-updates").updateId) || "apk");
-const JS_VERSION = "0.20.0"; // única fonte da versão mostrada em Configurações e enviada ao servidor
+const JS_VERSION = "0.20.1"; // única fonte da versão mostrada em Configurações e enviada ao servidor
 const MAX_PHOTOS = 10; // fotos por vez na galeria
 const CLIENT_CAPS = `sr=${SpeechRec ? 1 : 0},speech=${opt(() => require("expo-speech")) ? 1 : 0},player=${createPlayer ? 1 : 0},rtc=${RTC ? 1 : 0},js=${JS_VERSION},ota=${UPDATE_ID.slice(0, 8)}`;
 const MANAGE_SUBS_URL = Platform.OS === "ios" ? "https://apps.apple.com/account/subscriptions"
@@ -808,7 +808,10 @@ function FidusApp() {
         }
         catch { await new Promise((r) => setTimeout(r, 3000)); }
       }
-      const hist = await loadHistory();
+      // ao abrir, tela limpa (como no ChatGPT/Claude): conversa nova; as antigas ficam em Conversas
+      let hist: any[] | null = null;
+      try { hist = (await api("/v1/conversations", {}, 15000)).conversations || []; } catch { /* sem rede */ }
+      await freshChat();
       await loadWaitingDrafts();
       let onb = false;
       try {
@@ -1817,6 +1820,11 @@ function FidusApp() {
     const handle = (url?: string | null) => {
       const m = url && url.match(/login\?code=([A-Za-z0-9-]+)/);
       if (m && !configured) redeem(m[1]);
+      const ask = url && url.match(/ask\?q=([^&#]+)/);
+      if (ask && configured) {
+        let q = ""; try { q = decodeURIComponent(ask[1].replace(/\+/g, " ")).slice(0, 300); } catch {}
+        if (q) freshChat().then(() => setTyped(q));  // só escreve; a pessoa confere e toca em enviar
+      }
       const inv = url && url.match(/invite\?code=([A-Za-z0-9]+)/);
       if (inv) { setRefCode(inv[1]); setRefApply(inv[1]); }
     };
@@ -2295,6 +2303,30 @@ function FidusApp() {
     } catch (e: any) { Alert.alert(t("Erro"), errMsg(e)); }
     finally { setLoadingScreen(false); }
   }
+
+  // conversa nova sem apagar nada: os rascunhos que esperam o toque continuam na tela
+  async function freshChat() {
+    try { await post("/v1/conversations/new", {}, 15000); } catch { return false; }
+    histLen.current = 0;
+    setItems((prev) => prev.filter((it) => it.type === "action"));
+    setScreen("chat");
+    return true;
+  }
+
+  // voltou ao app depois de 30 min fora: começa limpo de novo (a conversa anterior fica em Conversas)
+  const awayAt = useRef(0);
+  useEffect(() => {
+    if (!configured) return;
+    const sub = AppState.addEventListener("change", (st) => {
+      if (st === "background") awayAt.current = Date.now();
+      if (st === "active" && awayAt.current && Date.now() - awayAt.current > 30 * 60000
+          && !busy && !voiceActive.current && histLen.current + items.filter((it) => it.type !== "action").length > 0) {
+        awayAt.current = 0;
+        freshChat();
+      }
+    });
+    return () => sub.remove();
+  }, [configured, busy, items]);
 
   async function newChat() {
     closeDrawer();

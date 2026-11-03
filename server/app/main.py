@@ -139,6 +139,34 @@ async def email_unsub(request: Request):
                           "You won't receive Fidus tips any more.</p>")
 
 
+_OPEN_TXT = {"pt": ("Abrir no Fidus", "Se o app não abrir, abra o Fidus e diga:"),
+             "pt-pt": ("Abrir no Fidus", "Se a app não abrir, abra o Fidus e diga:"),
+             "en": ("Open in Fidus", "If the app doesn't open, open Fidus and say:"),
+             "es": ("Abrir en Fidus", "Si la app no se abre, abre Fidus y di:")}
+
+
+@app.get("/abrir", response_class=HTMLResponse)
+def open_in_app(q: str = "", l: str = "pt"):
+    """Botão "Experimentar no Fidus" dos e-mails: abre o app numa conversa nova com o pedido já escrito (não envia).
+    Os leitores de e-mail não abrem fidus:// direto, por isso passa por esta página."""
+    import html as _h
+    from urllib.parse import quote
+    q = " ".join(q.split())[:200]
+    lang = l if l in _OPEN_TXT else ("pt" if l.startswith("pt") else "en")
+    label, hint = _OPEN_TXT[lang]
+    link = "fidus://ask?q=" + quote(q, safe="")
+    return _page("Fidus", f"<h1>Fidus</h1><p><a class='b' href='{_h.escape(link)}' "
+                          "style='display:inline-block;background:#111111;color:#FFFFFF;padding:14px 24px;border-radius:999px;"
+                          f"text-decoration:none;font-weight:700'>{_h.escape(label)} →</a></p>"
+                          f"<p>{_h.escape(hint)}<br><b>“{_h.escape(q)}”</b></p>"
+                          f"<script>setTimeout(function(){{location.href={json.dumps(link)};}},150);</script>")
+
+
+@app.get("/email-hero.png", include_in_schema=False)
+def email_hero():
+    return _icon("email-hero.png")
+
+
 def _page(title: str, body: str) -> HTMLResponse:
     return HTMLResponse(f"""<!doctype html><html lang="pt"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title>{ICON_LINKS}

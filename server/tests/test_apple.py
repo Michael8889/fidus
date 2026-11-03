@@ -127,3 +127,14 @@ def test_deleted_account_forgets_apple_id(monkeypatch):
     uid = r.json()["user"]["id"]
     accounts.forget_user(uid, "apple-del@x.com")
     assert accounts.get_user(uid)["apple_sub"] is None
+
+
+def test_email_try_button_opens_app_with_prompt():
+    from app import newsletter
+    subject, page = newsletter.preview(0, "pt")
+    assert "/abrir?q=" in page and "Experimentar no Fidus" in page and "/email-hero.png" in page
+    r = client.get("/abrir", params={"q": "o que ficou pendente hoje?</script><b>", "l": "pt"})
+    assert r.status_code == 200
+    assert "fidus://ask?q=o%20que%20ficou%20pendente%20hoje%3F%3C%2Fscript%3E%3Cb%3E" in r.text
+    assert "</script><b>" not in r.text.split("<script>")[0]  # o pedido aparece escapado na página
+    assert client.get("/email-hero.png").status_code == 200
